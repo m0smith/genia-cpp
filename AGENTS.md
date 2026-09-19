@@ -47,11 +47,46 @@ Bootstrap only (R16 E16-6, `m0smith/genia-2026#763`). No C++ code exists.
 `bootstrap/protocol_adapter_stub.py` is a temporary, non-semantic
 placeholder proving this repository can participate in the generic
 protocol conversation; it is not a starting point for the real
-interpreter and should be deleted once R20 lands a genuine C++ adapter.
+interpreter and should be deleted once R24 lands a genuine C++ adapter
+(E24-1 in `genia-2026`'s
+`docs/strategy/roadmap/e24-issue-sequence.md`).
+
+The real C++ host implementation is now numbered **R24** (originally
+planned as R21; `genia-2026` planning issue #845 decomposed the Exact
+Numeric Model into R21-R23 and moved the C++ host to R24). The R24
+pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
+`docs/design/r24-cpp-host-preflight.md` and the four pinned entry
+artifacts under `docs/design/r24/` there. This is a planning/pre-flight
+result only; it does not mean any C++ code exists here yet.
 
 Known commands:
 
-- setup: TODO (R20)
-- build: TODO (R20)
-- test: TODO (R20)
-- lint: TODO (R20)
+- setup: TODO (E24-1)
+- build: TODO (E24-1)
+- test: TODO (E24-1)
+- lint: TODO (E24-1)
+
+## Dependency/toolchain policy (pinned by the R24 pre-flight)
+
+Decided in `genia-2026`'s `docs/design/r24/dependency-toolchain-policy.md`;
+reproduced here for local reference. Do not edit this table without
+updating that file too — it is the authoritative copy.
+
+| Concern | Decision |
+|---|---|
+| Build system | CMake |
+| C++ language version | C++20 |
+| Compiler support policy | GCC and Clang, latest two major versions, Linux; no MSVC commitment at R24 |
+| Package/dependency management | Vendored/header-only or pinned git submodules only; no Conan/vcpkg at R24 |
+| Test framework | Catch2 (single header) |
+| Formatting | `clang-format`, pinned config |
+| Lint/static analysis | `clang-tidy`, pinned config, run in the local/self-hosted conformance job |
+| JSON protocol handling | `nlohmann/json`, used only at the E16-1 adapter boundary |
+| Arbitrary-precision Integer | In-house bignum (sign + base-2^32 limb vector) |
+| Decimal | In-house coefficient (bignum) + exponent pair |
+| Rational | In-house numerator/denominator pair over the Integer bignum |
+| Float64 | Native `double`, boxed as an explicit tagged runtime value |
+| Unicode strategy | In-house UTF-8 decode/code-point iteration; no ICU |
+| Ordered-map representation | In-house insertion-ordered map (vector of pairs + hash index) |
+| Diagnostic representation | In-house struct mirroring the R19 portable diagnostic schema; C++ exceptions caught and normalized before crossing the adapter boundary |
+| CI/conformance invocation | Local/self-hosted `cmake --build` + `ctest` + `python -m tools.spec_runner --host` with a committed evidence JSON; no large hosted matrix |
