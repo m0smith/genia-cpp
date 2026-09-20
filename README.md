@@ -80,9 +80,10 @@ its own reviewed change.
   package at runtime, matching the repository-boundary rule that this
   repo owns its own toolchain.
 - Nothing else. No C++ build system, lexer, parser, or evaluator exists
-  yet — that is R20 (`genia-2026`'s
-  [`roadmap/r16-r20.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/r16-r20.md)),
-  and it belongs entirely in this repository once it lands.
+  yet — that is R24 (`genia-2026`'s
+  [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md),
+  starting with E24-1's toolchain bootstrap), and it belongs entirely in
+  this repository once it lands.
 
 ## Trying the bootstrap placeholder
 
