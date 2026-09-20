@@ -48,6 +48,38 @@ struct UndefinedNameError {
   std::string name;
 };
 
+// E24-5 (m0smith/genia-2026#959) diagnostic-normalization hardening:
+// each Genia-level function/lambda call recurses through several C++
+// stack frames (invoke_closure -> eval_node -> ... -> invoke_closure).
+// A C++ stack overflow is undefined behavior -- it cannot be caught by
+// any try/catch, so an adversarial (or simply long) recursive Genia
+// program would otherwise segfault the whole adapter process, an
+// unconditional crash and a forbidden-text risk far worse than an
+// honest "unsupported" (verified empirically: a valid, non-adversarial
+// ~1000-deep recursive `sum_list`-shaped program reliably segfaults this
+// adapter without this guard). This limit is deliberately far below
+// that measured crash threshold, with comfortable margin, and changes
+// no observable behavior for any program shallower than it -- this is
+// hardening against a crash, not a new capability or a new Genia
+// semantics decision.
+constexpr int kMaxCallDepth = 300;
+// A per-thread recursion counter is the only reasonable shape for this
+// guard in a header-only, free-function evaluator (threading an extra
+// parameter through every mutually recursive eval_node/invoke_closure
+// call site for one bookkeeping value would be a far more invasive
+// change for no behavioral benefit).
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+inline thread_local int g_call_depth = 0;
+
+struct CallDepthGuard {
+  CallDepthGuard() { ++g_call_depth; }
+  ~CallDepthGuard() { --g_call_depth; }
+  CallDepthGuard(const CallDepthGuard&) = delete;
+  CallDepthGuard& operator=(const CallDepthGuard&) = delete;
+  CallDepthGuard(CallDepthGuard&&) = delete;
+  CallDepthGuard& operator=(CallDepthGuard&&) = delete;
+};
+
 inline std::optional<value::Value> eval_node(const core_ir::Node& node, const EnvPtr& env);
 inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
                                                   const std::vector<value::Value>& args);
@@ -270,6 +302,10 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
 // unsupported rather than guessed at.
 inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
                                                   const std::vector<value::Value>& args) {
+  CallDepthGuard depth_guard;
+  if (g_call_depth > kMaxCallDepth) {
+    return std::nullopt;
+  }
   if (!closure.case_clauses.empty()) {
     for (const auto& clause : closure.case_clauses) {
       auto bindings = pattern_match::match(clause.pattern, args);
