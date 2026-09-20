@@ -137,15 +137,33 @@ TEST_CASE("end to end: parse of a bare integer literal through the real adapter"
 TEST_CASE("end to end: unsupported-grammar source over eval is a real unsupported response") {
   json request = {
       {"protocol_version", "1"},
-      {"case_id", "list-literal-unsupported"},
+      {"case_id", "lambda-unsupported"},
       {"operation", "eval"},
-      {"input", {{"source", "[1, 2, 3]"}, {"stdin", nullptr}, {"argv", nullptr}}},
+      {"input", {{"source", "(x) -> x"}, {"stdin", nullptr}, {"argv", nullptr}}},
   };
   auto response = genia::adapter::handle_request(request.dump());
   REQUIRE(response.has_value());
   const json& envelope = *response;
   CHECK(envelope["status"] == "unsupported");
   CHECK(envelope["result"].is_null());
+}
+
+TEST_CASE("end to end: eval of a list-literal + map-function source through the real adapter") {
+  json request = {
+      {"protocol_version", "1"},
+      {"case_id", "map-items"},
+      {"operation", "eval"},
+      {"input",
+       {{"source", "m = map_put(map_put(map_new(), \"a\", 1), \"b\", 2)\nmap_items(m)\n"},
+        {"stdin", nullptr},
+        {"argv", nullptr}}},
+  };
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  const json& envelope = *response;
+  CHECK(envelope["status"] == "ok");
+  CHECK(envelope["result"]["stdout"] == "[[\"a\", 1], [\"b\", 2]]\n");
+  CHECK(envelope["result"]["exit_code"] == 0);
 }
 
 TEST_CASE("an unknown future operation is still deterministically unsupported") {

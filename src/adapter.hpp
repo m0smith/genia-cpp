@@ -5,7 +5,9 @@
 // docs/design/r24/native-primitive-inventory.md's transport row).
 #pragma once
 
+#include <fstream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -74,10 +76,29 @@ inline std::optional<json> handle_eval(const std::string& case_id, const json& i
   return build_ok_response(case_id, "eval", run_result_to_json(*result));
 }
 
-// Handles `cli`: input {"argv": [...], "stdin": ...}. Only the
-// `-c <source>` command-mode shape is implemented at this slice (file
-// mode is E24-3's scope; pipe/test modes are out of R24's floor
-// entirely).
+// Reads a file's full contents, or std::nullopt if it cannot be opened.
+// A missing/unreadable file is a genuine CLI-level failure in the real
+// host (a normalized diagnostic + nonzero exit), which this slice does
+// not implement (E24-5's diagnostic-normalization scope) -- so it must
+// be unsupported here, never a fabricated error response.
+inline std::optional<std::string> read_file_contents(const std::string& path) {
+  std::ifstream file(path, std::ios::binary);
+  if (!file.is_open()) {
+    return std::nullopt;
+  }
+  std::ostringstream buffer;
+  buffer << file.rdbuf();
+  if (file.bad()) {
+    return std::nullopt;
+  }
+  return buffer.str();
+}
+
+// Handles `cli`: input {"argv": [...], "stdin": ...}. Two shapes are
+// implemented at this slice: `-c <source>` command mode, and bare
+// `<file>` file mode (matching tools/spec_runner/host_executor.py's
+// `_cli_argv`: file mode sends exactly `[file, *trailing_args]`, no
+// flag). Pipe/test modes are out of R24's floor entirely.
 inline std::optional<json> handle_cli(const std::string& case_id, const json& input) {
   if (!input.contains("argv") || !input["argv"].is_array()) {
     return std::nullopt;
@@ -89,11 +110,24 @@ inline std::optional<json> handle_cli(const std::string& case_id, const json& in
     }
     argv.push_back(item.get<std::string>());
   }
-  if (argv.size() < 2 || argv[0] != "-c") {
+  if (argv.empty()) {
     return std::nullopt;
   }
-  const std::string& source = argv[1];
-  auto result = engine::try_run(source);
+  std::optional<std::string> source;
+  if (argv[0] == "-c") {
+    if (argv.size() < 2) {
+      return std::nullopt;
+    }
+    source = argv[1];
+  } else if (argv.size() == 1 && !argv[0].empty() && argv[0][0] != '-') {
+    source = read_file_contents(argv[0]);
+  } else {
+    return std::nullopt;
+  }
+  if (!source.has_value()) {
+    return std::nullopt;
+  }
+  auto result = engine::try_run(*source);
   if (!result.has_value()) {
     return std::nullopt;
   }
