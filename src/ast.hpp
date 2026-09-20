@@ -1,4 +1,4 @@
-// Parser AST for the E24-2/E24-3 vertical slice: integer/string/boolean
+// Parser AST for the E24-2..E24-4 vertical slice: integer/string/boolean
 // literals, list literals, bare-name references, assignment, function
 // calls, and `+ - * / ==` binary expressions only.
 //
@@ -15,7 +15,10 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include "pattern.hpp"
 
 namespace genia::ast {
 
@@ -28,6 +31,14 @@ enum class Kind : std::uint8_t {
   List,
   Assign,
   Call,
+  // E24-4 additions. A pipeline (`|>`) is a Binary node with op "|>",
+  // matching genia-2026's own AST layer (src/genia/ast_nodes.py's
+  // `Binary(op="PIPE_FWD")`, flattened into a dedicated IR node only at
+  // lowering time -- see lowering.hpp).
+  Lambda,
+  FuncDef,
+  Map,
+  Spread,
 };
 
 struct Node {
@@ -56,9 +67,37 @@ struct Node {
   std::shared_ptr<Node> left;
   std::shared_ptr<Node> right;
 
-  // List: element expressions. Call: argument expressions. Assign: the
-  // single value expression (reuses `left`).
+  // List: element expressions (an element may itself be Kind::Spread).
+  // Call: argument expressions. Assign: the single value expression
+  // (reuses `left`).
   std::vector<Node> items;
+
+  // Lambda/FuncDef: one positional-parameter pattern per parameter.
+  // Empty when `is_case_body` is true.
+  std::vector<pattern::Pattern> params;
+
+  // FuncDef only: the literal header parameter names (`name(a, b) = ...`),
+  // kept independently of `params`/`case_patterns` because genia-2026's
+  // real parse/lower wire shapes carry these plain names regardless of
+  // whether the body is a case-dispatch expression (see
+  // hosts/python/parse_adapter.py's FuncDef handler and
+  // src/genia/lowering.py's IrFuncDef construction, both of which always
+  // use the header's `node.params`, never anything derived from the
+  // body).
+  std::vector<std::string> header_param_names;
+
+  // Lambda/FuncDef: true when the body is a local case/pattern-dispatch
+  // expression (`pat -> result | pat -> result | ...`) rather than a
+  // single ordinary expression -- see parser.hpp's case-clause grammar.
+  bool is_case_body = false;
+  std::vector<pattern::Pattern> case_patterns;
+  std::vector<Node> case_results;
+
+  // Lambda/FuncDef (ordinary body): the body expression (reuses
+  // `left`). Spread: the spread expression (reuses `left`).
+
+  // Map: key -> value-expression entries, in source order.
+  std::vector<std::pair<std::string, Node>> map_entries;
 
   static Node literal(std::string digits) {
     Node n;
@@ -117,6 +156,52 @@ struct Node {
     n.kind = Kind::Call;
     n.name = std::move(callee_name);
     n.items = std::move(args);
+    return n;
+  }
+
+  static Node lambda(std::vector<pattern::Pattern> parameter_patterns, Node body) {
+    Node n;
+    n.kind = Kind::Lambda;
+    n.params = std::move(parameter_patterns);
+    n.left = std::make_shared<Node>(std::move(body));
+    return n;
+  }
+
+  static Node func_def(std::string func_name, std::vector<std::string> header_names,
+                       std::vector<pattern::Pattern> parameter_patterns, Node body) {
+    Node n;
+    n.kind = Kind::FuncDef;
+    n.name = std::move(func_name);
+    n.header_param_names = std::move(header_names);
+    n.params = std::move(parameter_patterns);
+    n.left = std::make_shared<Node>(std::move(body));
+    return n;
+  }
+
+  static Node func_def_case(std::string func_name, std::vector<std::string> header_names,
+                            std::vector<pattern::Pattern> clause_patterns,
+                            std::vector<Node> clause_results) {
+    Node n;
+    n.kind = Kind::FuncDef;
+    n.name = std::move(func_name);
+    n.header_param_names = std::move(header_names);
+    n.is_case_body = true;
+    n.case_patterns = std::move(clause_patterns);
+    n.case_results = std::move(clause_results);
+    return n;
+  }
+
+  static Node map_literal(std::vector<std::pair<std::string, Node>> entries) {
+    Node n;
+    n.kind = Kind::Map;
+    n.map_entries = std::move(entries);
+    return n;
+  }
+
+  static Node spread(Node inner) {
+    Node n;
+    n.kind = Kind::Spread;
+    n.left = std::make_shared<Node>(std::move(inner));
     return n;
   }
 };

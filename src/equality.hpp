@@ -1,4 +1,4 @@
-// R18 portable value equality for the E24-2/E24-3 vertical slice's
+// R18 portable value equality for the E24-2..E24-4 vertical slice's
 // supported kinds (Integer, Boolean, String, Bytes, List; Map is
 // compared structurally too though no pinned evidence exercises it).
 //
@@ -87,6 +87,8 @@ inline bool structural_equal(const value::Value& a, const value::Value& b) {
       }
       return true;
     }
+    case value::Kind::Outcome:
+    case value::Kind::Closure:
     case value::Kind::Opaque:
       // Never observed by any pinned evidence; no defined equality.
       return false;

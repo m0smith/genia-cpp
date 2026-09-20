@@ -69,7 +69,24 @@ inline std::optional<RunResult> try_run(const std::string& source) {
   if (!ir_program.has_value()) {
     return std::nullopt;
   }
-  auto result = evaluator::eval_program(*ir_program);
+  std::optional<value::Value> result;
+  try {
+    result = evaluator::eval_program(*ir_program);
+  } catch (const evaluator::UndefinedNameError& error) {
+    // E24-4's `deterministic_runtime_error_behavior` evidence
+    // (error-undefined-name.yaml): genia-2026's real reference host
+    // normalizes any undefined-name reference, at any point during
+    // command-mode execution, to exactly this stderr text and exit
+    // code -- see evaluator.hpp's header comment for the verified
+    // source (src/genia/environment.py + src/genia/interpreter.py).
+    // This is a genuine "ok" adapter result (the program ran and
+    // produced a real, deterministic error), never "unsupported".
+    RunResult run_result;
+    run_result.stdout_text = "";
+    run_result.stderr_text = "Error: Undefined name: " + error.name + "\n";
+    run_result.exit_code = 1;
+    return run_result;
+  }
   if (!result.has_value()) {
     return std::nullopt;
   }

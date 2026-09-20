@@ -134,10 +134,14 @@ TEST_CASE("end to end: parse of a bare integer literal through the real adapter"
   CHECK(envelope["result"]["ast"]["value"] == 42);
 }
 
-TEST_CASE("end to end: unsupported-grammar source over eval is a real unsupported response") {
+TEST_CASE("end to end: a bare lambda as the final result is a real unsupported response") {
+  // As of E24-4, `(x) -> x` parses and evaluates fine (it is a real
+  // lambda literal), but a Closure value has no rendered display form
+  // (see render.hpp) -- the whole `eval` case is still honestly
+  // unsupported, now because of rendering rather than grammar.
   json request = {
       {"protocol_version", "1"},
-      {"case_id", "lambda-unsupported"},
+      {"case_id", "lambda-unrenderable-result"},
       {"operation", "eval"},
       {"input", {{"source", "(x) -> x"}, {"stdin", nullptr}, {"argv", nullptr}}},
   };
@@ -164,6 +168,40 @@ TEST_CASE("end to end: eval of a list-literal + map-function source through the 
   CHECK(envelope["status"] == "ok");
   CHECK(envelope["result"]["stdout"] == "[[\"a\", 1], [\"b\", 2]]\n");
   CHECK(envelope["result"]["exit_code"] == 0);
+}
+
+TEST_CASE("end to end: eval of pipeline-map-sum.yaml's source through the real adapter") {
+  json request = {
+      {"protocol_version", "1"},
+      {"case_id", "pipeline-map-sum"},
+      {"operation", "eval"},
+      {"input",
+       {{"source", "[1, 2, 3] |> map((x) -> x + 1) |> sum"},
+        {"stdin", nullptr},
+        {"argv", nullptr}}},
+  };
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  const json& envelope = *response;
+  CHECK(envelope["status"] == "ok");
+  CHECK(envelope["result"]["stdout"] == "9\n");
+  CHECK(envelope["result"]["exit_code"] == 0);
+}
+
+TEST_CASE("end to end: error-undefined-name.yaml is a genuine ok result, not unsupported") {
+  json request = {
+      {"protocol_version", "1"},
+      {"case_id", "error-undefined-name"},
+      {"operation", "eval"},
+      {"input", {{"source", "undefined_name"}, {"stdin", nullptr}, {"argv", nullptr}}},
+  };
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  const json& envelope = *response;
+  CHECK(envelope["status"] == "ok");
+  CHECK(envelope["result"]["stdout"] == "");
+  CHECK(envelope["result"]["stderr"] == "Error: Undefined name: undefined_name\n");
+  CHECK(envelope["result"]["exit_code"] == 1);
 }
 
 TEST_CASE("an unknown future operation is still deterministically unsupported") {

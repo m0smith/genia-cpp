@@ -1,4 +1,4 @@
-// Minimal portable Core IR nodes for the E24-2/E24-3 vertical slice:
+// Minimal portable Core IR nodes for the E24-2..E24-4 vertical slice:
 // IrLiteral, IrVar, IrBinary, IrExprStmt, IrList, IrAssign, and IrCall
 // (genia-2026's docs/architecture/core-ir-portability.md
 // minimal_portable_node_families list has 29 entries; this slice
@@ -37,7 +37,10 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include "pattern.hpp"
 
 namespace genia::core_ir {
 
@@ -49,6 +52,12 @@ enum class Kind : std::uint8_t {
   List,
   Assign,
   Call,
+  // E24-4 additions.
+  Lambda,
+  FuncDef,
+  Map,
+  Pipeline,
+  Spread,
 };
 
 enum class LiteralKind : std::uint8_t { Integer, String, Bool };
@@ -94,9 +103,42 @@ struct Node {
   std::shared_ptr<Node> right;
 
   // ExprStmt/Assign: the wrapped/assigned expression (reuses `left`).
+  // Lambda/FuncDef (ordinary, non-case body): the body expression
+  // (reuses `left`). Spread: the spread expression (reuses `left`).
+  // Pipeline: the pipeline source (reuses `left`); `items` holds the
+  // ordered stages.
 
-  // List: element expressions. Call: argument expressions.
+  // List: element expressions. Call: argument expressions. Pipeline:
+  // ordered stage expressions.
   std::vector<Node> items;
+
+  // Lambda/FuncDef: one positional-parameter pattern per parameter
+  // (e.g. a plain `x` parameter lowers to `IrPatBind("x")`). Empty when
+  // `is_case_body` is true (a case-dispatch body binds nothing
+  // positionally beforehand -- see pattern_match.hpp's `match`).
+  std::vector<pattern::Pattern> params;
+
+  // FuncDef only: the literal header parameter names -- see
+  // ast.hpp's `header_param_names` for why this is independent of
+  // `params`/`case_patterns` (genia-2026's real IrFuncDef.params wire
+  // field always carries these, regardless of case-dispatch body).
+  std::vector<std::string> header_param_names;
+
+  // Lambda/FuncDef: true when the body is a local case/pattern-dispatch
+  // expression (E24-4's `pattern_case_dispatch` category) rather than a
+  // single ordinary expression. `case_patterns[i]` pairs with
+  // `case_results[i]` as clause i's pattern and result expression,
+  // tried in order (matching genia-2026's IrCase/IrCaseClause -- see
+  // ir_projection.hpp for the wire shape this projects to).
+  bool is_case_body = false;
+  std::vector<pattern::Pattern> case_patterns;
+  std::vector<Node> case_results;
+
+  // Map: key -> value-expression entries, in source order (matching
+  // genia-2026's IrMap.items; map-literal keys are always plain
+  // strings, whether written as a bare identifier or a string literal
+  // -- see src/genia/lowering.py's `_map_literal_key_name`).
+  std::vector<std::pair<std::string, Node>> map_entries;
 
   static Node integer_literal(std::string digits) {
     Node n;
@@ -165,6 +207,60 @@ struct Node {
     n.kind = Kind::Call;
     n.name = std::move(callee_name);
     n.items = std::move(args);
+    return n;
+  }
+
+  static Node lambda(std::vector<pattern::Pattern> parameter_patterns, Node body) {
+    Node n;
+    n.kind = Kind::Lambda;
+    n.params = std::move(parameter_patterns);
+    n.left = std::make_shared<Node>(std::move(body));
+    return n;
+  }
+
+  static Node func_def(std::string func_name, std::vector<std::string> header_names,
+                       std::vector<pattern::Pattern> parameter_patterns, Node body) {
+    Node n;
+    n.kind = Kind::FuncDef;
+    n.name = std::move(func_name);
+    n.header_param_names = std::move(header_names);
+    n.params = std::move(parameter_patterns);
+    n.left = std::make_shared<Node>(std::move(body));
+    return n;
+  }
+
+  static Node func_def_case(std::string func_name, std::vector<std::string> header_names,
+                            std::vector<pattern::Pattern> clause_patterns,
+                            std::vector<Node> clause_results) {
+    Node n;
+    n.kind = Kind::FuncDef;
+    n.name = std::move(func_name);
+    n.header_param_names = std::move(header_names);
+    n.is_case_body = true;
+    n.case_patterns = std::move(clause_patterns);
+    n.case_results = std::move(clause_results);
+    return n;
+  }
+
+  static Node map_literal(std::vector<std::pair<std::string, Node>> entries) {
+    Node n;
+    n.kind = Kind::Map;
+    n.map_entries = std::move(entries);
+    return n;
+  }
+
+  static Node pipeline(Node source, std::vector<Node> stages) {
+    Node n;
+    n.kind = Kind::Pipeline;
+    n.left = std::make_shared<Node>(std::move(source));
+    n.items = std::move(stages);
+    return n;
+  }
+
+  static Node spread(Node inner) {
+    Node n;
+    n.kind = Kind::Spread;
+    n.left = std::make_shared<Node>(std::move(inner));
     return n;
   }
 };

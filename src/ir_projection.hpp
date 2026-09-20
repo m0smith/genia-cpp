@@ -1,22 +1,104 @@
 // Projects this slice's Core IR into the portable wire shape
-// hosts/python/ir_normalize.py's `_normalize_ir_node` produces (the
-// `lower` operation's `result.ir`). No `ir`/`lower`-category bootstrap
-// case is pinned for E24-2/E24-3 yet, but this is built honestly
-// against the documented contract now rather than deferred, per
-// AGENTS.md's "no parser-to-runtime shortcuts" rule -- the `lower`
-// operation is real, not a stub, even before evidence exercises it.
+// hosts/python/ir_normalize.py's `_normalize_ir_node`/`_normalize_pattern`
+// produce (the `lower` operation's `result.ir`). No `ir`/`lower`-category
+// bootstrap case is pinned yet, but this is built honestly against the
+// documented contract now rather than deferred, per AGENTS.md's "no
+// parser-to-runtime shortcuts" rule -- the `lower` operation is real, not
+// a stub, even before evidence exercises it.
+//
+// `project`/`project_program` return std::optional: a node this
+// projection cannot honestly represent (e.g. this slice's own
+// `Kind::Spread` reached outside a list, which never happens in
+// practice -- see evaluator.hpp) fails the whole projection rather than
+// silently emitting a JSON null in its place, matching
+// ast_projection.hpp's already-safer optional-threading pattern.
 #pragma once
 
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "../third_party/nlohmann_json/json.hpp"
 #include "core_ir.hpp"
+#include "pattern.hpp"
 
 namespace genia::ir_projection {
 
 using json = nlohmann::json;
 
-inline json project(const core_ir::Node& node) {
+inline std::optional<json> project(const core_ir::Node& node);
+
+// Mirrors src/genia/lowering.py's `_lambda_pattern_is_simple_parameter_shape`:
+// a lambda whose every positional parameter is a plain Bind (never a
+// destructuring List/Map/Wildcard/Rest pattern) projects with `params`
+// as plain names and no `pattern` field; anything else projects `params`
+// as empty and carries the full pattern via `pattern`.
+inline bool is_simple_bind_shape(const std::vector<pattern::Pattern>& params) {
+  for (const auto& p : params) {
+    if (p.kind != pattern::Kind::Bind) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
+  switch (pattern.kind) {
+    case pattern::Kind::Bind:
+      return json{{"node", "IrPatBind"}, {"name", pattern.name}};
+    case pattern::Kind::Wildcard:
+      return json{{"node", "IrPatWildcard"}};
+    case pattern::Kind::Rest:
+      return json{{"node", "IrPatRest"}, {"name", pattern.name}};
+    case pattern::Kind::Tuple: {
+      json items = json::array();
+      for (const auto& item : pattern.items) {
+        auto projected_item = project_pattern(item);
+        if (!projected_item.has_value()) {
+          return std::nullopt;
+        }
+        items.push_back(*projected_item);
+      }
+      return json{{"node", "IrPatTuple"}, {"items", items}};
+    }
+    case pattern::Kind::List: {
+      json items = json::array();
+      for (const auto& item : pattern.items) {
+        auto projected_item = project_pattern(item);
+        if (!projected_item.has_value()) {
+          return std::nullopt;
+        }
+        items.push_back(*projected_item);
+      }
+      return json{{"node", "IrPatList"}, {"items", items}};
+    }
+    case pattern::Kind::Map: {
+      json items = json::array();
+      for (const auto& [key, value_pattern] : pattern.map_items) {
+        auto projected_value = project_pattern(value_pattern);
+        if (!projected_value.has_value()) {
+          return std::nullopt;
+        }
+        items.push_back(json{{"key", key}, {"value", *projected_value}});
+      }
+      return json{{"node", "IrPatMap"}, {"items", items}};
+    }
+  }
+  return std::nullopt;
+}
+
+inline std::optional<json> project_case_clause(const pattern::Pattern& pattern,
+                                               const core_ir::Node& result) {
+  auto projected_pattern = project_pattern(pattern);
+  auto projected_result = project(result);
+  if (!projected_pattern.has_value() || !projected_result.has_value()) {
+    return std::nullopt;
+  }
+  return json{
+      {"node", "IrCaseClause"}, {"pattern", *projected_pattern}, {"result", *projected_result}};
+}
+
+inline std::optional<json> project(const core_ir::Node& node) {
   switch (node.kind) {
     case core_ir::Kind::Literal:
       switch (node.literal_kind) {
@@ -28,45 +110,152 @@ inline json project(const core_ir::Node& node) {
         case core_ir::LiteralKind::Bool:
           return json{{"node", "IrLiteral"}, {"value", node.bool_value}};
       }
-      return json();
+      return std::nullopt;
     case core_ir::Kind::Var:
       return json{{"node", "IrVar"}, {"name", node.name}};
-    case core_ir::Kind::Binary:
+    case core_ir::Kind::Binary: {
+      auto left = project(*node.left);
+      auto right = project(*node.right);
+      if (!left.has_value() || !right.has_value()) {
+        return std::nullopt;
+      }
       return json{{"node", "IrBinary"},
-                  {"left", project(*node.left)},
+                  {"left", *left},
                   {"op", core_ir::op_token_name(node.op)},
-                  {"right", project(*node.right)}};
-    case core_ir::Kind::ExprStmt:
-      return json{{"node", "IrExprStmt"}, {"expr", project(*node.left)}};
+                  {"right", *right}};
+    }
+    case core_ir::Kind::ExprStmt: {
+      auto expr = project(*node.left);
+      if (!expr.has_value()) {
+        return std::nullopt;
+      }
+      return json{{"node", "IrExprStmt"}, {"expr", *expr}};
+    }
     case core_ir::Kind::List: {
       json items = json::array();
       for (const auto& item : node.items) {
-        items.push_back(project(item));
+        auto projected_item = project(item);
+        if (!projected_item.has_value()) {
+          return std::nullopt;
+        }
+        items.push_back(*projected_item);
       }
       return json{{"node", "IrList"}, {"items", items}};
     }
-    case core_ir::Kind::Assign:
-      return json{{"node", "IrAssign"}, {"name", node.name}, {"expr", project(*node.left)}};
+    case core_ir::Kind::Map: {
+      json items = json::array();
+      for (const auto& [key, value_node] : node.map_entries) {
+        auto projected_value = project(value_node);
+        if (!projected_value.has_value()) {
+          return std::nullopt;
+        }
+        items.push_back(json{{"key", key}, {"value", *projected_value}});
+      }
+      return json{{"node", "IrMap"}, {"items", items}};
+    }
+    case core_ir::Kind::Assign: {
+      auto expr = project(*node.left);
+      if (!expr.has_value()) {
+        return std::nullopt;
+      }
+      return json{{"node", "IrAssign"}, {"name", node.name}, {"expr", *expr}};
+    }
     case core_ir::Kind::Call: {
       json args = json::array();
       for (const auto& arg : node.items) {
-        args.push_back(project(arg));
+        auto projected_arg = project(arg);
+        if (!projected_arg.has_value()) {
+          return std::nullopt;
+        }
+        args.push_back(*projected_arg);
       }
       return json{
           {"node", "IrCall"}, {"fn", json{{"node", "IrVar"}, {"name", node.name}}}, {"args", args}};
     }
+    case core_ir::Kind::Lambda: {
+      auto body = project(*node.left);
+      if (!body.has_value()) {
+        return std::nullopt;
+      }
+      json result = {{"node", "IrLambda"}, {"body", *body}};
+      if (is_simple_bind_shape(node.params)) {
+        json names = json::array();
+        for (const auto& p : node.params) {
+          names.push_back(p.name);
+        }
+        result["params"] = names;
+      } else {
+        result["params"] = json::array();
+        auto projected_pattern = project_pattern(pattern::Pattern::tuple(node.params));
+        if (!projected_pattern.has_value()) {
+          return std::nullopt;
+        }
+        result["pattern"] = *projected_pattern;
+      }
+      return result;
+    }
+    case core_ir::Kind::FuncDef: {
+      json body;
+      if (node.is_case_body) {
+        json clauses = json::array();
+        for (size_t i = 0; i < node.case_patterns.size(); ++i) {
+          auto clause = project_case_clause(node.case_patterns[i], node.case_results[i]);
+          if (!clause.has_value()) {
+            return std::nullopt;
+          }
+          clauses.push_back(*clause);
+        }
+        body = json{{"node", "IrCase"}, {"clauses", clauses}};
+      } else {
+        auto projected_body = project(*node.left);
+        if (!projected_body.has_value()) {
+          return std::nullopt;
+        }
+        body = *projected_body;
+      }
+      return json{{"node", "IrFuncDef"},
+                  {"name", node.name},
+                  {"params", node.header_param_names},
+                  {"body", body}};
+    }
+    case core_ir::Kind::Pipeline: {
+      auto source = project(*node.left);
+      if (!source.has_value()) {
+        return std::nullopt;
+      }
+      json stages = json::array();
+      for (const auto& stage : node.items) {
+        auto projected_stage = project(stage);
+        if (!projected_stage.has_value()) {
+          return std::nullopt;
+        }
+        stages.push_back(*projected_stage);
+      }
+      return json{{"node", "IrPipeline"}, {"source", *source}, {"stages", stages}};
+    }
+    case core_ir::Kind::Spread: {
+      auto expr = project(*node.left);
+      if (!expr.has_value()) {
+        return std::nullopt;
+      }
+      return json{{"node", "IrSpread"}, {"expr", *expr}};
+    }
   }
-  return json();
+  return std::nullopt;
 }
 
 // hosts/python/ir_normalize.py's normalize_portable_ir always returns a
 // JSON array of normalized nodes, one per top-level program statement --
 // unlike the `parse`-category projection, it never unwraps a
 // single-statement program to a bare node.
-inline json project_program(const std::vector<core_ir::Node>& program) {
+inline std::optional<json> project_program(const std::vector<core_ir::Node>& program) {
   json array = json::array();
   for (const auto& node : program) {
-    array.push_back(project(node));
+    auto projected = project(node);
+    if (!projected.has_value()) {
+      return std::nullopt;
+    }
+    array.push_back(*projected);
   }
   return array;
 }

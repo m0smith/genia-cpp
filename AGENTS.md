@@ -43,28 +43,43 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-3 complete.** E24-1 (`m0smith/genia-2026#955`) built
+**E24-1 through E24-4 complete.** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
 added the first real vertical slice: integer literals, one evidenced
 bare-name reference (`print`), and `+ - * /` binary expressions, plus
-`-c` command mode. E24-3 (`m0smith/genia-2026#957`) widens that to
+`-c` command mode. E24-3 (`m0smith/genia-2026#957`) widened that to
 string/boolean/list literals, assignment, function calls, the native
 `map_new`/`map_get`/`map_put`/`map_has?`/`map_remove`/`map_count`/
 `map_items`/`utf8_encode` functions, R18 structural/legal-key equality
-(`==`), and file-mode CLI. Anything outside this grammar is rejected at
-the tokenizer/parser level and reported `unsupported`, never guessed at
-(see `src/parser.hpp`). There is still no Python code anywhere in this
-repository's build or execution path.
+(`==`), and file-mode CLI. E24-4 (`m0smith/genia-2026#958`) adds map
+literals (`{key: value, ...}`), lambdas and closures (including
+list/map-destructuring parameter patterns), named-function definitions
+with both ordinary and local case/pattern-dispatch bodies, pipelines
+(`|>`), the `err(reason[, context])` Outcome constructor and its
+`err(...)` rendering, and the one deterministic
+`Error: Undefined name: <name>` runtime diagnostic genia-2026's
+reference host produces for a genuinely unbound name (never guessed for
+a real-but-unimplemented Genia global — see
+`src/genia2026_known_globals.hpp`). `map`/`map_acc`/`sum` are
+interpreted from a small, genuinely Genia-source-level prelude
+installation (`src/global_env.hpp`), not reimplemented in C++, per
+`docs/design/r24/native-primitive-inventory.md`'s "list/map prelude
+helpers ... interpreted from the shared Genia prelude source" rule.
+Anything outside this grammar is rejected at the tokenizer/parser level
+and reported `unsupported`, never guessed at (see `src/parser.hpp`).
+There is still no Python code anywhere in this repository's build or
+execution path.
 
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`. Declared `partial`: `core_ir_eval`
-(exact Integer arithmetic, structural equality, list construction, and
-the native map/utf8 functions over this slice's grammar only — no
-lambdas, pattern matching, Decimal/Rational/Float64, or open
-functions). Every other `spec/manifest.json` capability remains
+(exact Integer arithmetic, structural equality, list/map construction,
+lambdas/closures, local case/pattern dispatch, pipelines, `err(...)`
+Outcomes, and the one deterministic undefined-name diagnostic, over
+this slice's grammar only — no Decimal/Rational/Float64, `some`/`none`,
+or open functions). Every other `spec/manifest.json` capability remains
 `unsupported`. Running the full shared spec corpus:
-`total=744 passed=21 failed=0 unsupported=723 protocol_error=0 crash=0
+`total=744 passed=64 failed=0 unsupported=680 protocol_error=0 crash=0
 timeout=0 invalid=0` (see README.md for the exact case list).
 
 The real C++ host implementation is numbered **R24** (originally
@@ -72,10 +87,10 @@ planned as R21; `genia-2026` planning issue #845 decomposed the Exact
 Numeric Model into R21-R23 and moved the C++ host to R24). The R24
 pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 `docs/design/r24-cpp-host-preflight.md` and the four pinned entry
-artifacts under `docs/design/r24/` there. E24-1 through E24-3 are the
-first three implementation slices of the E24 sequence
-(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-4 (Outcomes,
-lambdas, pattern/case dispatch, pipelines) has not started.**
+artifacts under `docs/design/r24/` there. E24-1 through E24-4 are the
+first four implementation slices of the E24 sequence
+(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-5 (diagnostic
+normalization) has not started.**
 
 Known commands:
 
