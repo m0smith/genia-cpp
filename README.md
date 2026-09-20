@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: E24-4 vertical slice complete. `genia-adapter` implements
+**Status: E24-5 complete. `genia-adapter` implements
 integer/string/boolean/list/map literals, bare-name references,
 assignment, `+ - * / ==` binary expressions, lambdas/closures, named
 functions (ordinary and local case/pattern-dispatch bodies), pipelines
@@ -8,8 +8,9 @@ functions (ordinary and local case/pattern-dispatch bodies), pipelines
 deterministic undefined-name runtime error, calls to the native
 `map_*`/`utf8_encode`/`err`/`sum` functions, and `-c`/file-mode CLI --
 end to end (source -> parser -> portable Core IR -> evaluator ->
-normalized adapter result). Every other Genia behavior remains honestly
-`unsupported`.**
+normalized adapter result), hardened against a C++ stack-overflow crash
+from adversarially deep recursion/nesting (E24-5). Every other Genia
+behavior remains honestly `unsupported`.**
 
 This is the planned production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
@@ -25,7 +26,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-4 are complete; E24-5 through E24-8 remain.
+E24-1 through E24-5 are complete; E24-6 through E24-8 remain.
 
 ## Authority
 
@@ -169,9 +170,24 @@ pipelines, and one deterministic runtime-error diagnostic:
   parse -> lower -> eval pipeline `eval`/`cli` share; both projections
   return `std::optional` and fail the whole projection (never a
   fabricated JSON `null`) for anything they cannot honestly represent.
-- `tests/test_bignum.cpp`, `tests/test_engine.cpp`, `tests/test_protocol.cpp`
-  — Catch2 unit tests (internal genia-cpp tests, not shared conformance
-  evidence).
+- `tests/test_bignum.cpp`, `tests/test_engine.cpp`, `tests/test_protocol.cpp`,
+  `tests/test_diagnostic_boundary.cpp` — Catch2 unit tests (internal
+  genia-cpp tests, not shared conformance evidence). The last is E24-5's
+  (`m0smith/genia-2026#959`) adversarial audit: malformed/resource-limit-
+  triggering input at the parser/evaluator/adapter-boundary layers,
+  asserting no forbidden text (pre-flight section 5: STL exception
+  wording, compiler/runtime-specific type names, OS/library error
+  strings, filesystem/library implementation details, demangled C++
+  symbols) and, more importantly, no crash. It caught two real crashes
+  this ticket fixed: a C++ stack overflow (undefined behavior,
+  uncatchable by any try/catch) from a few thousand levels of either
+  Genia-level recursive function calls or parser nesting (parenthesized
+  grouping, list/map literals/patterns) reliably segfaulted the adapter
+  before this slice; `src/evaluator.hpp`'s `kMaxCallDepth` and
+  `src/parser.hpp`'s `kMaxNestingDepth` now bound both well below the
+  measured crash threshold, converting the crash into an honest
+  `unsupported` with no change to any normal-sized program's behavior.
+  E24-5 adds no new Genia semantics or capabilities.
 - `genia-adapter` (the built binary) declares `parser`, `ast_lowering`,
   `cli_command_mode`, and `cli_file_mode` `supported`, `core_ir_eval`
   `partial`, and every other `spec/manifest.json` capability

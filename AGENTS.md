@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-4 complete.** E24-1 (`m0smith/genia-2026#955`) built
+**E24-1 through E24-5 complete.** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
 added the first real vertical slice: integer literals, one evidenced
@@ -68,8 +68,19 @@ installation (`src/global_env.hpp`), not reimplemented in C++, per
 helpers ... interpreted from the shared Genia prelude source" rule.
 Anything outside this grammar is rejected at the tokenizer/parser level
 and reported `unsupported`, never guessed at (see `src/parser.hpp`).
-There is still no Python code anywhere in this repository's build or
-execution path.
+E24-5 (`m0smith/genia-2026#959`) is a hardening/audit pass, not a new
+feature: it adds no new Genia semantics, only an internal adversarial
+Catch2 test matrix (`tests/test_diagnostic_boundary.cpp`) plus two real
+crash fixes that pass caught by running it — a C++ stack overflow
+(undefined behavior, uncatchable by any try/catch) from a few thousand
+levels of either Genia-level recursive function calls or parser
+nesting (parenthesized grouping, list/map literals/patterns) reliably
+segfaulted this adapter before this slice; both are now bounded by a
+depth guard well below the measured crash threshold (`src/evaluator.hpp`'s
+`kMaxCallDepth`, `src/parser.hpp`'s `kMaxNestingDepth`), converting the
+crash into an honest `unsupported` with no change to any
+normal-sized program's behavior. There is still no Python code anywhere
+in this repository's build or execution path.
 
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`. Declared `partial`: `core_ir_eval`
@@ -87,10 +98,10 @@ planned as R21; `genia-2026` planning issue #845 decomposed the Exact
 Numeric Model into R21-R23 and moved the C++ host to R24). The R24
 pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 `docs/design/r24-cpp-host-preflight.md` and the four pinned entry
-artifacts under `docs/design/r24/` there. E24-1 through E24-4 are the
-first four implementation slices of the E24 sequence
-(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-5 (diagnostic
-normalization) has not started.**
+artifacts under `docs/design/r24/` there. E24-1 through E24-5 are the
+first five implementation slices of the E24 sequence
+(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-6 (R20 open
+functions) has not started.**
 
 Known commands:
 

@@ -288,6 +288,30 @@ class Parser {
   std::vector<Token> tokens_;
   size_t pos_ = 0;
 
+  // E24-5 (m0smith/genia-2026#959) diagnostic-normalization hardening:
+  // recursive-descent nesting (parenthesized grouping, lambdas, nested
+  // list/map literals or patterns) recurses through several mutually
+  // recursive parse functions per source-level nesting level. A C++
+  // stack overflow is undefined behavior, uncatchable by any try/catch,
+  // so pathologically deep (or simply very deep) nesting would
+  // otherwise segfault the whole adapter process -- verified
+  // empirically: a few thousand levels of nested parens reliably
+  // segfaults this parser without this guard. This limit is deliberately
+  // far below that measured crash threshold and changes no observable
+  // behavior for any source shallower than it.
+  static constexpr int kMaxNestingDepth = 300;
+  int nesting_depth_ = 0;
+
+  struct NestingGuard {
+    explicit NestingGuard(int& depth) : depth_(depth) { ++depth_; }
+    ~NestingGuard() { --depth_; }
+    NestingGuard(const NestingGuard&) = delete;
+    NestingGuard& operator=(const NestingGuard&) = delete;
+    NestingGuard(NestingGuard&&) = delete;
+    NestingGuard& operator=(NestingGuard&&) = delete;
+    int& depth_;
+  };
+
   const Token& peek() const { return tokens_[pos_]; }
   const Token& peek_at(size_t offset) const {
     const size_t index = pos_ + offset;
@@ -398,6 +422,10 @@ class Parser {
   // ---- Patterns ------------------------------------------------------
 
   std::optional<pattern::Pattern> parse_pattern_atom() {
+    NestingGuard guard(nesting_depth_);
+    if (nesting_depth_ > kMaxNestingDepth) {
+      return std::nullopt;
+    }
     if (peek().kind == TokenKind::Ident) {
       const std::string text = peek().text;
       advance();
@@ -769,6 +797,10 @@ class Parser {
   }
 
   std::optional<ast::Node> parse_factor() {
+    NestingGuard guard(nesting_depth_);
+    if (nesting_depth_ > kMaxNestingDepth) {
+      return std::nullopt;
+    }
     if (peek().kind == TokenKind::Integer) {
       return ast::Node::literal(advance().text);
     }
