@@ -7,6 +7,13 @@
 // documented parse-category wire contract every host's `parse` operation
 // must match, per docs/design/ir.md's `{kind: Literal, value: ...}`
 // table and the reference host's own normalize_ast).
+//
+// normalize_ast only special-cases ExprStmt/Number/Var/Assign/FuncDef/
+// Open*/NamedPattern*/Binary; every other node type (String, Boolean,
+// List, Call, ...) falls through to its bare fallback shape
+// `{"kind": node_type}` -- no pinned E24-3 `parse`-category evidence
+// exercises string/boolean/list/call literals, so this project mirrors
+// that same fallback rather than guessing at a richer shape.
 #pragma once
 
 #include <optional>
@@ -24,7 +31,7 @@ using json = nlohmann::json;
 // would silently lose precision through nlohmann::json's number type
 // (which is not arbitrary-precision). Rather than emit a wrong number,
 // projection fails (the caller must treat that as this specific parse
-// case being unsupported) for literals that large. No pinned E24-2
+// case being unsupported) for literals that large. No pinned E24-2/E24-3
 // evidence exercises this: the sole pinned `parse` case is "42".
 inline std::optional<int64_t> digits_to_safe_int64(const std::string& digits) {
   if (digits.size() > 18) {  // 10^18 comfortably fits int64_t; stay well clear of overflow
@@ -51,6 +58,10 @@ inline std::optional<json> project(const ast::Node& node) {
       }
       return json{{"kind", "Literal"}, {"value", *value}};
     }
+    case ast::Kind::StringLiteral:
+      return json{{"kind", "String"}};
+    case ast::Kind::BoolLiteral:
+      return json{{"kind", "Boolean"}};
     case ast::Kind::Var:
       return json{{"kind", "Var"}, {"name", node.name}};
     case ast::Kind::Binary: {
@@ -61,6 +72,17 @@ inline std::optional<json> project(const ast::Node& node) {
       }
       return json{{"kind", "Binary"}, {"op", node.op}, {"left", *left}, {"right", *right}};
     }
+    case ast::Kind::List:
+      return json{{"kind", "List"}};
+    case ast::Kind::Assign: {
+      auto value = project(*node.left);
+      if (!value.has_value()) {
+        return std::nullopt;
+      }
+      return json{{"kind", "Assign"}, {"name", node.name}, {"value", *value}};
+    }
+    case ast::Kind::Call:
+      return json{{"kind", "Call"}};
   }
   return std::nullopt;
 }

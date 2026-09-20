@@ -49,11 +49,20 @@ TEST_CASE("parse: print 123 is a Var reference followed by a Literal") {
   CHECK((*ast)[1]["value"] == 123);
 }
 
-TEST_CASE("parse: unsupported syntax (parens, strings) is std::nullopt, never a guess") {
+TEST_CASE("parse: unsupported syntax (parens, lambdas) is std::nullopt, never a guess") {
   CHECK_FALSE(try_parse("(1 + 2)").has_value());
-  CHECK_FALSE(try_parse("\"hello\"").has_value());
-  CHECK_FALSE(try_parse("[1, 2]").has_value());
+  CHECK_FALSE(try_parse("(x) -> x").has_value());
   CHECK_FALSE(try_parse("-5").has_value());  // unary minus is out of this slice's grammar
+}
+
+TEST_CASE("parse: string and list literals are supported as of E24-3") {
+  auto string_ast = try_parse("\"hello\"");
+  REQUIRE(string_ast.has_value());
+  CHECK((*string_ast)["kind"] == "String");
+
+  auto list_ast = try_parse("[1, 2]");
+  REQUIRE(list_ast.has_value());
+  CHECK((*list_ast)["kind"] == "List");
 }
 
 TEST_CASE("lower: a literal lowers to a tagged IrLiteral payload wrapped in IrExprStmt") {
@@ -164,4 +173,84 @@ TEST_CASE("run: standard precedence -- multiplication binds tighter than additio
   auto result = try_run("2 + 3 * 4");
   REQUIRE(result.has_value());
   CHECK(result->stdout_text == "14\n");
+}
+
+// --- E24-3: lists, ordered maps, equality, file mode ------------------
+
+TEST_CASE("run: list-literal-construction-and-equality.yaml") {
+  auto result = try_run("[1, 2] == [1, 2]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "true\n");
+}
+
+TEST_CASE("run: map-items.yaml") {
+  auto result = try_run(
+      "m = map_put(map_put(map_new(), \"a\", 1), \"b\", 2)\n"
+      "map_items(m)\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[[\"a\", 1], [\"b\", 2]]\n");
+}
+
+TEST_CASE("run: map-put-replace-existing-key-preserves-order-via-items.yaml") {
+  auto result = try_run(
+      "m = map_put(map_put(map_put(map_new(), \"a\", 1), \"b\", 2), \"c\", 3)\n"
+      "map_items(map_put(m, \"a\", 99))\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[[\"a\", 99], [\"b\", 2], [\"c\", 3]]\n");
+}
+
+TEST_CASE("run: r18-structural-equality-bytes-and-lists.yaml") {
+  auto result = try_run(
+      "a = utf8_encode(\"hi\")\n"
+      "b = utf8_encode(\"hi\")\n"
+      "c = utf8_encode(\"no\")\n"
+      "[a == b, a == c, [a] == [b], [1, 2] == [1, 2], [1, 2] == [1, 2, 3], [] == []]\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, false, true, true, false, true]\n");
+}
+
+TEST_CASE("run: r18-legal-key-kind-separation-integer-string.yaml") {
+  auto result = try_run(
+      "bools = map_put(map_put(map_new(), true, \"bool\"), 1, \"int\")\n"
+      "kinds = map_put(map_put(map_new(), \"1\", \"string\"), 1, \"int\")\n"
+      "[map_count(bools), map_get(bools, true), map_get(bools, 1), map_count(kinds), "
+      "map_get(kinds, \"1\"), map_get(kinds, 1)]\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[2, \"bool\", \"int\", 2, \"string\", \"int\"]\n");
+}
+
+TEST_CASE("run: file_mode_basic.genia's source (print 42) still works via the shared pipeline") {
+  auto result = try_run("print 42");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "42\n");
+}
+
+TEST_CASE("run: assignment introduces a binding visible to later statements only") {
+  auto result = try_run("x = 5\nx + 1\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "6\n");
+}
+
+TEST_CASE("run: referencing an undefined name is unsupported even with assignment support") {
+  CHECK_FALSE(try_run("y").has_value());
+}
+
+TEST_CASE("run: boolean literals render as true/false, distinct kind from Integer") {
+  auto result = try_run("[true, false, true == 1, 1 == true]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, false, false, false]\n");
+}
+
+TEST_CASE("run: map_get on a legal key with no matching entry is unsupported, not a crash") {
+  CHECK_FALSE(try_run("map_get(map_new(), \"missing\")").has_value());
+}
+
+TEST_CASE("run: map_put/map_get round trip through a native ordered map") {
+  auto result = try_run("map_get(map_put(map_new(), \"k\", 7), \"k\")");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "7\n");
+}
+
+TEST_CASE("run: string escapes are unsupported, never guessed at") {
+  CHECK_FALSE(try_run("\"a\\\"b\"").has_value());
 }
