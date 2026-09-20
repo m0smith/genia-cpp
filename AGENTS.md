@@ -43,26 +43,36 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 complete (`m0smith/genia-2026#955`): toolchain bootstrap and an
-honest E16-1 adapter skeleton.** A real, compiled C++ binary
-(`genia-adapter`) now speaks the E16-1 protocol: it truthfully declares
-every capability in `genia-2026`'s `spec/manifest.json` (required +
-optional) `unsupported`, and answers every `parse`/`lower`/`eval`/`cli`
-request with a deterministic `unsupported` response. It implements
-**zero** Genia semantics — no parsing, no lowering, no evaluation. The
-temporary Python `bootstrap/protocol_adapter_stub.py` placeholder has
-been deleted; there is no Python code anywhere in this repository's
-build or execution path.
+**E24-1 and E24-2 complete.** E24-1 (`m0smith/genia-2026#955`) built the
+toolchain bootstrap and an honest E16-1 adapter skeleton implementing
+zero Genia semantics. E24-2 (`m0smith/genia-2026#956`) adds the first
+real vertical slice on top of it: `genia-adapter` now genuinely parses,
+lowers to portable Core IR, and evaluates exactly one deliberately
+minimal grammar — integer literals, the one evidenced bare-name
+reference (`print`), and `+ - * /` binary expressions with standard
+precedence — plus `-c` command mode. Anything outside that grammar is
+rejected at the tokenizer/parser level and reported `unsupported`,
+never guessed at (see `src/parser.hpp`). There is still no Python code
+anywhere in this repository's build or execution path.
+
+Capabilities declared `supported`: `parser`, `ast_lowering`,
+`cli_command_mode`. Declared `partial`: `core_ir_eval` (exact Integer
+arithmetic over this slice's grammar only — no lists, maps, lambdas,
+pattern matching, Decimal/Rational/Float64, file mode, or open
+functions). Every other `spec/manifest.json` capability remains
+`unsupported`. Running the full shared spec corpus:
+`total=740 passed=10 failed=0 unsupported=730 protocol_error=0 crash=0
+timeout=0 invalid=0` (see README.md for the exact case list).
 
 The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
 Numeric Model into R21-R23 and moved the C++ host to R24). The R24
 pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 `docs/design/r24-cpp-host-preflight.md` and the four pinned entry
-artifacts under `docs/design/r24/` there. E24-1 is the first
-implementation slice of the E24 sequence
-(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-2 (parsing,
-arithmetic, and the first real Genia semantics) has not started.**
+artifacts under `docs/design/r24/` there. E24-1 and E24-2 are the first
+two implementation slices of the E24 sequence
+(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-3 (lists,
+ordered maps, equality, file mode) has not started.**
 
 Known commands:
 
@@ -73,8 +83,8 @@ Known commands:
 - lint: `clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp && clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp`
 - conformance evidence: from a `genia-2026` checkout at the pinned
   revision, `python -m tools.spec_runner --host '<path>/genia-cpp/build/genia-adapter' --evidence evidence.json`
-  (expected result at E24-1: every applicable case `unsupported`, 0
-  `pass`/`fail`/`crash`/`protocol_error`/`timeout`)
+  (expected result at E24-2: `total=740 passed=10 failed=0
+  unsupported=730 protocol_error=0 crash=0 timeout=0 invalid=0`)
 
 ## Dependency/toolchain policy (pinned by the R24 pre-flight)
 

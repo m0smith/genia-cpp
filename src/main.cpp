@@ -1,24 +1,28 @@
-// genia-cpp E16-1 adapter entry point (E24-1: toolchain bootstrap only).
+// genia-cpp E16-1 adapter entry point.
 //
 // This binary implements ONLY the E16-1 transport contract: it reads
 // exactly one JSON request object from stdin and writes exactly one JSON
 // response object to stdout, per
 // docs/design/r16-multi-host-conformance-infrastructure-contract.md.
 //
-// It does not parse, lower, or evaluate any Genia source. Every operation
-// other than `capabilities` deterministically answers `unsupported`, and
-// `capabilities` truthfully declares every genia-2026 capability name as
-// `unsupported`. This is intentional and required by E24-1's scope (see
-// m0smith/genia-2026#955): C++ implements Genia, it does not decide what
-// Genia means, and it must never claim a capability ahead of real
-// evidence.
+// As of E24-2 (m0smith/genia-2026#956) it parses, lowers, and evaluates
+// exactly one deliberately minimal vertical slice of Genia source:
+// integer literals, bare-name references, and `+ - * /` binary
+// expressions, plus `-c` command mode. Every request outside that slice
+// -- including every other operation this build predates -- answers
+// `unsupported`, and `capabilities` truthfully declares only `parser`,
+// `ast_lowering`, `cli_command_mode` (`supported`) and `core_ir_eval`
+// (`partial`); every other genia-2026 capability name remains
+// `unsupported`. C++ implements Genia, it does not decide what Genia
+// means, and it must never claim a capability ahead of real evidence.
 //
 // Stdout carries the response envelope and nothing else -- no logging, no
-// evaluated-program output, matching the R16 stdout/stderr channel-
-// ownership rule. Any internal failure is caught here and results in a
-// clean, empty exit (never a raw C++/STL exception reaching the process
-// boundary), so a malformed request is classified `protocol_error` by the
-// runner rather than `crash`.
+// evaluated-program output leaks outside the JSON `result.stdout` field,
+// matching the R16 stdout/stderr channel-ownership rule. Any internal
+// failure is caught here and results in a clean, empty exit (never a raw
+// C++/STL exception reaching the process boundary), so a malformed
+// request is classified `protocol_error` by the runner rather than
+// `crash`.
 #include <exception>
 #include <iostream>
 #include <iterator>
