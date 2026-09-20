@@ -1,6 +1,8 @@
 # genia-cpp
 
-**Status: bootstrap only. No C++ interpreter is implemented here yet.**
+**Status: E24-1 toolchain bootstrap complete. No Genia semantics are
+implemented. `genia-adapter` truthfully declares every capability
+`unsupported`.**
 
 This is the planned production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
@@ -44,9 +46,9 @@ here. See `genia-2026`'s
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`b859ddc6374d8c930180ef546b103cb2fa1c0d9b`](https://github.com/m0smith/genia-2026/commit/b859ddc6374d8c930180ef546b103cb2fa1c0d9b) |
+| `genia-2026` contract revision | [`41e5d80b79f1b05d6836a489ff70ba4f751e67e9`](https://github.com/m0smith/genia-2026/commit/41e5d80b79f1b05d6836a489ff70ba4f751e67e9) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | `genia-2026` `main` at the time the R24 pre-flight gate recorded GO (2026-09-19): R16-R23 complete and audited, R24 pre-flight artifacts (`docs/design/r24-cpp-host-preflight.md` and `docs/design/r24/*`) pinned, P8/P9 provider-composition proofs landed but explicitly do not change R24 scope. |
+| Represents | `genia-2026` `main` after PR `#953` merged the R24 pre-flight artifacts (`docs/design/r24-cpp-host-preflight.md`, `docs/design/r24/*`, and `docs/strategy/roadmap/e24-issue-sequence.md`): R16-R23 complete and audited, R24 pre-flight recorded GO (2026-09-19). This is the exact revision `src/protocol.hpp`'s `kContractRevision` declares and `genia-adapter`'s `capabilities` response reports. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
@@ -67,32 +69,58 @@ its own reviewed change.
 
 ## What exists here
 
-- `bootstrap/protocol_adapter_stub.py` — a minimal, self-contained
-  placeholder that speaks just enough of the E16-1 protocol to answer a
-  `capabilities` request (declaring the pinned revision/protocol version
-  above and every capability `unsupported`) and to answer every other
-  operation with a deterministic `unsupported` response. **It does not
-  parse, lower, or evaluate any Genia source — it does not interpret
-  Genia at all.** It exists only to prove this repository can
-  participate in the generic protocol conversation (run through
-  `genia-2026`'s `tools/spec_runner --host`) without consulting Python
-  implementation source. It has no dependency on `genia-2026`'s Python
-  package at runtime, matching the repository-boundary rule that this
-  repo owns its own toolchain.
-- Nothing else. No C++ build system, lexer, parser, or evaluator exists
-  yet — that is R24 (`genia-2026`'s
-  [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md),
-  starting with E24-1's toolchain bootstrap), and it belongs entirely in
-  this repository once it lands.
+E24-1 (`m0smith/genia-2026#955`) replaced the temporary Python
+`bootstrap/protocol_adapter_stub.py` placeholder with a real, compiled
+C++ E16-1 adapter. That file has been deleted; there is no Python code
+left in this repository's execution path.
 
-## Trying the bootstrap placeholder
+- `src/protocol.hpp` — the E16-1 wire-envelope helpers (request/response
+  shape, the pinned capability vocabulary, the `capabilities` and
+  `unsupported` response builders). Transport-only; no Genia semantics.
+- `src/adapter.hpp` — request classification/dispatch, factored out of
+  `main()` so it is unit-testable without spawning a subprocess.
+- `src/main.cpp` — the binary entry point: reads exactly one JSON request
+  from stdin, writes exactly one JSON response to stdout, and nothing
+  else. Every internal exception is caught here (diagnostic-normalization
+  boundary discipline) so a malformed request never crashes the process.
+- `tests/test_protocol.cpp` — Catch2 unit tests for the envelope/dispatch
+  logic (internal genia-cpp tests, not shared conformance evidence).
+- `third_party/nlohmann_json/json.hpp`, `third_party/catch2/catch.hpp` —
+  vendored single-header dependencies per the R24 dependency/toolchain
+  policy (pinned versions: nlohmann/json v3.11.3, Catch2 v2.13.10).
+- `genia-adapter` (the built binary) truthfully declares **every**
+  capability in `genia-2026`'s `spec/manifest.json` (required + optional,
+  30 names at the pinned revision) as `unsupported`, and answers `parse`/
+  `lower`/`eval`/`cli` with a deterministic `unsupported` response. It
+  parses, lowers, and evaluates no Genia source whatsoever.
+- No parser, lowering, or evaluator exists yet — that starts at E24-2
+  (`genia-2026`'s
+  [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)),
+  which is **not** part of this repository's current state.
+
+## Building and running the adapter
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build --output-on-failure   # internal unit tests
+```
 
 ```bash
 git clone https://github.com/m0smith/genia-2026
 git clone https://github.com/m0smith/genia-cpp
-python -m tools.spec_runner --host 'python3 ../genia-cpp/bootstrap/protocol_adapter_stub.py'
-# (run from inside the genia-2026 checkout; every applicable case reports
-# UNSUPPORTED, honestly, since no interpreter exists here yet)
+cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
+cd genia-2026
+python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
+# every applicable case reports UNSUPPORTED, honestly: 0 capabilities are
+# claimed supported, 0 fail/crash/protocol_error/timeout.
+```
+
+Formatting/lint (matching the R24 dependency/toolchain policy):
+
+```bash
+clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp
+clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp
 ```
 
 ## Contributing

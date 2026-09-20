@@ -43,28 +43,38 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-Bootstrap only (R16 E16-6, `m0smith/genia-2026#763`). No C++ code exists.
-`bootstrap/protocol_adapter_stub.py` is a temporary, non-semantic
-placeholder proving this repository can participate in the generic
-protocol conversation; it is not a starting point for the real
-interpreter and should be deleted once R24 lands a genuine C++ adapter
-(E24-1 in `genia-2026`'s
-`docs/strategy/roadmap/e24-issue-sequence.md`).
+**E24-1 complete (`m0smith/genia-2026#955`): toolchain bootstrap and an
+honest E16-1 adapter skeleton.** A real, compiled C++ binary
+(`genia-adapter`) now speaks the E16-1 protocol: it truthfully declares
+every capability in `genia-2026`'s `spec/manifest.json` (required +
+optional) `unsupported`, and answers every `parse`/`lower`/`eval`/`cli`
+request with a deterministic `unsupported` response. It implements
+**zero** Genia semantics — no parsing, no lowering, no evaluation. The
+temporary Python `bootstrap/protocol_adapter_stub.py` placeholder has
+been deleted; there is no Python code anywhere in this repository's
+build or execution path.
 
-The real C++ host implementation is now numbered **R24** (originally
+The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
 Numeric Model into R21-R23 and moved the C++ host to R24). The R24
 pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 `docs/design/r24-cpp-host-preflight.md` and the four pinned entry
-artifacts under `docs/design/r24/` there. This is a planning/pre-flight
-result only; it does not mean any C++ code exists here yet.
+artifacts under `docs/design/r24/` there. E24-1 is the first
+implementation slice of the E24 sequence
+(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-2 (parsing,
+arithmetic, and the first real Genia semantics) has not started.**
 
 Known commands:
 
-- setup: TODO (E24-1)
-- build: TODO (E24-1)
-- test: TODO (E24-1)
-- lint: TODO (E24-1)
+- setup: none (no package manager; `nlohmann/json` and `Catch2` are
+  vendored single headers under `third_party/`)
+- build: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build`
+- test: `ctest --test-dir build --output-on-failure`
+- lint: `clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp && clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp`
+- conformance evidence: from a `genia-2026` checkout at the pinned
+  revision, `python -m tools.spec_runner --host '<path>/genia-cpp/build/genia-adapter' --evidence evidence.json`
+  (expected result at E24-1: every applicable case `unsupported`, 0
+  `pass`/`fail`/`crash`/`protocol_error`/`timeout`)
 
 ## Dependency/toolchain policy (pinned by the R24 pre-flight)
 

@@ -1,0 +1,11 @@
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  performance-*,
+  portability-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic
+WarningsAsErrors: ''
+HeaderFilterRegex: '^.*/genia-cpp/src/[^/]+\.(hpp|cpp)$'
