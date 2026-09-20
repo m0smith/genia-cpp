@@ -12,7 +12,7 @@
 
 using genia::protocol::json;
 
-TEST_CASE("capabilities response declares every known capability unsupported") {
+TEST_CASE("capabilities response matches this build's actual, evidence-backed support") {
   auto response = genia::adapter::handle_request(
       R"({"protocol_version":"1","case_id":"__capabilities__","operation":"capabilities","input":{}})");
   REQUIRE(response.has_value());
@@ -30,14 +30,28 @@ TEST_CASE("capabilities response declares every known capability unsupported") {
   REQUIRE(result.contains("contract_revision"));
   REQUIRE(result.contains("protocol_version"));
 
-  CHECK(result["operations"].empty());
+  CHECK(result["operations"] == json::array({"parse", "lower", "eval", "cli"}));
   CHECK(result["protocol_version"] == "1");
   CHECK(result["contract_revision"].get<std::string>().size() > 0);
 
   const json& capabilities = result["capabilities"];
   CHECK(capabilities.size() == genia::protocol::known_capabilities().size());
+
+  // As of E24-2, exactly the overridden capabilities are
+  // supported/partial; every other known capability remains
+  // unsupported (never claimed ahead of evidence).
   for (const auto& [name, status] : capabilities.items()) {
-    CHECK(status == "unsupported");
+    bool is_override = false;
+    for (const auto& [override_name, override_status] : genia::protocol::capability_overrides()) {
+      if (override_name == name) {
+        CHECK(status == override_status);
+        is_override = true;
+        break;
+      }
+    }
+    if (!is_override) {
+      CHECK(status == "unsupported");
+    }
   }
 
   // Every declared capability name must come from the pinned genia-2026
@@ -47,7 +61,7 @@ TEST_CASE("capabilities response declares every known capability unsupported") {
   }
 }
 
-TEST_CASE("parse/lower/eval/cli operations are all unsupported") {
+TEST_CASE("parse/lower/eval/cli with no input fields are all unsupported") {
   for (const std::string operation : {"parse", "lower", "eval", "cli"}) {
     json request = {
         {"protocol_version", "1"},
@@ -65,6 +79,73 @@ TEST_CASE("parse/lower/eval/cli operations are all unsupported") {
     CHECK(envelope["unsupported_reason"].is_string());
     CHECK_FALSE(envelope["unsupported_reason"].get<std::string>().empty());
   }
+}
+
+TEST_CASE("end to end: eval of arithmetic-basic.yaml's source through the real adapter") {
+  json request = {
+      {"protocol_version", "1"},
+      {"case_id", "arithmetic-basic"},
+      {"operation", "eval"},
+      {"input", {{"source", "40 + 2\n"}, {"stdin", nullptr}, {"argv", nullptr}}},
+  };
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  const json& envelope = *response;
+  CHECK(envelope["status"] == "ok");
+  CHECK(envelope["result"]["stdout"] == "42\n");
+  CHECK(envelope["result"]["stderr"] == "");
+  CHECK(envelope["result"]["exit_code"] == 0);
+}
+
+TEST_CASE("end to end: cli command_mode_basic.yaml's argv shape through the real adapter") {
+  json request = {
+      {"protocol_version", "1"},
+      {"case_id", "command_mode_basic"},
+      {"operation", "cli"},
+      {"input", {{"argv", json::array({"-c", "print 123"})}, {"stdin", nullptr}}},
+  };
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  const json& envelope = *response;
+  CHECK(envelope["status"] == "ok");
+  // The raw adapter response keeps the real trailing newline; the
+  // cli-category expected value ("123", no newline) is compared after
+  // tools/spec_runner's own trailing-newline stripping for this
+  // category (see m0smith/genia-2026#965/#966) -- this adapter must
+  // never strip it itself, or eval-category comparisons (which do NOT
+  // strip) would be built on a different, undocumented convention.
+  CHECK(envelope["result"]["stdout"] == "123\n");
+  CHECK(envelope["result"]["exit_code"] == 0);
+}
+
+TEST_CASE("end to end: parse of a bare integer literal through the real adapter") {
+  json request = {
+      {"protocol_version", "1"},
+      {"case_id", "parse-literal-number"},
+      {"operation", "parse"},
+      {"input", {{"source", "42"}}},
+  };
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  const json& envelope = *response;
+  CHECK(envelope["status"] == "ok");
+  CHECK(envelope["result"]["kind"] == "ok");
+  CHECK(envelope["result"]["ast"]["kind"] == "Literal");
+  CHECK(envelope["result"]["ast"]["value"] == 42);
+}
+
+TEST_CASE("end to end: unsupported-grammar source over eval is a real unsupported response") {
+  json request = {
+      {"protocol_version", "1"},
+      {"case_id", "list-literal-unsupported"},
+      {"operation", "eval"},
+      {"input", {{"source", "[1, 2, 3]"}, {"stdin", nullptr}, {"argv", nullptr}}},
+  };
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  const json& envelope = *response;
+  CHECK(envelope["status"] == "unsupported");
+  CHECK(envelope["result"].is_null());
 }
 
 TEST_CASE("an unknown future operation is still deterministically unsupported") {

@@ -13,8 +13,10 @@ endif()
 
 add_compile_options(-Wall -Wextra)
 
-# --- genia-adapter: the E16-1 host-adapter binary (E24-1 scope: no Genia
-# semantics, every operation deterministically unsupported). ---
+# --- genia-adapter: the E16-1 host-adapter binary. As of E24-2 it
+# implements one minimal vertical slice (integer literals/arithmetic +
+# `-c` command mode); everything else remains deterministically
+# unsupported. ---
 add_executable(genia-adapter
   src/main.cpp
 )
@@ -28,6 +30,8 @@ target_include_directories(genia-adapter PRIVATE
 enable_testing()
 add_executable(genia-adapter-tests
   tests/test_protocol.cpp
+  tests/test_bignum.cpp
+  tests/test_engine.cpp
 )
 target_include_directories(genia-adapter-tests PRIVATE
   third_party/nlohmann_json

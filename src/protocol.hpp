@@ -10,6 +10,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../third_party/nlohmann_json/json.hpp"
@@ -24,7 +25,15 @@ inline constexpr const char* kProtocolVersion = "1";
 // Update deliberately (see README.md's "Pinned contract" table) as this
 // repository advances -- never silently, matching the same discipline the
 // Python bootstrap stub this replaces documented.
-inline constexpr const char* kContractRevision = "41e5d80b79f1b05d6836a489ff70ba4f751e67e9";
+//
+// Re-pinned for E24-2 (m0smith/genia-2026#956) to the revision after
+// merging two evidence/tooling fixes this slice's own preparation found
+// necessary: #964 (bootstrap-cases.json's "literals" category cited a
+// case requiring out-of-scope pattern dispatch) and #966 (the generic
+// external-host `cli`-category path never stripped trailing newlines,
+// unlike the in-process Python-host path every spec/cli/*.yaml case's
+// expected_stdout assumes).
+inline constexpr const char* kContractRevision = "dfa9aa5c32eec7e7b33f9a221dbad7f1c5bcd548";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -72,23 +81,45 @@ inline const std::vector<std::string>& known_capabilities() {
 }
 
 inline constexpr const char* kUnsupportedReason =
-    "genia-cpp is toolchain-bootstrap only (E24-1, "
-    "m0smith/genia-2026#955); no Genia parsing, lowering, or evaluation "
-    "is implemented yet -- see https://github.com/m0smith/genia-cpp "
-    "AGENTS.md";
+    "genia-cpp implements only the E24-2 vertical slice (integer "
+    "literals, bare-name references, `+ - * /` binary expressions, and "
+    "`-c` command mode); this request is outside that scope -- see "
+    "https://github.com/m0smith/genia-cpp AGENTS.md";
+
+// Per E24-2 (m0smith/genia-2026#956): `parser`, `ast_lowering`, and
+// `cli_command_mode` are declared `supported` (this slice's parser and
+// lowering handle their entire grammar, and command mode is fully
+// wired); `core_ir_eval` is declared `partial` (only exact Integer
+// arithmetic over this slice's minimal grammar -- lists, maps, lambdas,
+// pattern matching, Decimal/Rational/Float64 all remain unimplemented).
+// Every other capability remains `unsupported`. This map is the single
+// source of truth for both the `capabilities` response and this
+// project's own honesty: a name absent here defaults to `unsupported`.
+inline const std::vector<std::pair<std::string, std::string>>& capability_overrides() {
+  static const std::vector<std::pair<std::string, std::string>> kOverrides = {
+      {"parser", "supported"},
+      {"ast_lowering", "supported"},
+      {"core_ir_eval", "partial"},
+      {"cli_command_mode", "supported"},
+  };
+  return kOverrides;
+}
 
 // Builds the `capabilities` operation's `ok` response: every known
-// capability declared `unsupported`, an empty `operations` list (this
-// adapter performs none of parse/lower/eval/cli), and the pinned
-// contract/protocol version.
+// capability declared per capability_overrides() (defaulting to
+// `unsupported`), the operations this adapter actually attempts, and
+// the pinned contract/protocol version.
 inline json build_capabilities_response(const std::string& case_id) {
   json capabilities = json::object();
   for (const auto& name : known_capabilities()) {
     capabilities[name] = "unsupported";
   }
+  for (const auto& [name, status] : capability_overrides()) {
+    capabilities[name] = status;
+  }
   json result = {
       {"capabilities", capabilities},
-      {"operations", json::array()},
+      {"operations", json::array({"parse", "lower", "eval", "cli"})},
       {"contract_revision", kContractRevision},
       {"protocol_version", kProtocolVersion},
   };
