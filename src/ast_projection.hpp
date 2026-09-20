@@ -83,6 +83,40 @@ inline std::optional<json> project(const ast::Node& node) {
     }
     case ast::Kind::Call:
       return json{{"kind", "Call"}};
+    case ast::Kind::Lambda:
+      // hosts/python/parse_adapter.py's normalize_ast has no special
+      // case for the real Python parser's `Lambda` AST node, so it
+      // falls through to the bare `{"kind": node_type}` fallback --
+      // verified directly against that source, the same fallback this
+      // project already uses for String/Boolean/List/Call above.
+      return json{{"kind", "Lambda"}};
+    case ast::Kind::Map:
+      // Same bare-fallback rule for the real `MapLiteral` AST node.
+      return json{{"kind", "MapLiteral"}};
+    case ast::Kind::Spread:
+      // Same bare-fallback rule for the real `Spread` AST node.
+      return json{{"kind", "Spread"}};
+    case ast::Kind::FuncDef: {
+      // normalize_ast's real FuncDef handler: `params` is always the
+      // header's plain parameter names (regardless of whether the body
+      // is a case-dispatch expression), and `body` recurses -- a
+      // case-dispatch body has no special handler either, so it
+      // projects via the same bare fallback as `CaseExpr`.
+      json body;
+      if (node.is_case_body) {
+        body = json{{"kind", "CaseExpr"}};
+      } else {
+        auto projected_body = project(*node.left);
+        if (!projected_body.has_value()) {
+          return std::nullopt;
+        }
+        body = *projected_body;
+      }
+      return json{{"kind", "FuncDef"},
+                  {"name", node.name},
+                  {"params", node.header_param_names},
+                  {"body", body}};
+    }
   }
   return std::nullopt;
 }

@@ -1,11 +1,15 @@
 # genia-cpp
 
-**Status: E24-3 vertical slice complete. `genia-adapter` implements
-integer/string/boolean/list literals, bare-name references, assignment,
-`+ - * / ==` binary expressions, calls to the native `map_*`/`utf8_encode`
-functions, and `-c`/file-mode CLI -- end to end (source -> parser ->
-portable Core IR -> evaluator -> normalized adapter result). Every other
-Genia behavior remains honestly `unsupported`.**
+**Status: E24-4 vertical slice complete. `genia-adapter` implements
+integer/string/boolean/list/map literals, bare-name references,
+assignment, `+ - * / ==` binary expressions, lambdas/closures, named
+functions (ordinary and local case/pattern-dispatch bodies), pipelines
+(`|>`), the `err(...)` Outcome constructor and its rendering, one
+deterministic undefined-name runtime error, calls to the native
+`map_*`/`utf8_encode`/`err`/`sum` functions, and `-c`/file-mode CLI --
+end to end (source -> parser -> portable Core IR -> evaluator ->
+normalized adapter result). Every other Genia behavior remains honestly
+`unsupported`.**
 
 This is the planned production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
@@ -21,7 +25,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-3 are complete; E24-4 through E24-8 remain.
+E24-1 through E24-4 are complete; E24-5 through E24-8 remain.
 
 ## Authority
 
@@ -73,9 +77,9 @@ identity.
 
 ## What exists here
 
-E24-3 (`m0smith/genia-2026#957`) widens E24-2's vertical slice to cover
-R17/R18's portable data-structure and equality contracts, plus the
-second CLI entry point:
+E24-4 (`m0smith/genia-2026#958`) widens E24-3's vertical slice to cover
+Outcome values, lambdas/closures, local case/pattern dispatch,
+pipelines, and one deterministic runtime-error diagnostic:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
@@ -85,54 +89,86 @@ second CLI entry point:
   `capabilities`/`parse`/`lower`/`eval`/`cli` (including both `-c`
   command mode and bare-file-path file mode), routing the latter four
   through `src/engine.hpp`.
-- `src/parser.hpp`, `src/ast.hpp` — a tokenizer and recursive-descent
-  parser for exactly this slice's grammar: integer/string/boolean
-  literals, list literals, assignment, function calls, the evidenced
-  bare-name references (`print` plus any name the program itself
-  assigns), and `+ - * / ==` binary expressions with standard
-  precedence. Anything outside that grammar (parens, unary minus,
-  lambdas, pattern matching, decimal/exponent literals, string escapes,
-  other identifiers, ...) is rejected at the tokenizer/parser level and
-  reported `unsupported`, never guessed at.
+- `src/parser.hpp`, `src/ast.hpp`, `src/pattern.hpp` — a tokenizer and
+  recursive-descent parser for exactly this slice's grammar:
+  integer/string/boolean/list/map literals, assignment, named-function
+  definitions (`name(params) = body`, ordinary or local
+  case/pattern-dispatch), lambdas (`(params) -> body`, including
+  list/map-destructuring parameters), pipelines (`|>`), general
+  parenthesized grouping, function calls, the bare-name references
+  every other identifier now resolves to (whether a name is actually
+  *bound* is a runtime concern -- see `src/evaluator.hpp` -- not a
+  parse-time restriction, matching genia-2026's real grammar), and
+  `+ - * / ==` binary expressions with standard precedence. `pattern.hpp`
+  holds the one pattern-shape struct (Bind/Wildcard/Rest/List/Map/Tuple)
+  shared by the parser and evaluator, matching
+  `docs/architecture/core-ir-portability.md`'s named pattern families.
+  Genia's own reserved keywords/special forms this slice does not
+  implement (`import`, `pattern`, `quote`, `delay`, `quasiquote`,
+  `unquote`, `unquote_splicing`, `some`, `none`, `nil`) are rejected
+  outright rather than silently misparsed as ordinary names or calls --
+  a real bug this slice's own preparation caught and fixed by running
+  genia-2026's *full* shared spec corpus (not just this slice's pinned
+  evidence) against early builds. Anything else outside this grammar
+  (parens as anything but grouping/lambda, unary minus, general postfix
+  call application on a non-identifier expression, guard clauses,
+  decimal/exponent literals, string escapes, ...) is rejected at the
+  tokenizer/parser level and reported `unsupported`, never guessed at.
 - `src/core_ir.hpp`, `src/lowering.hpp` — the portable Core IR subset
   this slice produces (`IrLiteral`, `IrVar`, `IrBinary`, `IrExprStmt`,
-  `IrList`, `IrAssign`, `IrCall`) and real AST -> IR lowering, matching
-  genia-2026's `docs/architecture/core-ir-portability.md` wire shapes
-  exactly (verified against `spec/ir/*.yaml` evidence, not guessed;
-  `IrLiteral`'s payload varies by literal kind -- only numeric literals
-  get R21's tagged payload, string/bool are plain, per R21 E21-2).
+  `IrList`, `IrMap`, `IrAssign`, `IrCall`, `IrLambda`, `IrFuncDef`,
+  `IrCase`/`IrCaseClause`, `IrPipeline`, `IrSpread`) and real AST -> IR
+  lowering, matching genia-2026's
+  `docs/architecture/core-ir-portability.md` wire shapes exactly
+  (`src/ir_projection.hpp`; not yet exercised by pinned `lower`-category
+  evidence, but built honestly against the documented contract rather
+  than deferred).
 - `src/bignum.hpp` — the in-house arbitrary-precision Integer kernel
   (sign + base-2^32 limbs) per the R24 dependency/toolchain policy: no
   third-party bignum library.
-- `src/value.hpp` — the runtime value representation: exact Integer,
-  Boolean, String, Bytes (from `utf8_encode`), List, the native
-  in-house insertion-ordered `OrderedMap` (vector of pairs + hash
-  index, never `std::map`/`std::unordered_map`), and an opaque
-  placeholder for the one evidenced global name that isn't yet
-  callable.
+- `src/value.hpp`, `src/environment.hpp` — the runtime value
+  representation (exact Integer, Boolean, String, Bytes, List, the
+  native in-house insertion-ordered `OrderedMap`, Outcome (`err(...)`
+  only -- `some`/`none` remain unimplemented), Closure, and an opaque
+  placeholder for `print`) and the parent-chained lexical environment
+  lambda/function calls evaluate their bodies in.
 - `src/equality.hpp` — R18 structural/legal-key equality: one internal
   dispatch over Genia semantic kinds, kind-tagged map-key encoding so
   distinct kinds never collide (booleans vs. numbers vs. strings), no
   fallback to host container/language equality.
+- `src/pattern_match.hpp` — pattern matching for lambda parameters and
+  local case dispatch, mirroring genia-2026's real
+  `src/genia/pattern_match.py` `match_pattern`/`match_pattern_atom`
+  exactly for the pattern kinds this slice implements, including the
+  "duplicate binding must agree" conflict rule (`([x, x]) -> true`
+  against unequal values does not match).
 - `src/native_functions.hpp` — the native `map_new`/`map_get`/
   `map_put`/`map_has?`/`map_remove`/`map_count`/`map_items`/
-  `utf8_encode` callables. The map functions are, in genia-2026's real
-  prelude, trivial single-clause pass-throughs to same-named native
-  primitives (e.g. `map_put(map, key, value) = _map_put(map, key,
-  value)`); this slice implements them natively rather than
-  interpreting that prelude source text because it has no user-level
-  function *definition* support yet (no pinned evidence needs one) and
-  the observable behavior is identical either way. Genuine prelude-
-  source interpretation (needed for `map_keys`/`map_values`, whose
-  dependency chain requires real pattern dispatch and recursion) is
-  E24-4+ scope -- see `m0smith/genia-2026#968`.
-- `src/global_env.hpp`, `src/evaluator.hpp` — the flat program-level
-  environment (assignment/lookup) and Core IR evaluator.
-- `src/render.hpp` — canonical Integer/Boolean/String/List display
-  rendering for command/file mode's auto-display result.
+  `utf8_encode`/`err`/`_sum`/`_seq_type_error` callables (each a
+  trivial, argument-pass-through-only wrapper in genia-2026's real
+  prelude, or itself a native primitive there).
+- `src/global_env.hpp`, `src/evaluator.hpp`, `src/genia2026_known_globals.hpp`
+  — `evaluator.hpp` is the Core IR evaluator: closures, named-function
+  calls (ordinary and case-dispatch bodies, including recursion),
+  pipelines, map/list construction (with `IrSpread` splicing), and the
+  one deterministic `Error: Undefined name: <name>` diagnostic for a
+  name genuinely absent from genia-2026's real global namespace (see
+  `genia2026_known_globals.hpp`'s header comment for why that
+  distinction matters: a reference to a real-but-unimplemented Genia
+  global like `collect` or `sheet` must stay `unsupported`, never be
+  misreported as "undefined"). `global_env.hpp` installs `print` plus a
+  small, genuinely Genia-source-level prelude (`sum`, `map`, `map_acc`)
+  through the real parse -> lower -> eval pipeline -- never a native C++
+  reimplementation of `map`'s dispatch/recursion, per
+  `docs/design/r24/native-primitive-inventory.md`'s "list/map prelude
+  helpers ... interpreted from the shared Genia prelude source" rule.
+- `src/render.hpp` — canonical Integer/Boolean/String/List/Map/Outcome
+  display rendering for command/file mode's auto-display result.
 - `src/ast_projection.hpp`, `src/ir_projection.hpp`, `src/engine.hpp` —
   wire projections for the `parse`/`lower` operations and the
-  parse -> lower -> eval pipeline `eval`/`cli` share.
+  parse -> lower -> eval pipeline `eval`/`cli` share; both projections
+  return `std::optional` and fail the whole projection (never a
+  fabricated JSON `null`) for anything they cannot honestly represent.
 - `tests/test_bignum.cpp`, `tests/test_engine.cpp`, `tests/test_protocol.cpp`
   — Catch2 unit tests (internal genia-cpp tests, not shared conformance
   evidence).
@@ -140,16 +176,13 @@ second CLI entry point:
   `cli_command_mode`, and `cli_file_mode` `supported`, `core_ir_eval`
   `partial`, and every other `spec/manifest.json` capability
   `unsupported`. Running the full shared spec corpus against it:
-  `total=744 passed=21 failed=0 unsupported=723 protocol_error=0
-  crash=0 timeout=0 invalid=0` — the 10 cases `docs/design/r24/
-  bootstrap-cases.json` pins for E24-2+E24-3 all pass, plus 11
-  incidental cases this slice's honest, evidence-matched grammar/
-  lowering also happens to satisfy (e.g. `eval/assignment-rebind`,
-  `eval/r19-unicode-debug-literal-non-control`,
-  `ir/config-provider-ordinary-calls`,
-  `parse/parse-config-provider-ordinary-call` -- each individually
-  verified to genuinely exercise only this slice's implemented grammar,
-  not a lucky accident).
+  `total=744 passed=64 failed=0 unsupported=680 protocol_error=0
+  crash=0 timeout=0 invalid=0` — the 7 pinned E24-4 cases
+  (`outcome_values`, `lambda_function_call`, `pattern_case_dispatch`,
+  `pipeline_composition`, `deterministic_runtime_error_behavior`) all
+  pass, plus the E24-2/E24-3 pinned cases and further incidental cases
+  this slice's honest, evidence-matched grammar/lowering/evaluation also
+  happens to satisfy.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
   equality, and display for any well-formed UTF-8 input, but is not yet
@@ -157,10 +190,12 @@ second CLI entry point:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- Lambdas, pattern matching, Outcomes, Decimal/Rational/Float64, and
-  open functions remain entirely unimplemented — that starts at E24-4
-  (`genia-2026`'s
-  [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
+- `some`/`none` Option values, Decimal/Rational/Float64, open functions,
+  general diagnostic normalization (beyond the one undefined-name case),
+  and general postfix call application (calling the result of a call or
+  a parenthesized expression, e.g. immediately-invoked lambdas) remain
+  entirely unimplemented — later slices'/`genia-2026`'s
+  [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md).
 
 ## Building and running the adapter
 
@@ -176,7 +211,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=744 passed=21 failed=0 unsupported=723 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=744 passed=64 failed=0 unsupported=680 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

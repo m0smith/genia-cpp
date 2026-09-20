@@ -1,4 +1,4 @@
-// AST -> Core IR lowering for the E24-2/E24-3 vertical slice.
+// AST -> Core IR lowering for the E24-2..E24-4 vertical slice.
 //
 // A real lowering step, matching genia-2026's src/genia/lowering.py
 // approach of one dedicated function translating parser-AST node kinds
@@ -23,6 +23,23 @@ inline std::optional<core_ir::Op> lower_op(const std::string& symbol) {
   return std::nullopt;
 }
 
+// A pipeline chain parses as nested left-associative Binary("|>") nodes
+// (`a |> b |> c` == `Binary(Binary(a, "|>", b), "|>", c)`); this
+// flattens it into one source expression plus an ordered stage list,
+// matching genia-2026's src/genia/lowering.py `_flatten_pipeline_ast`.
+inline std::optional<std::pair<ast::Node, std::vector<ast::Node>>> flatten_pipeline(
+    const ast::Node& node) {
+  if (node.kind == ast::Kind::Binary && node.op == "|>") {
+    auto flattened = flatten_pipeline(*node.left);
+    if (!flattened.has_value()) {
+      return std::nullopt;
+    }
+    flattened->second.push_back(*node.right);
+    return flattened;
+  }
+  return std::make_pair(node, std::vector<ast::Node>{});
+}
+
 inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
   switch (node.kind) {
     case ast::Kind::Literal:
@@ -34,6 +51,26 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
     case ast::Kind::Var:
       return core_ir::Node::var(node.name);
     case ast::Kind::Binary: {
+      if (node.op == "|>") {
+        auto flattened = flatten_pipeline(node);
+        if (!flattened.has_value()) {
+          return std::nullopt;
+        }
+        auto source = lower_node(flattened->first);
+        if (!source.has_value()) {
+          return std::nullopt;
+        }
+        std::vector<core_ir::Node> stages;
+        stages.reserve(flattened->second.size());
+        for (const auto& stage : flattened->second) {
+          auto lowered_stage = lower_node(stage);
+          if (!lowered_stage.has_value()) {
+            return std::nullopt;
+          }
+          stages.push_back(std::move(*lowered_stage));
+        }
+        return core_ir::Node::pipeline(std::move(*source), std::move(stages));
+      }
       auto op = lower_op(node.op);
       if (!op.has_value()) {
         return std::nullopt;
@@ -76,16 +113,76 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       }
       return core_ir::Node::call(node.name, std::move(args));
     }
+    case ast::Kind::Lambda: {
+      if (node.is_case_body) {
+        // No pinned E24-4 evidence needs a case-bodied bare lambda
+        // (only FuncDef does -- see map_acc/get_name); the parser never
+        // produces one, so this path is unreachable, not a guess.
+        return std::nullopt;
+      }
+      auto body = lower_node(*node.left);
+      if (!body.has_value()) {
+        return std::nullopt;
+      }
+      return core_ir::Node::lambda(node.params, std::move(*body));
+    }
+    case ast::Kind::FuncDef: {
+      if (node.is_case_body) {
+        std::vector<core_ir::Node> results;
+        results.reserve(node.case_results.size());
+        for (const auto& result : node.case_results) {
+          auto lowered_result = lower_node(result);
+          if (!lowered_result.has_value()) {
+            return std::nullopt;
+          }
+          results.push_back(std::move(*lowered_result));
+        }
+        return core_ir::Node::func_def_case(node.name, node.header_param_names, node.case_patterns,
+                                            std::move(results));
+      }
+      auto body = lower_node(*node.left);
+      if (!body.has_value()) {
+        return std::nullopt;
+      }
+      return core_ir::Node::func_def(node.name, node.header_param_names, node.params,
+                                     std::move(*body));
+    }
+    case ast::Kind::Map: {
+      std::vector<std::pair<std::string, core_ir::Node>> entries;
+      entries.reserve(node.map_entries.size());
+      for (const auto& [key, value_node] : node.map_entries) {
+        auto lowered_value = lower_node(value_node);
+        if (!lowered_value.has_value()) {
+          return std::nullopt;
+        }
+        entries.emplace_back(key, std::move(*lowered_value));
+      }
+      return core_ir::Node::map_literal(std::move(entries));
+    }
+    case ast::Kind::Spread: {
+      auto inner = lower_node(*node.left);
+      if (!inner.has_value()) {
+        return std::nullopt;
+      }
+      return core_ir::Node::spread(std::move(*inner));
+    }
   }
   return std::nullopt;
 }
 
 // Every top-level statement in this slice's grammar is an expression
-// statement or an assignment. Expression statements lower wrapped in
-// IrExprStmt (matching src/genia/lowering.py's `ExprStmt -> IrExprStmt`
-// rule); IrAssign is never wrapped, per GENIA_RULES.md's "IrAssign
-// placement" invariant (it appears directly in IrBlock.exprs). Both
-// verified directly against genia-2026's spec/ir/*.yaml evidence.
+// statement, an assignment, or (E24-4) a function definition.
+// Expression statements lower wrapped in IrExprStmt (matching
+// src/genia/lowering.py's `ExprStmt -> IrExprStmt` rule); IrAssign and
+// IrFuncDef are never wrapped -- genia-2026's parser never produces an
+// ExprStmt wrapping either (both are their own distinct top-level
+// grammar productions, not expressions), so lowering never wraps them
+// either (see src/genia/lowering.py: `lower_node` maps `FuncDef` and
+// `Assign` straight to `IrFuncDef`/`IrAssign`, only `ExprStmt` produces
+// `IrExprStmt`). Verified directly against genia-2026's spec/ir/*.yaml
+// evidence for IrAssign; no pinned `ir`-category evidence yet exercises
+// a top-level IrFuncDef, but the same non-wrapping rule follows directly
+// from the same parser/lowering source.
 inline std::optional<std::vector<core_ir::Node>> lower_program(const ast::Program& program) {
   std::vector<core_ir::Node> result;
   result.reserve(program.size());
@@ -94,7 +191,7 @@ inline std::optional<std::vector<core_ir::Node>> lower_program(const ast::Progra
     if (!lowered.has_value()) {
       return std::nullopt;
     }
-    if (lowered->kind == core_ir::Kind::Assign) {
+    if (lowered->kind == core_ir::Kind::Assign || lowered->kind == core_ir::Kind::FuncDef) {
       result.push_back(std::move(*lowered));
     } else {
       result.push_back(core_ir::Node::expr_stmt(std::move(*lowered)));

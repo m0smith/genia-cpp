@@ -1,27 +1,77 @@
-// Runtime values for the E24-2/E24-3 vertical slice.
+// Runtime values for the E24-2..E24-4 vertical slice.
 //
-// Kinds: exact Integer, Boolean, String, Bytes (from utf8_encode),
-// List, Map (the native in-house insertion-ordered map), and an opaque
-// placeholder for a known-but-not-yet-callable global binding (see
-// global_env.hpp). Decimal/Rational/Float64/lambdas/Outcomes are all
-// later slices' scope (E24-4/E24-7) -- this is deliberately not a
-// general Genia value representation yet.
+// Kinds: exact Integer, Boolean, String, Bytes (from utf8_encode), List,
+// Map (the native in-house insertion-ordered map), Outcome (E24-4: the
+// `err(reason)`/`err(reason, context)` recoverable-failure constructor
+// only -- `some`/`none` remain unimplemented, no pinned evidence needs
+// them), Closure (E24-4: a lambda or named-function value -- either a
+// single ordinary body evaluated after positional-pattern parameter
+// binding, or a local case/pattern-dispatch body tried clause by
+// clause), and an opaque placeholder for a known-but-not-yet-callable
+// global binding (see global_env.hpp). Decimal/Rational/Float64 remain
+// E24-7 scope -- this is deliberately not a general Genia value
+// representation yet.
 #pragma once
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "bignum.hpp"
+#include "pattern.hpp"
+
+namespace genia::core_ir {
+struct Node;
+}  // namespace genia::core_ir
+
+namespace genia::evaluator {
+class Environment;
+}  // namespace genia::evaluator
 
 namespace genia::value {
 
-enum class Kind : std::uint8_t { Integer, Boolean, String, Bytes, List, Map, Opaque };
+enum class Kind : std::uint8_t {
+  Integer,
+  Boolean,
+  String,
+  Bytes,
+  List,
+  Map,
+  Outcome,
+  Closure,
+  Opaque
+};
 
 class OrderedMap;
+struct Value;
+
+// One clause of a local case/pattern-dispatch function body (E24-4's
+// `pattern_case_dispatch` category): tried in source order against the
+// call's argument list (see pattern_match.hpp's `match`); the first
+// clause whose pattern matches supplies the result expression.
+struct CaseClause {
+  pattern::Pattern pattern;
+  std::shared_ptr<core_ir::Node> result;
+};
+
+// A lambda or named-function value. Exactly one of `case_clauses` or
+// `params` is meaningful for a given closure (never both): a
+// case-bodied function (e.g. `map_acc`) carries `case_clauses` and
+// binds nothing positionally beforehand; an ordinary function/lambda
+// (e.g. `inc(x) = x + 1`, or `([a, b]) -> a + b`) carries one
+// positional pattern per parameter and a single `body` expression.
+struct Closure {
+  std::vector<pattern::Pattern>
+      params;  // one pattern per positional parameter; empty when case_clauses is used
+  std::vector<CaseClause> case_clauses;  // populated only for a case-dispatch body
+  std::shared_ptr<core_ir::Node> body;   // populated only when case_clauses is empty
+  std::shared_ptr<evaluator::Environment> captured_env;
+  std::string name;  // the bound name for a named function; empty for an anonymous lambda
+};
 
 struct Value {
   Kind kind = Kind::Opaque;
@@ -30,6 +80,13 @@ struct Value {
   std::string text;         // valid when kind == String or Bytes (raw UTF-8/byte content)
   std::shared_ptr<std::vector<Value>> list_items;  // valid when kind == List
   std::shared_ptr<OrderedMap> map;                 // valid when kind == Map
+
+  // Outcome (`err(reason)` / `err(reason, context)`): `outcome_context`
+  // is nullptr when the 1-argument form was used.
+  std::shared_ptr<Value> outcome_reason;
+  std::shared_ptr<Value> outcome_context;
+
+  std::shared_ptr<Closure> closure;  // valid when kind == Closure
 
   static Value make_integer(bignum::Integer v) {
     Value value;
@@ -70,6 +127,23 @@ struct Value {
     Value value;
     value.kind = Kind::Map;
     value.map = std::move(m);
+    return value;
+  }
+
+  static Value make_outcome_err(Value reason, std::optional<Value> context) {
+    Value value;
+    value.kind = Kind::Outcome;
+    value.outcome_reason = std::make_shared<Value>(std::move(reason));
+    if (context.has_value()) {
+      value.outcome_context = std::make_shared<Value>(std::move(*context));
+    }
+    return value;
+  }
+
+  static Value make_closure(std::shared_ptr<Closure> c) {
+    Value value;
+    value.kind = Kind::Closure;
+    value.closure = std::move(c);
     return value;
   }
 

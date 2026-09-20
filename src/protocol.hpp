@@ -85,25 +85,27 @@ inline const std::vector<std::string>& known_capabilities() {
 }
 
 inline constexpr const char* kUnsupportedReason =
-    "genia-cpp implements only the E24-2/E24-3 vertical slice (integer "
-    "literals, string/boolean literals, list literals, bare-name "
-    "references, assignment, `+ - * / ==` binary expressions, calls to "
-    "this slice's native map_*/utf8_encode functions, and `-c`/file-mode "
-    "CLI); this request is outside that scope -- see "
-    "https://github.com/m0smith/genia-cpp AGENTS.md";
+    "genia-cpp implements only the E24-2..E24-4 vertical slice (integer "
+    "literals, string/boolean/list/map literals, bare-name references, "
+    "assignment, `+ - * / ==` binary expressions, lambdas, named-function "
+    "definitions (ordinary and local case/pattern-dispatch bodies), "
+    "pipelines, `err(...)` Outcomes, the one deterministic undefined-name "
+    "runtime error, calls to this slice's native map_*/utf8_encode/err/sum "
+    "functions, and `-c`/file-mode CLI); this request is outside that "
+    "scope -- see https://github.com/m0smith/genia-cpp AGENTS.md";
 
-// Per E24-2 (m0smith/genia-2026#956) and E24-3 (m0smith/genia-2026#957):
-// `parser`, `ast_lowering`, `cli_command_mode`, and `cli_file_mode` are
-// declared `supported` (this slice's parser and lowering handle their
-// entire grammar, and both CLI entry points are fully wired);
-// `core_ir_eval` is declared `partial` (only exact Integer arithmetic,
-// structural equality, list construction, and the native map/utf8
-// functions over this slice's minimal grammar -- lambdas, pattern
-// matching, Decimal/Rational/Float64, and open functions all remain
-// unimplemented). Every other capability remains `unsupported`. This
-// map is the single source of truth for both the `capabilities`
-// response and this project's own honesty: a name absent here defaults
-// to `unsupported`.
+// Per E24-2 (m0smith/genia-2026#956), E24-3 (m0smith/genia-2026#957), and
+// E24-4 (m0smith/genia-2026#958): `parser`, `ast_lowering`,
+// `cli_command_mode`, and `cli_file_mode` are declared `supported` (this
+// slice's parser and lowering handle their entire grammar, and both CLI
+// entry points are fully wired); `core_ir_eval` remains `partial` (E24-4
+// added Outcome values, lambdas/closures, local case/pattern dispatch,
+// pipelines, and one deterministic runtime-error diagnostic over this
+// slice's minimal grammar, but Decimal/Rational/Float64, open functions,
+// and general diagnostic normalization all remain unimplemented). Every
+// other capability remains `unsupported`. This map is the single source
+// of truth for both the `capabilities` response and this project's own
+// honesty: a name absent here defaults to `unsupported`.
 inline const std::vector<std::pair<std::string, std::string>>& capability_overrides() {
   static const std::vector<std::pair<std::string, std::string>> kOverrides = {
       {"parser", "supported"},        {"ast_lowering", "supported"},

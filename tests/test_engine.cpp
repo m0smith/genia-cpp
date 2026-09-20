@@ -49,10 +49,24 @@ TEST_CASE("parse: print 123 is a Var reference followed by a Literal") {
   CHECK((*ast)[1]["value"] == 123);
 }
 
-TEST_CASE("parse: unsupported syntax (parens, lambdas) is std::nullopt, never a guess") {
-  CHECK_FALSE(try_parse("(1 + 2)").has_value());
-  CHECK_FALSE(try_parse("(x) -> x").has_value());
-  CHECK_FALSE(try_parse("-5").has_value());  // unary minus is out of this slice's grammar
+TEST_CASE("parse: parenthesized grouping and lambdas are supported as of E24-4") {
+  // Regression: parenthesized grouping (`(expr)`) and lambda literals
+  // (`(params) -> body`) were unsupported through E24-3; both are now
+  // real grammar (see parser.hpp's `try_parse_lambda`/general-grouping
+  // fallback).
+  auto grouped = try_parse("(1 + 2)");
+  REQUIRE(grouped.has_value());
+  CHECK((*grouped)["kind"] == "Binary");
+
+  auto lambda = try_parse("(x) -> x");
+  REQUIRE(lambda.has_value());
+}
+
+TEST_CASE("parse: unary minus, guard clauses, and decimal literals remain unsupported") {
+  CHECK_FALSE(try_parse("-5").has_value());   // unary minus is out of this slice's grammar
+  CHECK_FALSE(try_parse("1.5").has_value());  // Decimal literals are R21/E24-7 scope
+  CHECK_FALSE(try_parse("x ? true -> x")
+                  .has_value());  // case-clause guards are out of this slice's grammar
 }
 
 TEST_CASE("parse: string and list literals are supported as of E24-3") {
@@ -112,15 +126,24 @@ TEST_CASE("parse: a digit run immediately followed by 'e' or '.' is unsupported,
   CHECK_FALSE(try_run("1e3").has_value());
 }
 
-TEST_CASE("parse: an identifier other than the one evidenced global name is unsupported") {
+TEST_CASE(
+    "parse: none/some/nil remain unsupported; any other identifier is an ordinary Var (E24-4)") {
   // Regression: genia-2026 keywords like `none` lower to their own Core
-  // IR node (IrOptionNone), never IrVar -- accepting arbitrary
-  // identifiers as ordinary Var references would silently misparse
-  // them. Only "print" is accepted (see global_env.hpp).
+  // IR node (IrOptionNone), never IrVar -- accepting them as an
+  // ordinary Var reference would silently misparse them; this slice
+  // still does not implement Option at all (see
+  // parser.hpp's `is_reserved_option_keyword`). As of E24-4, whether an
+  // identifier is *bound* is purely a runtime concern (see
+  // error-undefined-name.yaml's evidence) -- parsing no longer
+  // restricts which bare names are accepted, matching genia-2026's real
+  // grammar.
   CHECK_FALSE(try_parse("none").has_value());
   CHECK_FALSE(try_parse("some").has_value());
-  CHECK_FALSE(try_parse("undefined_name_xyz").has_value());
+  CHECK_FALSE(try_parse("nil").has_value());
   CHECK(try_parse("print").has_value());
+  auto undefined_ast = try_parse("undefined_name_xyz");
+  REQUIRE(undefined_ast.has_value());
+  CHECK((*undefined_ast)["kind"] == "Var");
 }
 
 TEST_CASE("run: arithmetic-basic.yaml -- 40 + 2 produces stdout 42\\n") {
@@ -145,8 +168,17 @@ TEST_CASE("run: print 123 -- the Var reference is inert, only the literal is dis
   CHECK(result->exit_code == 0);
 }
 
-TEST_CASE("run: an undefined name is unsupported, never a guessed diagnostic") {
-  CHECK_FALSE(try_run("undefined_name_xyz").has_value());
+TEST_CASE("run: error-undefined-name.yaml -- a deterministic runtime error, not unsupported") {
+  // Superseded by E24-4's deterministic_runtime_error_behavior evidence:
+  // genia-2026's real reference host normalizes any undefined-name
+  // reference to this exact stderr text and exit code (see
+  // evaluator.hpp's UndefinedNameError / engine.hpp's try_run) -- a
+  // genuine "ok" result, never "unsupported".
+  auto result = try_run("undefined_name_xyz");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text.empty());
+  CHECK(result->stderr_text == "Error: Undefined name: undefined_name_xyz\n");
+  CHECK(result->exit_code == 1);
 }
 
 TEST_CASE("run: non-evenly-dividing division is unsupported (would require Rational)") {
@@ -231,8 +263,11 @@ TEST_CASE("run: assignment introduces a binding visible to later statements only
   CHECK(result->stdout_text == "6\n");
 }
 
-TEST_CASE("run: referencing an undefined name is unsupported even with assignment support") {
-  CHECK_FALSE(try_run("y").has_value());
+TEST_CASE("run: referencing an undefined name is the same deterministic error (E24-4)") {
+  auto result = try_run("y");
+  REQUIRE(result.has_value());
+  CHECK(result->stderr_text == "Error: Undefined name: y\n");
+  CHECK(result->exit_code == 1);
 }
 
 TEST_CASE("run: boolean literals render as true/false, distinct kind from Integer") {
@@ -253,4 +288,96 @@ TEST_CASE("run: map_put/map_get round trip through a native ordered map") {
 
 TEST_CASE("run: string escapes are unsupported, never guessed at") {
   CHECK_FALSE(try_run("\"a\\\"b\"").has_value());
+}
+
+// --- E24-4: Outcomes, lambdas, pattern/case dispatch, pipelines -------
+
+TEST_CASE("run: outcome-err-render.yaml") {
+  auto result = try_run("err(\"parse-error\")");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "err(\"parse-error\")\n");
+  CHECK(result->exit_code == 0);
+}
+
+TEST_CASE("run: outcome-pipeline-err-short-circuit.yaml") {
+  auto result = try_run("err(\"bad-number\", {field: \"age\"}) |> ((x) -> x + 1)");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "err(\"bad-number\", {field: \"age\"})\n");
+  CHECK(result->exit_code == 0);
+}
+
+TEST_CASE("run: lambda-pattern-list-param.yaml") {
+  auto result = try_run("map(([a, b]) -> a + b, [[1, 2], [3, 4]])");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[3, 7]\n");
+}
+
+TEST_CASE("run: pattern-map-partial.yaml") {
+  auto result = try_run(
+      "get_name(r) =\n"
+      "  {name} -> name |\n"
+      "  _ -> \"unknown\"\n"
+      "get_name({name: \"Genia\", version: 1})\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "\"Genia\"\n");
+}
+
+TEST_CASE("run: pattern-map-partial.yaml -- the wildcard fallback clause") {
+  auto result = try_run(
+      "get_name(r) = {name} -> name | _ -> \"unknown\"\n"
+      "get_name(42)\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "\"unknown\"\n");
+}
+
+TEST_CASE("run: pipeline-call-shape-basic.yaml") {
+  auto result = try_run("inc(x) = x + 1\n1 |> inc\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "2\n");
+}
+
+TEST_CASE("run: pipeline-map-sum.yaml") {
+  auto result = try_run("[1, 2, 3] |> map((x) -> x + 1) |> sum");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "9\n");
+}
+
+TEST_CASE("run: error-undefined-name.yaml") {
+  auto result = try_run("undefined_name");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text.empty());
+  CHECK(result->stderr_text == "Error: Undefined name: undefined_name\n");
+  CHECK(result->exit_code == 1);
+}
+
+TEST_CASE("run: a user-defined function recurses via a list-rest pattern, like map_acc") {
+  // Not one of the pinned cases directly, but exercises the same
+  // recursive case-dispatch/list-rest-pattern mechanism global_env.hpp's
+  // `map`/`map_acc` relies on, with an ordinary (non-prelude) FuncDef.
+  auto result = try_run(
+      "sum_list(xs) = [] -> 0 | [x, ..rest] -> x + sum_list(rest)\n"
+      "sum_list([1, 2, 3])\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "6\n");
+}
+
+TEST_CASE("run: a lambda called with the wrong arity is unsupported, never a crash") {
+  CHECK_FALSE(try_run("((x) -> x)(1, 2)").has_value());
+}
+
+TEST_CASE("run: a case-dispatch function with no matching clause is unsupported") {
+  auto result = try_run(
+      "only_zero(n) = 0 -> \"zero\"\n"
+      "only_zero(5)\n");
+  CHECK_FALSE(result.has_value());
+}
+
+TEST_CASE("run: map literal with a string key renders identically to an identifier key") {
+  auto result = try_run("{\"a\": 1}");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "{a: 1}\n");
+}
+
+TEST_CASE("run: a lambda is not itself renderable as a final program result") {
+  CHECK_FALSE(try_run("(x) -> x").has_value());
 }
