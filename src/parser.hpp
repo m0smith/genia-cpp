@@ -42,12 +42,14 @@
 #include <vector>
 
 #include "ast.hpp"
+#include "bignum.hpp"
 #include "pattern.hpp"
 
 namespace genia::parser {
 
 enum class TokenKind : std::uint8_t {
   Integer,
+  Decimal,
   String,
   Ident,
   Plus,
@@ -95,19 +97,48 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
       while (i < n && std::isdigit(static_cast<unsigned char>(source[i]))) {
         ++i;
       }
-      // A digit run immediately followed (no whitespace) by '.' or
-      // 'e'/'E' is genia-2026's Decimal source classification (R21: a
-      // dot or exponent marker directly adjacent to digits, never two
-      // independent tokens) -- e.g. "1e3" is one Decimal literal
-      // attempt, not an Integer "1" followed by a bare identifier
-      // "e3" (verified directly against genia-2026's
-      // spec/parse/parse-r21-*.yaml evidence). Decimal literals are
-      // out of this slice's grammar, so this must fail tokenization
-      // (unsupported), never silently split into unrelated tokens.
-      if (i < n && (source[i] == '.' || source[i] == 'e' || source[i] == 'E')) {
-        return std::nullopt;
+      // R21 numeric source classification (docs/design/r21-numeric-
+      // source-portable-representation-contract.md section 2):
+      //   integer          := DIGIT+
+      //   decimal-dotted   := DIGIT+ "." DIGIT+
+      //   decimal-exp      := DIGIT+ exponent
+      //   decimal-dot-exp  := DIGIT+ "." DIGIT+ exponent
+      //   exponent         := ("e"|"E") ("+"|"-")? DIGIT+
+      // A dot not immediately followed by a digit is a trailing-dot
+      // form ("5."), not part of this literal -- the dot is left
+      // unconsumed for the main loop, which has no token for a bare
+      // '.' and correctly fails tokenization (matching genia-2026's
+      // real "Unexpected character" rejection without reproducing that
+      // diagnostic text). A leading-dot form (".5") never reaches this
+      // branch at all (isdigit(c) is false for '.'), so it fails the
+      // same way. An exponent marker with no digit after it (optional
+      // sign included) is a malformed exponent -- e.g. "1e", "1e+" --
+      // and fails tokenization outright, never guessed at.
+      bool is_decimal = false;
+      if (i < n && source[i] == '.' && i + 1 < n &&
+          std::isdigit(static_cast<unsigned char>(source[i + 1]))) {
+        is_decimal = true;
+        ++i;  // '.'
+        while (i < n && std::isdigit(static_cast<unsigned char>(source[i]))) {
+          ++i;
+        }
       }
-      tokens.push_back({TokenKind::Integer, source.substr(start, i - start)});
+      if (i < n && (source[i] == 'e' || source[i] == 'E')) {
+        ++i;  // 'e'/'E'
+        if (i < n && (source[i] == '+' || source[i] == '-')) {
+          ++i;
+        }
+        const size_t exponent_digits_start = i;
+        while (i < n && std::isdigit(static_cast<unsigned char>(source[i]))) {
+          ++i;
+        }
+        if (i == exponent_digits_start) {
+          return std::nullopt;
+        }
+        is_decimal = true;
+      }
+      tokens.push_back(
+          {is_decimal ? TokenKind::Decimal : TokenKind::Integer, source.substr(start, i - start)});
       continue;
     }
     if (std::isalpha(c) || c == '_') {
@@ -248,6 +279,92 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
   }
   tokens.push_back({TokenKind::End, ""});
   return tokens;
+}
+
+// One canonical R21 Decimal literal payload: value is
+// `coefficient_digits * 10^exponent` (section 4.2's tagged Core IR
+// payload shape, computed once here so both the parse-category and
+// lower-category wire projections derive from the identical canonical
+// form -- exactly how an Integer literal's `integer_digits` is already
+// shared between the two).
+struct DecimalLiteralValue {
+  std::string coefficient_digits;
+  int64_t exponent = 0;
+};
+
+// Canonicalizes a raw Decimal token's source text (already validated by
+// the tokenizer to match `DIGIT+ ("." DIGIT+)? (("e"|"E") ("+"|"-")?
+// DIGIT+)?`) per R21 section 4.2 / R22 section 2's canonicalization
+// rule: zero -> ("0", 0); otherwise strip every trailing base-10 zero
+// from the absolute coefficient and increase the exponent by the count
+// removed. Returns std::nullopt only if the exponent text's magnitude
+// does not fit an int64_t (adversarially large source text -- no pinned
+// evidence needs one this large; this is the same overflow-safety
+// convention as ast_projection.hpp's `digits_to_safe_int64`).
+inline std::optional<DecimalLiteralValue> canonicalize_decimal_literal(const std::string& raw) {
+  size_t i = 0;
+  const size_t n = raw.size();
+  const size_t int_start = i;
+  while (i < n && std::isdigit(static_cast<unsigned char>(raw[i]))) {
+    ++i;
+  }
+  const std::string int_part = raw.substr(int_start, i - int_start);
+  std::string frac_part;
+  if (i < n && raw[i] == '.') {
+    ++i;
+    const size_t frac_start = i;
+    while (i < n && std::isdigit(static_cast<unsigned char>(raw[i]))) {
+      ++i;
+    }
+    frac_part = raw.substr(frac_start, i - frac_start);
+  }
+  int64_t exponent_from_marker = 0;
+  if (i < n && (raw[i] == 'e' || raw[i] == 'E')) {
+    ++i;
+    bool negative_exponent = false;
+    if (i < n && (raw[i] == '+' || raw[i] == '-')) {
+      negative_exponent = raw[i] == '-';
+      ++i;
+    }
+    const size_t exp_digits_start = i;
+    while (i < n && std::isdigit(static_cast<unsigned char>(raw[i]))) {
+      ++i;
+    }
+    const std::string exp_digits = raw.substr(exp_digits_start, i - exp_digits_start);
+    try {
+      size_t consumed = 0;
+      const long long parsed = std::stoll(exp_digits, &consumed);
+      if (consumed != exp_digits.size()) {
+        return std::nullopt;
+      }
+      exponent_from_marker = negative_exponent ? -parsed : parsed;
+    } catch (const std::exception&) {
+      return std::nullopt;
+    }
+  }
+  const std::string raw_digits = int_part + frac_part;
+  auto magnitude = bignum::Integer::from_unsigned_decimal(raw_digits);
+  if (!magnitude.has_value()) {
+    return std::nullopt;
+  }
+  // Moving the decimal point right past `frac_part`'s digits requires
+  // subtracting its length from the exponent the source's own marker
+  // contributed. `frac_part.size()` is bounded by the source text's own
+  // length, physically nowhere near int64_t's range, so this never
+  // overflows in practice.
+  const int64_t exponent = exponent_from_marker - static_cast<int64_t>(frac_part.size());
+  if (magnitude->is_zero()) {
+    return DecimalLiteralValue{"0", 0};
+  }
+  std::string digits = magnitude->to_decimal_string();  // canonical, no leading zeros, no sign
+  int64_t trimmed_exponent = exponent;
+  size_t keep = digits.size();
+  while (keep > 1 && digits[keep - 1] == '0') {
+    --keep;
+    ++trimmed_exponent;
+  }
+  digits.resize(keep);
+  return DecimalLiteralValue{std::move(digits), trimmed_exponent};
 }
 
 // Identifiers genia-2026 treats as dedicated keywords/special forms,
@@ -1016,8 +1133,29 @@ class Parser {
     if (nesting_depth_ > kMaxNestingDepth) {
       return std::nullopt;
     }
+    if (peek().kind == TokenKind::Minus) {
+      // Unary minus (R21 section 2: source sign is never part of a
+      // numeric literal itself -- "-1.25 is unary minus applied to the
+      // positive Decimal literal"). Binds to the immediately following
+      // factor, tighter than `* / %`, so `-2 * 3` is `(-2) * 3` and
+      // `--5` is `-(-5)`.
+      advance();
+      auto operand = parse_factor();
+      if (!operand.has_value()) {
+        return std::nullopt;
+      }
+      return ast::Node::unary("-", std::move(*operand));
+    }
     if (peek().kind == TokenKind::Integer) {
       return ast::Node::literal(advance().text);
+    }
+    if (peek().kind == TokenKind::Decimal) {
+      auto canonical = canonicalize_decimal_literal(advance().text);
+      if (!canonical.has_value()) {
+        return std::nullopt;
+      }
+      return ast::Node::decimal_literal(std::move(canonical->coefficient_digits),
+                                        canonical->exponent);
     }
     if (peek().kind == TokenKind::String) {
       return ast::Node::string_literal(advance().text);

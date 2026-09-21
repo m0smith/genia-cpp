@@ -10,14 +10,49 @@
 #pragma once
 
 #include <cctype>
+#include <cstdint>
 #include <optional>
 #include <string>
 
+#include "bignum.hpp"
 #include "value.hpp"
 
 namespace genia::render {
 
 inline std::optional<std::string> display(const value::Value& value);
+
+// Canonical Decimal display/debug atom, R23 section 2.2, verified
+// directly against genia-2026's src/genia/numeric_runtime.py
+// `_canonical_decimal_text` (the same function it reuses for Float64's
+// inner spelling). `coefficient`/`exponent` must already be canonical
+// (R22 section 2): zero is exactly coefficient 0/exponent 0, and a
+// nonzero coefficient's magnitude has no trailing base-10 zeros.
+inline std::string render_decimal(const bignum::Integer& coefficient, int64_t exponent) {
+  const std::string full = coefficient.to_decimal_string();
+  const bool negative = !full.empty() && full[0] == '-';
+  const std::string digits = negative ? full.substr(1) : full;
+  const std::string sign = negative ? "-" : "";
+  const int64_t n = static_cast<int64_t>(digits.size());
+  const int64_t adjusted_exponent = n + exponent - 1;
+  if (adjusted_exponent >= -6 && adjusted_exponent <= 20) {
+    const int64_t point_pos = n + exponent;
+    std::string body;
+    if (point_pos <= 0) {
+      body = "0." + std::string(static_cast<size_t>(-point_pos), '0') + digits;
+    } else if (point_pos >= n) {
+      body = digits + std::string(static_cast<size_t>(point_pos - n), '0') + ".0";
+    } else {
+      body = digits.substr(0, static_cast<size_t>(point_pos)) + "." +
+             digits.substr(static_cast<size_t>(point_pos));
+    }
+    return sign + body;
+  }
+  const std::string rest = digits.substr(1);
+  const std::string mantissa = digits.substr(0, 1) + "." + (rest.empty() ? "0" : rest);
+  const std::string exp_sign = adjusted_exponent >= 0 ? "+" : "-";
+  const int64_t abs_adjusted = adjusted_exponent >= 0 ? adjusted_exponent : -adjusted_exponent;
+  return sign + mantissa + "e" + exp_sign + std::to_string(abs_adjusted);
+}
 
 // A map-literal key renders bare when it is a legal Genia identifier
 // (matching genia-2026's src/genia/utf8.py `_format_map_key`'s
@@ -51,6 +86,8 @@ inline std::optional<std::string> display(const value::Value& value) {
   switch (value.kind) {
     case value::Kind::Integer:
       return value.integer.to_decimal_string();
+    case value::Kind::Decimal:
+      return render_decimal(value.decimal_coefficient, value.decimal_exponent);
     case value::Kind::Boolean:
       return value.boolean ? "true" : "false";
     case value::Kind::String: {

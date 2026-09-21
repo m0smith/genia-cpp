@@ -1,17 +1,21 @@
 # genia-cpp
 
-**Status: E24-6 complete. `genia-adapter` implements
-integer/string/boolean/list/map literals, bare-name references,
-assignment, `+ - * / == %` binary expressions, lambdas/closures, named
-functions (ordinary and local case/pattern-dispatch bodies), local R20
-open functions (grouped and repeated top-level clause spellings, single
-module only), pipelines (`|>`), the `err(...)` Outcome constructor and
-its rendering, one deterministic undefined-name runtime error, calls to
-the native `map_*`/`utf8_encode`/`err`/`sum` functions, and
-`-c`/file-mode CLI -- end to end (source -> parser -> portable Core IR
--> evaluator -> normalized adapter result), hardened against a C++
-stack-overflow crash from adversarially deep recursion/nesting (E24-5).
-Every other Genia behavior remains honestly `unsupported`.**
+**Status: E24-6 complete, E24-7 in progress (increment 1 landed).
+`genia-adapter` implements integer/string/boolean/list/map literals,
+Decimal source literals (`1.25`, `1e3`, ...; negation and canonical
+display only -- no arithmetic beyond negation yet), unary minus,
+bare-name references, assignment, `+ - * / == %` binary expressions,
+lambdas/closures, named functions (ordinary and local case/pattern-
+dispatch bodies), local R20 open functions (grouped and repeated
+top-level clause spellings, single module only), pipelines (`|>`), the
+`err(...)` Outcome constructor and its rendering, the R18 Integer/
+Decimal numeric-equality bridge, one deterministic undefined-name
+runtime error, calls to the native `map_*`/`utf8_encode`/`err`/`sum`
+functions, and `-c`/file-mode CLI -- end to end (source -> parser ->
+portable Core IR -> evaluator -> normalized adapter result), hardened
+against a C++ stack-overflow crash from adversarially deep recursion/
+nesting (E24-5). Every other Genia behavior remains honestly
+`unsupported`.**
 
 This is the planned production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
@@ -27,7 +31,8 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-6 are complete; E24-7 through E24-8 remain.
+E24-1 through E24-6 are complete; E24-7 is in progress (increment 1 of
+several); E24-8 remains.
 
 ## Authority
 
@@ -104,7 +109,24 @@ verbatim) plus the `%` (exact floor-remainder) operator the pinned
 selection) require `multi_file_eval`, explicitly out of R24 scope per
 `docs/design/r24/capability-floor.json` -- both are hard-rejected at
 parse time (never silently misparsed as ordinary identifiers) rather
-than attempted:
+than attempted. E24-7 (`m0smith/genia-2026#961`) is a large ticket
+(R21 source classification + R22 exact numeric runtime + R23
+rendering/format-spec/JSON boundary) built as a sequence of increments;
+**increment 1** adds unary minus (a real `IrUnary` node, not a special
+case of Binary) and R21 Decimal source-literal classification/
+canonicalization/lowering (`1.25`, `1e3`, `1.25e-2`, equivalent-
+spelling normalization, rejected leading-/trailing-dot and malformed-
+exponent forms), plus just enough Decimal runtime support to close the
+loop for a literal end to end: a `Decimal` value kind, negation, and
+canonical display/debug rendering (R23 section 2.2's fixed/scientific
+rule). Enabling Decimal literals immediately exposed a real gap this
+slice's own full-corpus run caught before merging: R18's Integer/
+Decimal numeric-equality bridge (`1 == 1.0`) was unimplemented, which
+would have silently turned two previously-honestly-`unsupported`
+`spec/eval/r18-*.yaml` cases into wrong `ok` results -- fixed via exact
+(never lossy-float) comparison, since Decimal is always exact. Decimal
+arithmetic beyond negation, Rational, Float64, the format-spec engine,
+and the JSON boundary all remain further E24-7 increments:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
@@ -130,7 +152,14 @@ than attempted:
   `+ - * / == %` binary expressions with standard precedence (`%` is
   exact floor-remainder, Python-style, sign follows the divisor --
   verified directly against `src/genia/numeric_runtime.py`'s
-  `exact_remainder`, not C++'s native truncating `%`). `pattern.hpp`
+  `exact_remainder`, not C++'s native truncating `%`), Decimal source
+  literals (R21 section 2's `DIGIT+ "." DIGIT+`/`DIGIT+ exponent`/
+  `DIGIT+ "." DIGIT+ exponent` forms -- classified in the tokenizer, not
+  guessed at by pattern-matching the digit run after the fact), and
+  unary minus (a real prefix operator binding tighter than `* / %`,
+  matching genia-2026's own `Unary` AST node -- source sign is never
+  part of a numeric literal itself, R21's "-1.25 is unary minus applied
+  to the positive Decimal literal" rule). `pattern.hpp`
   holds the one pattern-shape struct
   (Bind/Wildcard/Rest/List/Map/Tuple/Literal) shared by the parser and
   evaluator, matching `docs/architecture/core-ir-portability.md`'s named
@@ -146,16 +175,17 @@ than attempted:
   reference parser's own partial-backtrack nuance, to avoid the same
   class of silent-misparse risk with no diagnostic to fall back on).
   Anything else outside this grammar (parens as anything but
-  grouping/lambda, unary minus, general postfix call application on a
-  non-identifier expression, guard clauses, bare/top-level varargs rest
-  patterns, decimal/exponent literals, string escapes, ...) is rejected
-  at the tokenizer/parser level and reported `unsupported`, never
-  guessed at.
+  grouping/lambda, general postfix call application on a non-identifier
+  expression, guard clauses, leading-/trailing-dot numeric forms,
+  malformed exponents, string escapes, ...) is rejected at the
+  tokenizer/parser level and reported `unsupported`, never guessed at.
 - `src/core_ir.hpp`, `src/lowering.hpp` — the portable Core IR subset
-  this slice produces (`IrLiteral`, `IrVar`, `IrBinary`, `IrExprStmt`,
-  `IrList`, `IrMap`, `IrAssign`, `IrCall`, `IrLambda`, `IrFuncDef`,
-  `IrOpenFuncDef`, `IrCase`/`IrCaseClause`, `IrPipeline`, `IrSpread`) and
-  real AST -> IR lowering, matching genia-2026's
+  this slice produces (`IrLiteral` (including the R21 tagged Decimal
+  `{kind: "decimal", coefficient, exponent}` payload), `IrVar`,
+  `IrUnary`, `IrBinary`, `IrExprStmt`, `IrList`, `IrMap`, `IrAssign`,
+  `IrCall`, `IrLambda`, `IrFuncDef`, `IrOpenFuncDef`,
+  `IrCase`/`IrCaseClause`, `IrPipeline`, `IrSpread`) and real AST -> IR
+  lowering, matching genia-2026's
   `docs/architecture/core-ir-portability.md` wire shapes exactly
   (`src/ir_projection.hpp`, verified directly against
   `hosts/python/ir_normalize.py`). `IrOpenFuncDef` reuses `IrCaseClause`/
@@ -168,15 +198,21 @@ than attempted:
   (sign + base-2^32 limbs) per the R24 dependency/toolchain policy: no
   third-party bignum library.
 - `src/value.hpp`, `src/environment.hpp` — the runtime value
-  representation (exact Integer, Boolean, String, Bytes, List, the
-  native in-house insertion-ordered `OrderedMap`, Outcome (`err(...)`
-  only -- `some`/`none` remain unimplemented), Closure, and an opaque
-  placeholder for `print`) and the parent-chained lexical environment
-  lambda/function calls evaluate their bodies in.
+  representation (exact Integer, exact Decimal (E24-7: coefficient
+  `bignum::Integer` + `int64_t` exponent, R22 section 2 -- literal
+  construction and negation only, no arithmetic beyond that yet),
+  Boolean, String, Bytes, List, the native in-house insertion-ordered
+  `OrderedMap`, Outcome (`err(...)` only -- `some`/`none` remain
+  unimplemented), Closure, and an opaque placeholder for `print`) and
+  the parent-chained lexical environment lambda/function calls evaluate
+  their bodies in.
 - `src/equality.hpp` — R18 structural/legal-key equality: one internal
   dispatch over Genia semantic kinds, kind-tagged map-key encoding so
-  distinct kinds never collide (booleans vs. numbers vs. strings), no
-  fallback to host container/language equality.
+  distinct kinds never collide (booleans vs. numbers vs. strings), plus
+  R18's own Integer/Decimal numeric-equality bridge (`1 == 1.0`,
+  `decimal_equals_integer`) -- exact comparison, never the lossy
+  integer-to-host-float cast the contract forbids, since Decimal is
+  always exact. No fallback to host container/language equality.
 - `src/pattern_match.hpp` — pattern matching for lambda parameters and
   local case dispatch, mirroring genia-2026's real
   `src/genia/pattern_match.py` `match_pattern`/`match_pattern_atom`
@@ -203,8 +239,11 @@ than attempted:
   reimplementation of `map`'s dispatch/recursion, per
   `docs/design/r24/native-primitive-inventory.md`'s "list/map prelude
   helpers ... interpreted from the shared Genia prelude source" rule.
-- `src/render.hpp` — canonical Integer/Boolean/String/List/Map/Outcome
-  display rendering for command/file mode's auto-display result.
+- `src/render.hpp` — canonical Integer/Decimal/Boolean/String/List/Map/
+  Outcome display rendering for command/file mode's auto-display
+  result; Decimal rendering (`render_decimal`) implements R23 section
+  2.2's fixed/scientific notation rule verbatim, verified directly
+  against `src/genia/numeric_runtime.py`'s `_canonical_decimal_text`.
 - `src/ast_projection.hpp`, `src/ir_projection.hpp`, `src/engine.hpp` —
   wire projections for the `parse`/`lower` operations and the
   parse -> lower -> eval pipeline `eval`/`cli` share; both projections
@@ -242,15 +281,18 @@ than attempted:
   `unsupported` per case, or are gated out entirely by every
   cross-module case's separate `multi_file_eval` requirement (see
   `m0smith/genia-2026#973`/`#974`). Running the full shared spec corpus
-  against it: `total=744 passed=73 failed=0 unsupported=671
+  against it: `total=755 passed=87 failed=0 unsupported=668
   protocol_error=0 crash=0 timeout=0 invalid=0` — the 7 pinned E24-4
   cases (`outcome_values`, `lambda_function_call`,
   `pattern_case_dispatch`, `pipeline_composition`,
-  `deterministic_runtime_error_behavior`) and the 2 pinned E24-6
+  `deterministic_runtime_error_behavior`), the 2 pinned E24-6
   `open_functions_r20` cases (`r20-gcd-grouped-clause-equivalent`,
-  `r20-gcd-repeated-clauses`) all pass, plus the E24-2/E24-3 pinned
-  cases and further incidental cases (including several `parse`/`ir`
-  category R20 local-open-function cases) this slice's honest,
+  `r20-gcd-repeated-clauses`), and E24-7 increment 1's R21 Decimal-
+  literal `parse`/`ir` cases (classification, equivalent-spelling
+  normalization, the tagged Decimal payload, unary-negative lowering)
+  all pass, plus the E24-2/E24-3 pinned cases, the two `spec/eval/
+  r18-*.yaml` cases the Integer/Decimal equality-bridge fix restored to
+  passing, and further incidental cases this slice's honest,
   evidence-matched grammar/lowering/evaluation also happens to satisfy.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
@@ -259,14 +301,19 @@ than attempted:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- `some`/`none` Option values, Decimal/Rational/Float64, general
-  diagnostic normalization (beyond the one undefined-name case), and
-  general postfix call application (calling the result of a call or a
+- `some`/`none` Option values, Rational, Float64, general diagnostic
+  normalization (beyond the one undefined-name case), and general
+  postfix call application (calling the result of a call or a
   parenthesized expression, e.g. immediately-invoked lambdas) remain
-  entirely unimplemented. R20 open functions are only *partly*
-  implemented: local (single-module) grouped/repeated clause dispatch
-  works end to end, but cross-module `extend`/`use` contribution and
-  selection, the R20 diagnostic family
+  entirely unimplemented. Decimal is only *partly* implemented: source
+  literals, negation, canonical display, and the R18 Integer/Decimal
+  equality bridge work end to end, but Decimal arithmetic (`+ - * /
+  %`), comparison beyond `==`/`!=`, the `rational(...)`/`float64(...)`/
+  `exact(...)` conversions, field-format-spec integration, and the JSON
+  boundary all remain unimplemented. R20 open functions are only
+  *partly* implemented: local (single-module) grouped/repeated clause
+  dispatch works end to end, but cross-module `extend`/`use`
+  contribution and selection, the R20 diagnostic family
   (`open-function-no-matching-case`/`open-function-duplicate-clause`/
   `open-function-varargs-ambiguity`), and bare/top-level varargs rest
   patterns (`open f(x, ..rest) = ...`) all remain unimplemented — see
@@ -287,7 +334,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=744 passed=73 failed=0 unsupported=671 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=755 passed=87 failed=0 unsupported=668 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

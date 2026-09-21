@@ -58,6 +58,32 @@ inline std::optional<json> project(const ast::Node& node) {
       }
       return json{{"kind", "Literal"}, {"value", *value}};
     }
+    case ast::Kind::DecimalLiteral: {
+      // hosts/python/parse_adapter.py's real Number handler projects
+      // `{"kind": "Literal", "value": node.value}` for every numeric
+      // literal alike (Integer or Decimal) -- the wire shape does not
+      // distinguish them, only the numeric value itself differs
+      // (verified directly against that source). A JSON number can only
+      // exactly represent this literal when the coefficient/exponent
+      // pair fits a native double without overflow; this project never
+      // emits a silently-wrong number for one that doesn't.
+      try {
+        size_t consumed = 0;
+        const double parsed =
+            std::stod(node.decimal_coefficient_digits + "e" + std::to_string(node.decimal_exponent),
+                      &consumed);
+        return json{{"kind", "Literal"}, {"value", parsed}};
+      } catch (const std::exception&) {
+        return std::nullopt;
+      }
+    }
+    case ast::Kind::Unary:
+      // hosts/python/parse_adapter.py has no special case for the real
+      // Python parser's `Unary` AST node, so it falls through to the
+      // bare `{"kind": node_type}` fallback -- verified directly against
+      // that source, the same fallback this project already uses for
+      // Lambda/MapLiteral/Spread above.
+      return json{{"kind", "Unary"}};
     case ast::Kind::StringLiteral:
       return json{{"kind", "String"}};
     case ast::Kind::BoolLiteral:

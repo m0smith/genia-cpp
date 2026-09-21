@@ -45,12 +45,25 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
   switch (node.kind) {
     case ast::Kind::Literal:
       return core_ir::Node::integer_literal(node.integer_digits);
+    case ast::Kind::DecimalLiteral:
+      return core_ir::Node::decimal_literal(node.decimal_coefficient_digits, node.decimal_exponent);
     case ast::Kind::StringLiteral:
       return core_ir::Node::string_literal(node.string_value);
     case ast::Kind::BoolLiteral:
       return core_ir::Node::bool_literal(node.bool_value);
     case ast::Kind::Var:
       return core_ir::Node::var(node.name);
+    case ast::Kind::Unary: {
+      auto op = lower_op(node.op);
+      if (!op.has_value()) {
+        return std::nullopt;
+      }
+      auto operand = lower_node(*node.left);
+      if (!operand.has_value()) {
+        return std::nullopt;
+      }
+      return core_ir::Node::unary(*op, std::move(*operand));
+    }
     case ast::Kind::Binary: {
       if (node.op == "|>") {
         auto flattened = flatten_pipeline(node);

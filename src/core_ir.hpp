@@ -64,9 +64,11 @@ enum class Kind : std::uint8_t {
   // types (docs/design/r20-open-functions-syntax-ir-design.md section
   // 3), not because evaluation differs.
   OpenFuncDef,
+  // E24-7: portable IrUnary (see ir_projection.hpp for the wire shape).
+  Unary,
 };
 
-enum class LiteralKind : std::uint8_t { Integer, String, Bool };
+enum class LiteralKind : std::uint8_t { Integer, String, Bool, Decimal };
 
 // Binary operator token names, matching genia-2026's parser token names
 // (see src/genia/lowering.py: `IrBinary(lower(left), node.op, lower(right))`
@@ -100,12 +102,17 @@ struct Node {
       integer_digits;  // valid when literal_kind == Integer (R21 canonical unsigned decimal text)
   std::string string_value;  // valid when literal_kind == String
   bool bool_value = false;   // valid when literal_kind == Bool
+  // valid when literal_kind == Decimal (R21 section 4.2's canonical
+  // tagged payload: value is decimal_coefficient_digits * 10^decimal_exponent).
+  std::string decimal_coefficient_digits;
+  int64_t decimal_exponent = 0;
 
   // Var: the referenced name. Assign: the target name. Call: the
   // callee name (this slice only supports calling a name directly).
   std::string name;
 
-  // Binary
+  // Binary. Unary: the same `op` field plus the single operand (reuses
+  // `left`; `right` is unused).
   Op op = Op::Plus;
   std::shared_ptr<Node> left;
   std::shared_ptr<Node> right;
@@ -169,6 +176,23 @@ struct Node {
     n.kind = Kind::Literal;
     n.literal_kind = LiteralKind::Bool;
     n.bool_value = value;
+    return n;
+  }
+
+  static Node decimal_literal(std::string coefficient_digits, int64_t exponent) {
+    Node n;
+    n.kind = Kind::Literal;
+    n.literal_kind = LiteralKind::Decimal;
+    n.decimal_coefficient_digits = std::move(coefficient_digits);
+    n.decimal_exponent = exponent;
+    return n;
+  }
+
+  static Node unary(Op op, Node operand) {
+    Node n;
+    n.kind = Kind::Unary;
+    n.op = op;
+    n.left = std::make_shared<Node>(std::move(operand));
     return n;
   }
 
