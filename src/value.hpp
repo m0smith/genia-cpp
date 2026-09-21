@@ -12,9 +12,9 @@
 // ordinary body evaluated after positional-pattern parameter binding,
 // or a local case/pattern-dispatch body tried clause by clause), and an
 // opaque placeholder for a known-but-not-yet-callable global binding
-// (see global_env.hpp). Rational/Float64 remain further E24-7
-// increments -- this is deliberately not a general Genia value
-// representation yet.
+// (see global_env.hpp). Float64 is the explicit boxed binary64 domain;
+// its arithmetic/comparison integration remains later E24-7 work. This
+// is deliberately not a general Genia value representation yet.
 #pragma once
 
 #include <cstdint>
@@ -42,6 +42,7 @@ enum class Kind : std::uint8_t {
   Integer,
   Decimal,
   Rational,
+  Float64,
   Boolean,
   String,
   Bytes,
@@ -95,6 +96,7 @@ struct Value {
   // rational_denominator > 1, sign carried by rational_numerator.
   bignum::Integer rational_numerator;
   bignum::Integer rational_denominator;
+  double float64 = 0.0;  // valid when kind == Float64; preserves the exact binary64 bits
   bool boolean = false;  // valid when kind == Boolean
   std::string text;      // valid when kind == String or Bytes (raw UTF-8/byte content)
   std::shared_ptr<std::vector<Value>> list_items;  // valid when kind == List
@@ -138,6 +140,13 @@ struct Value {
     value.kind = Kind::Rational;
     value.rational_numerator = std::move(numerator);
     value.rational_denominator = std::move(denominator);
+    return value;
+  }
+
+  static Value make_float64(double v) {
+    Value value;
+    value.kind = Kind::Float64;
+    value.float64 = v;
     return value;
   }
 

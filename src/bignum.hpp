@@ -15,6 +15,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace genia::bignum {
@@ -78,6 +79,40 @@ class Integer {
 
   bool is_zero() const { return limbs_.empty(); }
   bool is_positive_or_zero() const { return positive_; }
+
+  size_t bit_length() const {
+    if (limbs_.empty()) return 0;
+    const uint32_t high = limbs_.back();
+    return (limbs_.size() - 1) * 32 + (32 - static_cast<size_t>(__builtin_clz(high)));
+  }
+
+  Integer absolute() const {
+    Integer result = *this;
+    result.positive_ = true;
+    return result;
+  }
+
+  Integer shift_left(size_t bits) const {
+    if (is_zero() || bits == 0) return *this;
+    Integer result = absolute();
+    for (size_t i = 0; i < bits; ++i) result = result.shift_left_one_bit();
+    result.positive_ = positive_;
+    return result;
+  }
+
+  static std::pair<Integer, Integer> divmod_positive(const Integer& dividend,
+                                                     const Integer& divisor) {
+    Integer remainder;
+    Integer quotient = divmod_magnitude(dividend, divisor, remainder);
+    return {quotient, remainder};
+  }
+
+  std::optional<uint64_t> to_u64() const {
+    if (!positive_ || limbs_.size() > 2) return std::nullopt;
+    uint64_t result = limbs_.empty() ? 0 : limbs_[0];
+    if (limbs_.size() == 2) result |= static_cast<uint64_t>(limbs_[1]) << 32;
+    return result;
+  }
 
   Integer negate() const {
     Integer result = *this;

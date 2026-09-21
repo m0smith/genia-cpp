@@ -91,7 +91,7 @@ inline const std::vector<std::string>& known_capabilities() {
 }
 
 inline constexpr const char* kUnsupportedReason =
-    "genia-cpp implements only the E24-2..E24-7(increment 4) vertical "
+    "genia-cpp implements only the E24-2..E24-7(increment 5) vertical "
     "slice (integer/Decimal literals, unary minus, string/boolean/list/map "
     "literals, bare-name references, assignment, `+ - * / == != % "
     "< <= > >=` binary expressions -- including the full R22 exact-family "

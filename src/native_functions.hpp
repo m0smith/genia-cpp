@@ -1,4 +1,4 @@
-// Native callable primitives for the E24-2..E24-4 vertical slice.
+// Native callable primitives for the E24-2..E24-7 vertical slice.
 //
 // map_new/map_get/map_put/map_has?/map_remove/map_count/map_items are,
 // in genia-2026's real prelude (src/genia/std/prelude/map.genia), each
@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "equality.hpp"
+#include "float64.hpp"
 #include "rational.hpp"
 #include "value.hpp"
 
@@ -46,6 +47,12 @@ using value::Value;
 // Callers must treat std::nullopt as "this case is unsupported", never
 // attempt a fallback value.
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
+  if (name == "float64" && args.size() == 1) {
+    return float64::from_exact(args[0]);
+  }
+  if (name == "exact" && args.size() == 1) {
+    return float64::to_exact(args[0]);
+  }
   if (name == "rational" && args.size() == 2) {
     // R22 section 3: both arguments must be Integers; a zero
     // denominator is deterministic numeric misuse (this slice has no
