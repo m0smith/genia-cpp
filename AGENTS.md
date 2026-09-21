@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-6 complete. E24-7 in progress (increments 1-2 of
+**E24-1 through E24-6 complete. E24-7 in progress (increments 1-3 of
 several, see below).** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -158,22 +158,53 @@ rounding through a host binary float. Rational arithmetic (`+ - * /
 slice's grammar at all yet), Float64, the format-spec engine, and the
 JSON boundary all remain further increments.
 
+**Increment 3** adds R22 sections 6-8's exact-family arithmetic
+(`src/arithmetic.hpp`) for `+`, `-`, `*`, `/`, and `%` across
+Integer/Decimal/Rational, closing the gap increment 2 left open.
+`+`/`-`/`*` follow section 6's `Integer < Decimal < Rational`
+promotion lattice: Integer/Integer keeps the existing fast bignum
+path; Decimal participation with no Rational operand aligns exponents
+and canonicalizes, always staying Decimal even for a mathematically
+integral result (`1.5 + 0.5 == 2.0`, never collapsing to Integer, per
+the contract's explicit rule); any Rational participation goes through
+general numerator/denominator fraction algebra reduced by
+`rational::construct_rational`, collapsing to Integer only at
+denominator 1 (`rational(1, 2) + rational(1, 2) == 1`). `/` implements
+section 7's own table, not section 6's: Integer/Integer division that
+is not evenly divisible produces Rational, *never* Decimal even when
+the quotient would terminate in base 10 (`1 / 2 == rational(1, 2)`);
+Decimal participation with no Rational operand produces Decimal only
+when the reduced quotient's denominator has no prime factors other
+than 2 and 5 (`denominator_terminates_in_base10`), Rational otherwise
+(`1.0 / 2 == 0.5` but `1.0 / 3 == rational(1, 3)`). `%` reuses section
+6's promotion rule (not section 7's), per section 8:
+`q = floor(left / right); left % right = left - q*right`, computed via
+`bignum::Integer::floor_remainder` for the floor quotient and exact
+fraction subtraction for the result — Decimal-only `%` never needs a
+termination check because its denominator is always a divisor of a
+power of 10 by construction. Division/remainder by exact zero stays
+honestly `unsupported` (deterministic numeric misuse this slice still
+has no diagnostic-worthy error path for), matching every other
+zero-divisor convention already established (`1 / 0`,
+`rational(1, 0)`). No capability declaration changed (`core_ir_eval`
+stays `partial`).
+
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
 varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
 is the honest declaration here). Declared `partial`: `core_ir_eval`
-(exact Integer arithmetic, Decimal literals/negation/display,
-`rational(...)` construction/display, the R22 exact-family
-(Integer/Decimal/Rational) equality bridge, structural equality,
-list/map construction, lambdas/closures, local case/pattern dispatch,
-pipelines, `err(...)` Outcomes, and the one deterministic
-undefined-name diagnostic — no Decimal/Rational arithmetic, comparison
+(the full R22 section 6-8 exact-family arithmetic/division/
+floor-remainder promotion rules for Integer/Decimal/Rational,
+`rational(...)` construction/display, the R22 exact-family equality
+bridge, structural equality, list/map construction, lambdas/closures,
+local case/pattern dispatch, pipelines, `err(...)` Outcomes, and the
+one deterministic undefined-name diagnostic — no ordered comparison
 operators, Float64, format-spec, JSON boundary, or `some`/`none`).
 Every other `spec/manifest.json` capability remains `unsupported`.
-Running the full shared spec corpus: `total=755 passed=89 failed=0
-unsupported=666 protocol_error=0 crash=0 timeout=0 invalid=0` (see
+Running the full shared spec corpus: `total=755 passed=92 failed=0
+unsupported=663 protocol_error=0 crash=0 timeout=0 invalid=0` (see
 README.md for the exact case list).
 
 The real C++ host implementation is numbered **R24** (originally
@@ -184,10 +215,9 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime) is in progress (increments 1-2 of several landed;
-exact-family arithmetic (`+ - * / %` across Integer/Decimal/Rational),
-comparison operators, Float64, format-spec, and the JSON boundary
-remain).**
+numeric runtime) is in progress (increments 1-3 of several landed;
+comparison operators (`< <= > >=`), Float64, format-spec, and the JSON
+boundary remain).**
 
 Known commands:
 

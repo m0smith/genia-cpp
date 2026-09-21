@@ -1,13 +1,15 @@
 # genia-cpp
 
-**Status: E24-6 complete, E24-7 in progress (increments 1-2 landed).
+**Status: E24-6 complete, E24-7 in progress (increments 1-3 landed).
 `genia-adapter` implements integer/string/boolean/list/map literals,
-Decimal source literals (`1.25`, `1e3`, ...; negation and canonical
-display only -- no arithmetic beyond negation yet), the exact Rational
+Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
-(gcd-reduced, canonical `<numerator>/<denominator>` display -- no
-arithmetic yet either), unary minus, bare-name references, assignment,
-`+ - * / == != %` binary expressions, lambdas/closures, named functions
+(gcd-reduced, canonical `<numerator>/<denominator>` display), unary
+minus, bare-name references, assignment, `+ - * / == != %` binary
+expressions -- including the full R22 exact-family
+(Integer/Decimal/Rational) arithmetic promotion lattice, exact
+division, and exact floor-remainder (sections 6-8), not just plain
+Integer/Integer -- lambdas/closures, named functions
 (ordinary and local case/pattern-dispatch bodies), local R20 open
 functions (grouped and repeated top-level clause spellings, single
 module only), pipelines (`|>`), the `err(...)` Outcome constructor and
@@ -33,7 +35,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-2
+E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-3
 of several); E24-8 remains.
 
 ## Authority
@@ -139,10 +141,28 @@ increment 1's Integer/Decimal-only special case into R22 section 10.1's
 full "Exact family" rule: Integer/Decimal/Rational compare by
 mathematical value in every pairing, via converting each to an exact
 numerator/denominator pair and comparing by cross-multiplication --
-never rounding through a host binary float. Rational arithmetic,
-comparison operators (`< <= > >=`, absent from this slice's grammar
-entirely), Float64, the format-spec engine, and the JSON boundary all
-remain further E24-7 increments:
+never rounding through a host binary float. **Increment 3** adds R22
+sections 6-8's exact-family arithmetic (`src/arithmetic.hpp`):
+`+`/`-`/`*` follow the `Integer < Decimal < Rational` promotion
+lattice (Integer/Integer stays Integer; Decimal participation retains
+Decimal even for a mathematically integral result, e.g. `1.5 + 0.5 ==
+2.0`, never collapsing to Integer; any Rational participation produces
+a reduced Rational, collapsing to Integer only at denominator 1, e.g.
+`rational(1, 2) + rational(1, 2) == 1`); `/` implements section 7's own
+table (Integer/Integer division that is not evenly divisible produces
+Rational, *never* Decimal, even when the quotient would terminate in
+base 10 -- `1 / 2 == rational(1, 2)`, not `0.5`; Decimal participation
+with no Rational operand produces Decimal only when the exact quotient
+terminates in base 10, Rational otherwise -- `1.0 / 2 == 0.5` but
+`1.0 / 3 == rational(1, 3)`); `%` follows the same section-6 promotion
+rule as `+`/`-`/`*` (before Rational denominator-one collapse), per
+section 8's `q = floor(left / right); left % right = left - q * right`.
+Division/remainder by exact zero remains honestly `unsupported`
+(deterministic numeric misuse this slice has no diagnostic-worthy error
+path for yet), matching every other zero-divisor convention already
+established. Ordered comparison operators (`< <= > >=`, absent from
+this slice's grammar entirely), Float64, the format-spec engine, and
+the JSON boundary all remain further E24-7 increments:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
@@ -217,11 +237,10 @@ remain further E24-7 increments:
   third-party bignum library.
 - `src/value.hpp`, `src/environment.hpp` — the runtime value
   representation (exact Integer, exact Decimal (E24-7: coefficient
-  `bignum::Integer` + `int64_t` exponent, R22 section 2 -- literal
-  construction and negation only, no arithmetic beyond that yet), exact
+  `bignum::Integer` + `int64_t` exponent, R22 section 2), exact
   Rational (E24-7 increment 2: `bignum::Integer` numerator/denominator,
-  R22 section 3 -- construction and display only, no arithmetic yet),
-  Boolean, String, Bytes, List, the native in-house insertion-ordered
+  R22 section 3), Boolean, String, Bytes, List, the native in-house
+  insertion-ordered
   `OrderedMap`, Outcome (`err(...)` only -- `some`/`none` remain
   unimplemented), Closure, and an opaque placeholder for `print`) and
   the parent-chained lexical environment lambda/function calls evaluate
@@ -231,6 +250,20 @@ remain further E24-7 increments:
   (`src/bignum.hpp`'s new `Integer::gcd`, the ordinary Euclidean
   algorithm), keeps the denominator positive with sign carried by the
   numerator, and collapses a reduced denominator of 1 to Integer.
+- `src/arithmetic.hpp` (E24-7 increment 3) — R22 sections 6-8 exact-family
+  `+`/`-`/`*`/`/`/`%`: Decimal-only `+`/`-`/`*` align exponents and
+  canonicalize (never collapsing to Integer); any-Rational-operand
+  `+`/`-`/`*` go through general numerator/denominator fraction algebra
+  reduced via `rational::construct_rational`; `/` reduces the operands'
+  cross-multiplied fraction and then picks Integer/Decimal/Rational per
+  section 7's table, checking base-10 termination
+  (`denominator_terminates_in_base10`) only where the contract requires
+  it; `%` computes the exact floor quotient via
+  `bignum::Integer::floor_remainder` and reduces `left - q*right` as a
+  fraction, promoted per section 6 (not section 7) -- Decimal-only `%`
+  is always guaranteed to terminate in base 10 (its denominator is
+  always a divisor of a power of 10), so no termination check is needed
+  there.
 - `src/equality.hpp` — R18 structural/legal-key equality: one internal
   dispatch over Genia semantic kinds, kind-tagged map-key encoding so
   distinct kinds never collide (booleans vs. numbers vs. strings), plus
@@ -313,7 +346,7 @@ remain further E24-7 increments:
   `unsupported` per case, or are gated out entirely by every
   cross-module case's separate `multi_file_eval` requirement (see
   `m0smith/genia-2026#973`/`#974`). Running the full shared spec corpus
-  against it: `total=755 passed=89 failed=0 unsupported=666
+  against it: `total=755 passed=92 failed=0 unsupported=663
   protocol_error=0 crash=0 timeout=0 invalid=0` — the 7 pinned E24-4
   cases (`outcome_values`, `lambda_function_call`,
   `pattern_case_dispatch`, `pipeline_composition`,
@@ -322,8 +355,11 @@ remain further E24-7 increments:
   `r20-gcd-repeated-clauses`), E24-7 increment 1's R21 Decimal-literal
   `parse`/`ir` cases (classification, equivalent-spelling
   normalization, the tagged Decimal payload, unary-negative lowering),
-  and increment 2's `r22-rational-construction.yaml`/
-  `r22-exact-family-equality.yaml` all pass, plus the E24-2/E24-3
+  increment 2's `r22-rational-construction.yaml`/
+  `r22-exact-family-equality.yaml`, and increment 3's
+  `r22-exact-arithmetic-promotion-lattice.yaml`/
+  `r22-exact-division-required-proofs.yaml`/
+  `r22-exact-floor-remainder.yaml` all pass, plus the E24-2/E24-3
   pinned cases, the two `spec/eval/r18-*.yaml` cases the Integer/
   Decimal equality-bridge fix restored to passing, and further
   incidental cases this slice's honest, evidence-matched
@@ -342,12 +378,13 @@ remain further E24-7 increments:
   application (calling the result of a call or a parenthesized
   expression, e.g. immediately-invoked lambdas) remain entirely
   unimplemented. Decimal and Rational are only *partly* implemented:
-  source literals/construction, negation (Decimal only), canonical
-  display, and R22 section 10.1's exact-family `==`/`!=` bridge across
-  Integer/Decimal/Rational all work end to end, but arithmetic
-  (`+ - * / %`) for anything beyond plain Integer/Integer, the
-  `float64(...)`/`exact(...)` conversions, field-format-spec
-  integration, and the JSON boundary all remain unimplemented. R20 open
+  source literals/construction, negation, canonical display, the R22
+  section 10.1 exact-family `==`/`!=` bridge, and the full section 6-8
+  `+ - * / %` arithmetic/division/floor-remainder promotion rules all
+  work end to end across Integer/Decimal/Rational, but ordered
+  comparison (`< <= > >=`), the `float64(...)`/`exact(...)`
+  conversions, field-format-spec integration, and the JSON boundary all
+  remain unimplemented. R20 open
   functions are only
   *partly* implemented: local (single-module) grouped/repeated clause
   dispatch works end to end, but cross-module `extend`/`use`
@@ -372,7 +409,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=755 passed=89 failed=0 unsupported=666 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=755 passed=92 failed=0 unsupported=663 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):
