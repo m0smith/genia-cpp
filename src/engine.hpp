@@ -92,6 +92,16 @@ inline std::optional<RunResult> try_run(const std::string& source) {
         "Error: float64: exact magnitude exceeds the largest finite binary64 value\n";
     run_result.exit_code = 1;
     return run_result;
+  } catch (const float64::DivisionByZeroError&) {
+    RunResult run_result;
+    run_result.stderr_text = "Error: float64 division by zero\n";
+    run_result.exit_code = 1;
+    return run_result;
+  } catch (const float64::RemainderByZeroError&) {
+    RunResult run_result;
+    run_result.stderr_text = "Error: float64 remainder by zero\n";
+    run_result.exit_code = 1;
+    return run_result;
   }
   if (!result.has_value()) {
     return std::nullopt;

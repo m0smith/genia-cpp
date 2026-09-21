@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-6 complete. E24-7 in progress (increments 1-5 of
+**E24-1 through E24-6 complete. E24-7 in progress (increments 1-6 of
 several, see below).** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -230,6 +230,16 @@ preserves signed zero and shortest-roundtrip finite text. Float64 arithmetic,
 the exact/Float64 comparison and map-key bridge, format specs, and JSON remain
 later increments. No capability declaration changed.
 
+**Increment 6** adds R22 section 9's closed-domain Float64 arithmetic:
+unary `-` and Float64-with-Float64 `+`, `-`, `*`, `/`, and `%`. Ordinary
+operations use native binary64; `%` adjusts `fmod` to the contract's floor
+remainder (including divisor-signed zero), rather than exposing C++'s
+truncating remainder. Either signed-zero divisor produces the exact normalized
+division/remainder diagnostic. Any Float64/exact-family pairing remains
+rejected in both directions for every binary arithmetic operator; this does
+not place Float64 in the exact promotion lattice. Equality, ordering, and map
+keys remain later work. No capability declaration changed.
+
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
@@ -246,9 +256,9 @@ diagnostic, and explicit Float64 conversions/rendering — no Float64
 arithmetic/comparison, format-spec, JSON boundary, or
 `some`/`none`). Every other `spec/manifest.json` capability remains
 `unsupported`. Running the full shared spec corpus: `total=755
-passed=94 failed=0 unsupported=661 protocol_error=0 crash=0 timeout=0
-invalid=0`; increment 5 adds the Float64 round-trip and magnitude-overflow
-cases while comparison-dependent Float64 cases remain unsupported.
+passed=97 failed=0 unsupported=658 protocol_error=0 crash=0 timeout=0
+invalid=0`; increment 6 adds Float64 arithmetic plus the two normalized
+zero-divisor cases while comparison-dependent Float64 cases remain unsupported.
 
 The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
@@ -258,8 +268,8 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime) is in progress (increments 1-5 of several landed;
-Float64 arithmetic/comparison, format-spec, and the JSON boundary remain).**
+numeric runtime) is in progress (increments 1-6 of several landed;
+Float64 comparison/map keys, format-spec, and the JSON boundary remain).**
 
 Known commands:
 

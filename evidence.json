@@ -39,7 +39,7 @@
     "cli"
   ],
   "contract_revision": {
-    "checkout": "80e07a209213ce2c6751cd4329cc7a30a59f13b9",
+    "checkout": "7df2c890783b47af1ba92dc76d6fe429c660fcc1",
     "classification": "resolvable_ancestor",
     "declared": "eb171afc434b3b9110007b8be76f6b0eff850311"
   },
@@ -47,10 +47,10 @@
     "crash": 0,
     "fail": 0,
     "invalid": 0,
-    "pass": 94,
+    "pass": 97,
     "protocol_error": 0,
     "timeout": 0,
-    "unsupported": 661
+    "unsupported": 658
   },
   "protocol_version": "1",
   "total_cases": 755
