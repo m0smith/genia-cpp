@@ -1,15 +1,15 @@
 # genia-cpp
 
-**Status: E24-6 complete, E24-7 in progress (increments 1-3 landed).
+**Status: E24-6 complete, E24-7 in progress (increments 1-4 landed).
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
 (gcd-reduced, canonical `<numerator>/<denominator>` display), unary
-minus, bare-name references, assignment, `+ - * / == != %` binary
-expressions -- including the full R22 exact-family
+minus, bare-name references, assignment, `+ - * / == != % < <= > >=`
+binary expressions -- including the full R22 exact-family
 (Integer/Decimal/Rational) arithmetic promotion lattice, exact
-division, and exact floor-remainder (sections 6-8), not just plain
-Integer/Integer -- lambdas/closures, named functions
+division, exact floor-remainder, and mathematical-value ordering
+(sections 6-8, 10.1), not just plain Integer/Integer -- lambdas/closures, named functions
 (ordinary and local case/pattern-dispatch bodies), local R20 open
 functions (grouped and repeated top-level clause spellings, single
 module only), pipelines (`|>`), the `err(...)` Outcome constructor and
@@ -35,7 +35,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-3
+E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-4
 of several); E24-8 remains.
 
 ## Authority
@@ -160,9 +160,27 @@ section 8's `q = floor(left / right); left % right = left - q * right`.
 Division/remainder by exact zero remains honestly `unsupported`
 (deterministic numeric misuse this slice has no diagnostic-worthy error
 path for yet), matching every other zero-divisor convention already
-established. Ordered comparison operators (`< <= > >=`, absent from
-this slice's grammar entirely), Float64, the format-spec engine, and
-the JSON boundary all remain further E24-7 increments:
+established. **Increment 4** adds R22 section 10.1's ordered comparison
+operators (`<`, `<=`, `>`, `>=`) for the exact family, reusing
+`exact_family_equal`'s numerator/denominator cross-multiplication
+technique for ordering (`equality.hpp`'s new `exact_family_compare`) --
+safe because every exact-family kind's converted denominator is always
+strictly positive, so cross-multiplication never needs a sign-flip
+caveat. Adding this new precedence tier also surfaced and fixed a
+latent parser bug: `parser.hpp`'s expression grammar previously
+flattened `+`/`-` and `==`/`!=` into one precedence level, contrary to
+`src/genia/parser.py`'s own `PRECEDENCE` table (`EQEQ`/`NE` = 30 <
+`PLUS`/`MINUS` = 50) -- e.g. `1 == 2 + 3` must group as `1 == (2 + 3)`,
+not `(1 == 2) + 3`. This never produced a silently wrong `ok` result
+(the mis-grouped `(1 == 2) + 3` shape is itself `unsupported`, a
+Boolean/Integer arithmetic mix outside this slice's exact-family-only
+arithmetic either way), but is fixed now via a proper
+precedence-climbing chain (`parse_expr` -> `parse_equality` (30) ->
+`parse_comparison` (40, new) -> `parse_additive` (50) -> `parse_term`
+(60)). Comparing a non-exact-family operand (`true < false`, `"a" <
+"b"`) remains honestly `unsupported` -- R22 section 10.1 covers only
+the exact family. Float64, the format-spec engine, and the JSON
+boundary all remain further E24-7 increments:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
@@ -185,9 +203,15 @@ the JSON boundary all remain further E24-7 increments:
   every other identifier now resolves to (whether a name is actually
   *bound* is a runtime concern -- see `src/evaluator.hpp` -- not a
   parse-time restriction, matching genia-2026's real grammar), and
-  `+ - * / == != %` binary expressions with standard precedence (`%` is
-  exact floor-remainder, Python-style, sign follows the divisor --
-  verified directly against `src/genia/numeric_runtime.py`'s
+  `+ - * / == != % < <= > >=` binary expressions via a real
+  precedence-climbing chain matching `src/genia/parser.py`'s own
+  `PRECEDENCE` table exactly (`EQEQ`/`NE` = 30 < `LT`/`LE`/`GT`/`GE` =
+  40 < `PLUS`/`MINUS` = 50 < `STAR`/`SLASH`/`PERCENT` = 60, higher
+  binds tighter -- `parse_expr` -> `parse_equality` -> `parse_comparison`
+  -> `parse_additive` -> `parse_term`; E24-7 increment 4 fixed a latent
+  bug where `+`/`-` and `==`/`!=` were previously flattened into one
+  level) (`%` is exact floor-remainder, Python-style, sign follows the
+  divisor -- verified directly against `src/genia/numeric_runtime.py`'s
   `exact_remainder`, not C++'s native truncating `%`; `!=` is exactly
   the logical negation of `==`, R18: "equality is ONE relation
   (==, !=)"), Decimal source
@@ -267,12 +291,15 @@ the JSON boundary all remain further E24-7 increments:
 - `src/equality.hpp` — R18 structural/legal-key equality: one internal
   dispatch over Genia semantic kinds, kind-tagged map-key encoding so
   distinct kinds never collide (booleans vs. numbers vs. strings), plus
-  R22 section 10.1's "Exact family" numeric-equality bridge
+  R22 section 10.1's "Exact family" numeric-equality/ordering bridge
   (Integer/Decimal/Rational compare by mathematical value in every
-  pairing, `exact_family_equal`) -- each value converts to an exact
-  numerator/denominator pair, compared via cross-multiplication, never
-  the lossy integer-to-host-float cast the contract forbids. No
-  fallback to host container/language equality.
+  pairing for `==`/`!=` via `exact_family_equal`, and for `< <= > >=`
+  via `exact_family_compare`, E24-7 increment 4) -- each value converts
+  to an exact numerator/denominator pair, compared via
+  cross-multiplication, never the lossy integer-to-host-float cast the
+  contract forbids (ordering's cross-multiplication is sign-safe
+  because every exact-family kind's converted denominator is always
+  strictly positive). No fallback to host container/language equality.
 - `src/pattern_match.hpp` — pattern matching for lambda parameters and
   local case dispatch, mirroring genia-2026's real
   `src/genia/pattern_match.py` `match_pattern`/`match_pattern_atom`
@@ -363,7 +390,13 @@ the JSON boundary all remain further E24-7 increments:
   pinned cases, the two `spec/eval/r18-*.yaml` cases the Integer/
   Decimal equality-bridge fix restored to passing, and further
   incidental cases this slice's honest, evidence-matched
-  grammar/lowering/evaluation also happens to satisfy.
+  grammar/lowering/evaluation also happens to satisfy. Increment 4's
+  ordered comparison operators are real and covered by this
+  repository's own Catch2 tests, but the count is unchanged from
+  increment 3 (still `passed=92`): the one pinned shared-corpus case
+  exercising ordering, `r22-exact-family-and-float64-ordering.yaml`,
+  also requires `float64(...)`, a further increment, so it does not yet
+  flip to passing.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
   equality, and display for any well-formed UTF-8 input, but is not yet
@@ -371,20 +404,20 @@ the JSON boundary all remain further E24-7 increments:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- `some`/`none` Option values, Float64, ordered comparison operators
-  (`< <= > >=`, absent from this slice's grammar for every numeric
-  kind, not just the newer ones), general diagnostic normalization
-  (beyond the one undefined-name case), and general postfix call
-  application (calling the result of a call or a parenthesized
-  expression, e.g. immediately-invoked lambdas) remain entirely
-  unimplemented. Decimal and Rational are only *partly* implemented:
-  source literals/construction, negation, canonical display, the R22
-  section 10.1 exact-family `==`/`!=` bridge, and the full section 6-8
-  `+ - * / %` arithmetic/division/floor-remainder promotion rules all
-  work end to end across Integer/Decimal/Rational, but ordered
-  comparison (`< <= > >=`), the `float64(...)`/`exact(...)`
-  conversions, field-format-spec integration, and the JSON boundary all
-  remain unimplemented. R20 open
+- `some`/`none` Option values, Float64 (entirely absent as a value kind
+  -- `float64(...)`/`exact(...)` conversions, Float64 arithmetic, and
+  the Float64/exact-family comparison bridge all remain unimplemented),
+  general diagnostic normalization (beyond the one undefined-name
+  case), and general postfix call application (calling the result of a
+  call or a parenthesized expression, e.g. immediately-invoked lambdas)
+  remain entirely unimplemented. Decimal and Rational are only *partly*
+  implemented: source literals/construction, negation, canonical
+  display, and the full R22 section 6-8, 10.1 exact-family
+  arithmetic/division/floor-remainder/equality/ordering rules
+  (`+ - * / % == != < <= > >=`) all work end to end across
+  Integer/Decimal/Rational, but comparing an exact-family value against
+  Float64 (section 10.2's bridge), field-format-spec integration, and
+  the JSON boundary all remain unimplemented. R20 open
   functions are only
   *partly* implemented: local (single-module) grouped/repeated clause
   dispatch works end to end, but cross-module `extend`/`use`

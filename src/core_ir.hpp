@@ -73,7 +73,7 @@ enum class LiteralKind : std::uint8_t { Integer, String, Bool, Decimal };
 // Binary operator token names, matching genia-2026's parser token names
 // (see src/genia/lowering.py: `IrBinary(lower(left), node.op, lower(right))`
 // where `node.op` is the raw lexer token name, not the symbol).
-enum class Op : std::uint8_t { Plus, Minus, Star, Slash, Percent, EqEq, NotEq };
+enum class Op : std::uint8_t { Plus, Minus, Star, Slash, Percent, EqEq, NotEq, Lt, Le, Gt, Ge };
 
 inline const char* op_token_name(Op op) {
   switch (op) {
@@ -91,6 +91,14 @@ inline const char* op_token_name(Op op) {
       return "EQEQ";
     case Op::NotEq:
       return "NE";
+    case Op::Lt:
+      return "LT";
+    case Op::Le:
+      return "LE";
+    case Op::Gt:
+      return "GT";
+    case Op::Ge:
+      return "GE";
   }
   return "";
 }

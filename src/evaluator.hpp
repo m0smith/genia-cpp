@@ -360,6 +360,19 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           return arithmetic::exact_divide(*lhs, *rhs);
         case core_ir::Op::Percent:
           return arithmetic::exact_floor_remainder(*lhs, *rhs);
+        // R22 section 10.1: Integer/Decimal/Rational compare by
+        // mathematical value for <, <=, >, >=, via the same
+        // numerator/denominator cross-multiplication `==`/`!=` already
+        // use (equality.hpp's `exact_family_compare`) -- never rounding
+        // through a host binary float.
+        case core_ir::Op::Lt:
+          return value::Value::make_boolean(equality::exact_family_compare(*lhs, *rhs) < 0);
+        case core_ir::Op::Le:
+          return value::Value::make_boolean(equality::exact_family_compare(*lhs, *rhs) <= 0);
+        case core_ir::Op::Gt:
+          return value::Value::make_boolean(equality::exact_family_compare(*lhs, *rhs) > 0);
+        case core_ir::Op::Ge:
+          return value::Value::make_boolean(equality::exact_family_compare(*lhs, *rhs) >= 0);
         case core_ir::Op::EqEq:
         case core_ir::Op::NotEq:
           break;  // handled above

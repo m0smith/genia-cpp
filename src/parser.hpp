@@ -11,8 +11,11 @@
 //   case_clause  := (pattern_tuple | pattern_atom) '->' pipeline_expr
 //   assignment := IDENT '=' pipeline_expr
 //   pipeline_expr := expr ('|>' expr)*
-//   expr       := term (('+' | '-' | '==') term)*
-//   term       := factor (('*' | '/') factor)*
+//   expr       := equality
+//   equality   := comparison (('==' | '!=') comparison)*
+//   comparison := additive (('<' | '<=' | '>' | '>=') additive)*
+//   additive   := term (('+' | '-') term)*
+//   term       := factor (('*' | '/' | '%') factor)*
 //   factor     := INTEGER | STRING | 'true' | 'false' | list | map_literal
 //               | lambda | '(' pipeline_expr ')' | call | IDENT
 //   lambda     := '(' (pattern_atom (',' pattern_atom)*)? ')' '->' expr
@@ -59,6 +62,10 @@ enum class TokenKind : std::uint8_t {
   Percent,
   EqEq,
   NotEq,
+  Lt,
+  Le,
+  Gt,
+  Ge,
   Eq,
   LBracket,
   RBracket,
@@ -285,6 +292,24 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
           continue;
         }
         return std::nullopt;
+      case '<':
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.push_back({TokenKind::Le, "<="});
+          i += 2;
+          continue;
+        }
+        tokens.push_back({TokenKind::Lt, "<"});
+        ++i;
+        continue;
+      case '>':
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.push_back({TokenKind::Ge, ">="});
+          i += 2;
+          continue;
+        }
+        tokens.push_back({TokenKind::Gt, ">"});
+        ++i;
+        continue;
       default:
         return std::nullopt;
     }
@@ -940,14 +965,63 @@ class Parser {
     return result;
   }
 
-  std::optional<ast::Node> parse_expr() {
+  // Precedence-climbing chain matching genia-2026's real
+  // src/genia/parser.py PRECEDENCE table exactly: EQEQ/NE=30 <
+  // LT/LE/GT/GE=40 < PLUS/MINUS=50 < STAR/SLASH/PERCENT=60 (higher binds
+  // tighter). Prior to this slice, `parse_expr` flattened PLUS/MINUS and
+  // EQEQ/NOTEQ into one level -- a latent conformance bug relative to
+  // that table (e.g. `1 == 2 + 3` must group as `1 == (2 + 3)`, not
+  // `(1 == 2) + 3`) that happened to never surface as a silently wrong
+  // *value* (a Boolean/Integer arithmetic mix like `(1 == 2) + 3` is
+  // itself unsupported by this slice's exact-family-only arithmetic, so
+  // the bug only ever manifested as an honest `unsupported`, never a
+  // wrong `ok` result) -- fixed here while adding the new comparison
+  // tier, verified directly against `src/genia/parser.py`'s own table,
+  // not guessed at.
+  std::optional<ast::Node> parse_expr() { return parse_equality(); }
+
+  std::optional<ast::Node> parse_equality() {
+    auto lhs = parse_comparison();
+    if (!lhs.has_value()) {
+      return std::nullopt;
+    }
+    ast::Node result = std::move(*lhs);
+    while (peek().kind == TokenKind::EqEq || peek().kind == TokenKind::NotEq) {
+      const std::string op = advance().text;
+      auto rhs = parse_comparison();
+      if (!rhs.has_value()) {
+        return std::nullopt;
+      }
+      result = ast::Node::binary(op, std::move(result), std::move(*rhs));
+    }
+    return result;
+  }
+
+  std::optional<ast::Node> parse_comparison() {
+    auto lhs = parse_additive();
+    if (!lhs.has_value()) {
+      return std::nullopt;
+    }
+    ast::Node result = std::move(*lhs);
+    while (peek().kind == TokenKind::Lt || peek().kind == TokenKind::Le ||
+           peek().kind == TokenKind::Gt || peek().kind == TokenKind::Ge) {
+      const std::string op = advance().text;
+      auto rhs = parse_additive();
+      if (!rhs.has_value()) {
+        return std::nullopt;
+      }
+      result = ast::Node::binary(op, std::move(result), std::move(*rhs));
+    }
+    return result;
+  }
+
+  std::optional<ast::Node> parse_additive() {
     auto lhs = parse_term();
     if (!lhs.has_value()) {
       return std::nullopt;
     }
     ast::Node result = std::move(*lhs);
-    while (peek().kind == TokenKind::Plus || peek().kind == TokenKind::Minus ||
-           peek().kind == TokenKind::EqEq || peek().kind == TokenKind::NotEq) {
+    while (peek().kind == TokenKind::Plus || peek().kind == TokenKind::Minus) {
       const std::string op = advance().text;
       auto rhs = parse_term();
       if (!rhs.has_value()) {
