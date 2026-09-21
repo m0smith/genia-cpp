@@ -207,8 +207,14 @@ TEST_CASE("run: error-undefined-name.yaml -- a deterministic runtime error, not 
   CHECK(result->exit_code == 1);
 }
 
-TEST_CASE("run: non-evenly-dividing division is unsupported (would require Rational)") {
-  CHECK_FALSE(try_run("1 / 2").has_value());
+TEST_CASE("run: non-evenly-dividing Integer/Integer division produces an exact Rational") {
+  // R22 section 7: Integer/Integer division that is not evenly divisible
+  // produces Rational, never Decimal -- superseded by E24-7 increment 3
+  // (arithmetic.hpp), which no longer treats this as unsupported now
+  // that Rational division is implemented.
+  auto result = try_run("1 / 2");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "1/2\n");
 }
 
 TEST_CASE("run: evenly-dividing division produces an exact Integer") {
@@ -677,4 +683,49 @@ TEST_CASE("run: != is the logical negation of ==, verified directly against the 
   auto result = try_run("[1 != 2, 1 != 1, 1 != 1.0]");
   REQUIRE(result.has_value());
   CHECK(result->stdout_text == "[true, false, false]\n");
+}
+
+TEST_CASE("run: r22-exact-arithmetic-promotion-lattice.yaml") {
+  auto result = try_run(
+      "[1 + 2, 1.5 + 0.5, rational(1, 2) + rational(1, 3), rational(1, 2) + rational(1, 2), "
+      "1 + rational(1, 2), -rational(1, 2)]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[3, 2.0, 5/6, 1, 3/2, -1/2]\n");
+}
+
+TEST_CASE("run: r22-exact-division-required-proofs.yaml") {
+  auto result = try_run("[6 / 3, 1 / 2, 1 / 3, 1.0 / 2, 1.0 / 3, (1 / 3) * 3]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[2, 1/2, 1/3, 0.5, 1/3, 1]\n");
+}
+
+TEST_CASE("run: r22-exact-floor-remainder.yaml stays Integer for Integer/Integer operands") {
+  auto result = try_run("[7 % 3, -7 % 3, 7 % -3, -7 % -3, 6 % 3, -6 % 3]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[1, 2, -2, -1, 0, 0]\n");
+}
+
+TEST_CASE("run: Decimal-only +/-/* retains Decimal even for an integral result") {
+  auto result = try_run("[2.0 * 3, 1.25 - 0.05, 2 - 2.0]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[6.0, 1.2, 0.0]\n");
+}
+
+TEST_CASE("run: Decimal division producing a non-terminating quotient falls back to Rational") {
+  auto result = try_run("1.0 / 7");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "1/7\n");
+}
+
+TEST_CASE("run: Rational division and floor-remainder") {
+  auto result = try_run("[rational(1, 2) / rational(1, 3), rational(7, 2) % 2]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[3/2, 3/2]\n");
+}
+
+TEST_CASE("run: exact division/remainder by zero is unsupported, never a crash") {
+  CHECK_FALSE(try_run("1 / 0").has_value());
+  CHECK_FALSE(try_run("1 % 0").has_value());
+  CHECK_FALSE(try_run("1.0 / 0").has_value());
+  CHECK_FALSE(try_run("rational(1, 2) / 0").has_value());
 }

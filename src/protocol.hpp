@@ -91,13 +91,15 @@ inline const std::vector<std::string>& known_capabilities() {
 }
 
 inline constexpr const char* kUnsupportedReason =
-    "genia-cpp implements only the E24-2..E24-7(increment 2) vertical "
+    "genia-cpp implements only the E24-2..E24-7(increment 3) vertical "
     "slice (integer/Decimal literals, unary minus, string/boolean/list/map "
     "literals, bare-name references, assignment, `+ - * / == != %` binary "
-    "expressions, lambdas, named-function definitions (ordinary and local "
-    "case/pattern-dispatch bodies), local R20 open functions (single "
-    "module only), pipelines, `err(...)` Outcomes, `rational(...)` "
-    "construction, the R22 exact-family (Integer/Decimal/Rational) "
+    "expressions -- including the full R22 exact-family "
+    "(Integer/Decimal/Rational) arithmetic/division/floor-remainder "
+    "promotion rules, not just Integer -- lambdas, named-function "
+    "definitions (ordinary and local case/pattern-dispatch bodies), local "
+    "R20 open functions (single module only), pipelines, `err(...)` "
+    "Outcomes, `rational(...)` construction, the R22 exact-family "
     "equality bridge, the one deterministic undefined-name runtime error, "
     "calls to this slice's native map_*/utf8_encode/err/sum functions, and "
     "`-c`/file-mode CLI); this request is outside that scope -- see "

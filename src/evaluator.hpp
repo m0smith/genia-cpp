@@ -1,13 +1,15 @@
-// Core IR evaluator for the E24-2..E24-4 vertical slice: exact Integer
-// arithmetic, structural equality, list/map construction, assignment,
-// lambdas, named-function definitions (ordinary and local
-// case/pattern-dispatch bodies), pipelines, the `err(...)` Outcome
-// constructor, and calls to this slice's native functions plus the
-// small set of prelude-sourced functions installed by global_env.hpp.
+// Core IR evaluator for the E24-2..E24-7 vertical slice: exact
+// Integer/Decimal/Rational arithmetic (see arithmetic.hpp for the R22
+// section 6-8 promotion/division/remainder rules), structural equality,
+// list/map construction, assignment, lambdas, named-function
+// definitions (ordinary and local case/pattern-dispatch bodies),
+// pipelines, the `err(...)` Outcome constructor, and calls to this
+// slice's native functions plus the small set of prelude-sourced
+// functions installed by global_env.hpp.
 //
 // Returns std::nullopt whenever the specific IR node cannot be honestly
-// evaluated by this slice (a non-integer arithmetic operand, a division
-// that would require a Rational this slice does not implement, an
+// evaluated by this slice (a non-numeric arithmetic operand, mixed
+// Float64/exact arithmetic this slice does not implement, an
 // unrecognized call, a case/pattern-dispatch with no matching clause,
 // ...). Callers must treat std::nullopt as "this case is unsupported",
 // never attempt a fallback value or a best-effort diagnostic: this
@@ -30,6 +32,7 @@
 #include <string>
 #include <vector>
 
+#include "arithmetic.hpp"
 #include "bignum.hpp"
 #include "core_ir.hpp"
 #include "environment.hpp"
@@ -130,6 +133,12 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       if (operand->kind == value::Kind::Decimal) {
         return value::Value::make_decimal(operand->decimal_coefficient.negate(),
                                           operand->decimal_exponent);
+      }
+      if (operand->kind == value::Kind::Rational) {
+        // Denominator is already positive and unaffected by negation;
+        // only the sign-carrying numerator flips (R22 section 3).
+        return value::Value::make_rational(operand->rational_numerator.negate(),
+                                           operand->rational_denominator);
       }
       return std::nullopt;
     }
@@ -303,37 +312,54 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         // reference host, not guessed).
         return value::Value::make_boolean(!equality::structural_equal(*lhs, *rhs));
       }
-      if (lhs->kind != value::Kind::Integer || rhs->kind != value::Kind::Integer) {
+      if (!equality::is_exact_family_kind(lhs->kind) ||
+          !equality::is_exact_family_kind(rhs->kind)) {
         return std::nullopt;
       }
+      // R22 section 6 promotion lattice (Integer < Decimal < Rational)
+      // for `+`/`-`/`*` and (section 8) `%`; section 7's own table for
+      // `/`. `both_integer` keeps the fast bignum-only path for the
+      // overwhelmingly common case; `any_rational` routes to general
+      // exact fraction algebra (reduced, collapsing to Integer at
+      // denominator 1); otherwise exactly one operand is Decimal (the
+      // other Integer or Decimal), which retains Decimal per section 6.
+      const bool both_integer =
+          lhs->kind == value::Kind::Integer && rhs->kind == value::Kind::Integer;
+      const bool any_rational =
+          lhs->kind == value::Kind::Rational || rhs->kind == value::Kind::Rational;
       switch (node.op) {
         case core_ir::Op::Plus:
-          return value::Value::make_integer(lhs->integer.add(rhs->integer));
+          if (both_integer) {
+            return value::Value::make_integer(lhs->integer.add(rhs->integer));
+          }
+          if (any_rational) {
+            return arithmetic::rational_add(*lhs, *rhs);
+          }
+          return arithmetic::decimal_add_sub(*lhs, *rhs, /*subtract=*/false);
         case core_ir::Op::Minus:
-          return value::Value::make_integer(lhs->integer.sub(rhs->integer));
+          if (both_integer) {
+            return value::Value::make_integer(lhs->integer.sub(rhs->integer));
+          }
+          if (any_rational) {
+            return arithmetic::rational_sub(*lhs, *rhs);
+          }
+          return arithmetic::decimal_add_sub(*lhs, *rhs, /*subtract=*/true);
         case core_ir::Op::Star:
-          return value::Value::make_integer(lhs->integer.mul(rhs->integer));
-        case core_ir::Op::Slash: {
-          auto quotient = lhs->integer.exact_divide(rhs->integer);
-          if (!quotient.has_value()) {
-            // Division by zero, or a non-evenly-dividing quotient that
-            // R22 defines as producing a Rational: this slice
-            // implements neither, so the case is unsupported rather
-            // than wrong.
-            return std::nullopt;
+          if (both_integer) {
+            return value::Value::make_integer(lhs->integer.mul(rhs->integer));
           }
-          return value::Value::make_integer(*quotient);
-        }
-        case core_ir::Op::Percent: {
-          // Exact floor-remainder (R22: src/genia/numeric_runtime.py's
-          // exact_remainder) -- division by zero is unsupported, never a
-          // crash or a fabricated error, matching Slash's own convention.
-          auto remainder = lhs->integer.floor_remainder(rhs->integer);
-          if (!remainder.has_value()) {
-            return std::nullopt;
+          if (any_rational) {
+            return arithmetic::rational_mul(*lhs, *rhs);
           }
-          return value::Value::make_integer(*remainder);
-        }
+          return arithmetic::decimal_mul(*lhs, *rhs);
+        case core_ir::Op::Slash:
+          // arithmetic::exact_divide implements R22 section 7's full
+          // table (Integer-or-Rational for Integer/Integer, Decimal
+          // when the quotient terminates in base 10, Rational
+          // otherwise); std::nullopt only for division by exact zero.
+          return arithmetic::exact_divide(*lhs, *rhs);
+        case core_ir::Op::Percent:
+          return arithmetic::exact_floor_remainder(*lhs, *rhs);
         case core_ir::Op::EqEq:
         case core_ir::Op::NotEq:
           break;  // handled above
