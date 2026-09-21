@@ -3,9 +3,15 @@
 // pinned genia-2026 bootstrap-cases.json evidence requires, plus the
 // deliberate "unsupported, never wrong" boundary this slice must hold
 // for anything outside its grammar.
+#include <bit>
+#include <limits>
+
 #include "../src/ast_projection.hpp"
 #include "../src/engine.hpp"
+#include "../src/float64.hpp"
 #include "../src/ir_projection.hpp"
+#include "../src/native_functions.hpp"
+#include "../src/render.hpp"
 #include "../third_party/catch2/catch.hpp"
 
 using genia::engine::try_lower;
@@ -247,6 +253,66 @@ TEST_CASE("run: unary minus negates an Integer or Decimal literal (E24-7)") {
   auto negated_operand_of_binary = try_run("1 + -5");
   REQUIRE(negated_operand_of_binary.has_value());
   CHECK(negated_operand_of_binary->stdout_text == "-4\n");
+}
+
+TEST_CASE("E24-7 Float64 explicit conversions preserve the exact domain boundary") {
+  auto result = try_run("[float64(2), float64(rational(1, 3)), exact(float64(0.1))]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text ==
+        "[float64(2.0), float64(0.3333333333333333), "
+        "0.1000000000000000055511151231257827021181583404541015625]\n");
+
+  CHECK_FALSE(try_run("1 + float64(2)").has_value());
+  CHECK_FALSE(try_run("float64(2) + 1").has_value());
+}
+
+TEST_CASE("E24-7 Float64 conversion rounds ties to even and rejects overflow") {
+  auto tie_down = try_run("float64(rational(9007199254740993, 1))");
+  REQUIRE(tie_down.has_value());
+  CHECK(tie_down->stdout_text == "float64(9007199254740992.0)\n");
+
+  auto tie_up = try_run("float64(rational(9007199254740995, 1))");
+  REQUIRE(tie_up.has_value());
+  CHECK(tie_up->stdout_text == "float64(9007199254740996.0)\n");
+
+  auto overflow = try_run(
+      "float64(100000000000000000000000000000000000000000000000000000000000000000000000"
+      "000000000000000000000000000000000000000000000000000000000000000000000000"
+      "000000000000000000000000000000000000000000000000000000000000000000000000"
+      "000000000000000000000000000000000000000000000000000000000000000000000000"
+      "00000000000000000000000000000000000000000000000000000000000000000000000)");
+  REQUIRE(overflow.has_value());
+  CHECK(overflow->stderr_text ==
+        "Error: float64: exact magnitude exceeds the largest finite binary64 value\n");
+  CHECK(overflow->exit_code == 1);
+
+  const auto max_significand = genia::bignum::Integer::from_u64((uint64_t{1} << 53) - 1);
+  const auto just_above_max =
+      max_significand.shift_left(971).add(genia::bignum::Integer::from_u64(1));
+  CHECK_THROWS_AS(
+      genia::native_functions::call("float64", {genia::value::Value::make_integer(just_above_max)}),
+      genia::float64::MagnitudeOverflowError);
+}
+
+TEST_CASE("E24-7 exact(Float64) handles signed zero, exact 0.1, and non-finite rejection") {
+  using genia::native_functions::call;
+  using genia::value::Value;
+  auto positive_zero = call("exact", {Value::make_float64(0.0)});
+  auto negative_zero = call("exact", {Value::make_float64(-0.0)});
+  REQUIRE(positive_zero.has_value());
+  REQUIRE(negative_zero.has_value());
+  CHECK(genia::render::display(*positive_zero) == "0.0");
+  CHECK(genia::render::display(*negative_zero) == "0.0");
+  CHECK(genia::render::display(Value::make_float64(0.0)) == "float64(0.0)");
+  CHECK(genia::render::display(Value::make_float64(-0.0)) == "float64(-0.0)");
+  const uint64_t identity_bits = 0x3fd5555555555555u;
+  auto identity = call("float64", {Value::make_float64(std::bit_cast<double>(identity_bits))});
+  REQUIRE(identity.has_value());
+  CHECK(std::bit_cast<uint64_t>(identity->float64) == identity_bits);
+  CHECK_FALSE(
+      call("exact", {Value::make_float64(std::numeric_limits<double>::infinity())}).has_value());
+  CHECK_FALSE(
+      call("exact", {Value::make_float64(std::numeric_limits<double>::quiet_NaN())}).has_value());
 }
 
 TEST_CASE("run: an empty program is unsupported") { CHECK_FALSE(try_run("").has_value()); }

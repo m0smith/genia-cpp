@@ -17,9 +17,9 @@
 // This was required as soon as Decimal literals parse at all (E24-7
 // increment 1 discovered this the hard way: enabling Decimal literals
 // without it turned two previously-honestly-`unsupported`
-// spec/eval/r18-*.yaml cases into wrong `ok` results). The Float64
-// bridge (R22 section 10.2) remains a later E24-7 increment -- that
-// value kind does not exist yet at this point in the slice.
+// spec/eval/r18-*.yaml cases into wrong `ok` results). The Float64 value
+// now exists for explicit conversion/rendering, while its R22 section
+// 10.2 equality bridge remains a later E24-7 increment.
 #pragma once
 
 #include <optional>
@@ -137,6 +137,8 @@ inline bool structural_equal(const value::Value& a, const value::Value& b) {
     case value::Kind::Decimal:
     case value::Kind::Rational:
       return exact_family_equal(a, b);  // unreachable: handled above, kept for switch coverage
+    case value::Kind::Float64:
+      return a.float64 == b.float64;
     case value::Kind::Boolean:
       return a.boolean == b.boolean;
     case value::Kind::String:

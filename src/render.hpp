@@ -10,6 +10,8 @@
 #pragma once
 
 #include <cctype>
+#include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -20,6 +22,29 @@
 namespace genia::render {
 
 inline std::optional<std::string> display(const value::Value& value);
+
+inline std::string render_float64(double number) {
+  if (std::isnan(number)) return "float64(nan)";
+  if (std::isinf(number)) return number < 0 ? "float64(-inf)" : "float64(inf)";
+  if (number == 0.0) return std::signbit(number) ? "float64(-0.0)" : "float64(0.0)";
+  char buffer[64];
+  auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), number);
+  if (error != std::errc()) return "";
+  std::string inner(buffer, end);
+  auto e = inner.find('e');
+  if (e == std::string::npos) {
+    if (inner.find('.') == std::string::npos) inner += ".0";
+  } else {
+    if (inner.find('.', 0) == std::string::npos || inner.find('.') > e) inner.insert(e++, ".0");
+    if (e + 1 < inner.size() && inner[e + 1] != '+' && inner[e + 1] != '-')
+      inner.insert(e + 1, "+");
+    size_t exponent_digits = e + 2;
+    while (exponent_digits + 1 < inner.size() && inner[exponent_digits] == '0') {
+      inner.erase(exponent_digits, 1);
+    }
+  }
+  return "float64(" + inner + ")";
+}
 
 // Canonical Decimal display/debug atom, R23 section 2.2, verified
 // directly against genia-2026's src/genia/numeric_runtime.py
@@ -95,6 +120,8 @@ inline std::optional<std::string> display(const value::Value& value) {
       // needed here (unlike Decimal's render_decimal).
       return value.rational_numerator.to_decimal_string() + "/" +
              value.rational_denominator.to_decimal_string();
+    case value::Kind::Float64:
+      return render_float64(value.float64);
     case value::Kind::Boolean:
       return value.boolean ? "true" : "false";
     case value::Kind::String: {

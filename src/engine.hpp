@@ -86,6 +86,12 @@ inline std::optional<RunResult> try_run(const std::string& source) {
     run_result.stderr_text = "Error: Undefined name: " + error.name + "\n";
     run_result.exit_code = 1;
     return run_result;
+  } catch (const float64::MagnitudeOverflowError&) {
+    RunResult run_result;
+    run_result.stderr_text =
+        "Error: float64: exact magnitude exceeds the largest finite binary64 value\n";
+    run_result.exit_code = 1;
+    return run_result;
   }
   if (!result.has_value()) {
     return std::nullopt;
