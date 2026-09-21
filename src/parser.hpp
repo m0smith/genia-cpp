@@ -58,6 +58,7 @@ enum class TokenKind : std::uint8_t {
   Slash,
   Percent,
   EqEq,
+  NotEq,
   Eq,
   LBracket,
   RBracket,
@@ -273,6 +274,17 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
         tokens.push_back({TokenKind::Eq, "="});
         ++i;
         continue;
+      case '!':
+        // `!=` only -- this slice does not implement bare `!` (boolean
+        // not, genia-2026's own BANG token), no pinned evidence needs
+        // it, so a lone `!` is genuinely unsupported rather than
+        // guessed at.
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.push_back({TokenKind::NotEq, "!="});
+          i += 2;
+          continue;
+        }
+        return std::nullopt;
       default:
         return std::nullopt;
     }
@@ -935,7 +947,7 @@ class Parser {
     }
     ast::Node result = std::move(*lhs);
     while (peek().kind == TokenKind::Plus || peek().kind == TokenKind::Minus ||
-           peek().kind == TokenKind::EqEq) {
+           peek().kind == TokenKind::EqEq || peek().kind == TokenKind::NotEq) {
       const std::string op = advance().text;
       auto rhs = parse_term();
       if (!rhs.has_value()) {

@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-6 complete. E24-7 in progress (increment 1 of
+**E24-1 through E24-6 complete. E24-7 in progress (increments 1-2 of
 several, see below).** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -136,22 +136,45 @@ honestly-`unsupported` `spec/eval/r18-*.yaml` cases into wrong `ok`
 results; `equality.hpp`'s `decimal_equals_integer` fixes this via exact
 (never lossy-float) comparison, since Decimal is always exact.
 
+**Increment 2** adds R22 section 3's exact Rational runtime value
+(`bignum::Integer` numerator/denominator, gcd-reduced, denominator
+positive, sign carried by the numerator, denominator-one collapsing to
+Integer — `src/bignum.hpp`'s new `Integer::gcd`, `src/rational.hpp`'s
+`construct_rational`), the `rational(numerator, denominator)`
+constructor (both arguments must be Integers; a zero denominator is
+honestly unsupported, matching `1 / 0`'s existing convention — no
+diagnostic-worthy error path exists yet), canonical `<numerator>/
+<denominator>` rendering (R23 section 2.3), and the `!=` operator
+(exactly the logical negation of `==`, verified directly against the
+reference host — R18: "equality is ONE relation (==, !=)"). This
+increment also generalizes `equality.hpp`'s cross-kind numeric bridge
+from increment 1's ad hoc Integer/Decimal-only
+`decimal_equals_integer` into R22 section 10.1's full "Exact family"
+rule (Integer/Decimal/Rational compare by mathematical value in every
+pairing), by converting each exact-family value to an exact numerator/
+denominator pair and comparing via cross-multiplication — never
+rounding through a host binary float. Rational arithmetic (`+ - * /
+%`), comparison operators (`< <= > >=`, which do not exist in this
+slice's grammar at all yet), Float64, the format-spec engine, and the
+JSON boundary all remain further increments.
+
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
 varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
 is the honest declaration here). Declared `partial`: `core_ir_eval`
-(exact Integer arithmetic, Decimal literals/negation/display and the
-Integer/Decimal equality bridge, structural equality, list/map
-construction, lambdas/closures, local case/pattern dispatch, pipelines,
-`err(...)` Outcomes, and the one deterministic undefined-name
-diagnostic — no Decimal arithmetic beyond negation, Rational, Float64,
-format-spec, JSON boundary, or `some`/`none`). Every other
-`spec/manifest.json` capability remains `unsupported`. Running the full
-shared spec corpus: `total=755 passed=87 failed=0 unsupported=668
-protocol_error=0 crash=0 timeout=0 invalid=0` (see README.md for the
-exact case list).
+(exact Integer arithmetic, Decimal literals/negation/display,
+`rational(...)` construction/display, the R22 exact-family
+(Integer/Decimal/Rational) equality bridge, structural equality,
+list/map construction, lambdas/closures, local case/pattern dispatch,
+pipelines, `err(...)` Outcomes, and the one deterministic
+undefined-name diagnostic — no Decimal/Rational arithmetic, comparison
+operators, Float64, format-spec, JSON boundary, or `some`/`none`).
+Every other `spec/manifest.json` capability remains `unsupported`.
+Running the full shared spec corpus: `total=755 passed=89 failed=0
+unsupported=666 protocol_error=0 crash=0 timeout=0 invalid=0` (see
+README.md for the exact case list).
 
 The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
@@ -161,8 +184,9 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime) is in progress (increment 1 of several landed;
-Rational, Float64, exact arithmetic, format-spec, and the JSON boundary
+numeric runtime) is in progress (increments 1-2 of several landed;
+exact-family arithmetic (`+ - * / %` across Integer/Decimal/Rational),
+comparison operators, Float64, format-spec, and the JSON boundary
 remain).**
 
 Known commands:

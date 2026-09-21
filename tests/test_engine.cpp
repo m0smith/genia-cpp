@@ -647,3 +647,34 @@ TEST_CASE("run: r18-map-structural-equality.yaml's Integer/Decimal mapped-value 
   REQUIRE(result.has_value());
   CHECK(result->stdout_text == "true\n");
 }
+
+// --- E24-7 increment 2: Rational construction + `!=` --------------------
+
+TEST_CASE("run: r22-rational-construction.yaml") {
+  auto result = try_run(
+      "[rational(2, 4), rational(-2, -4), rational(2, -4), rational(2, 2), "
+      "rational(2, 2) == 1]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[1/2, 1/2, -1/2, 1, true]\n");
+}
+
+TEST_CASE("run: rational(...) with a zero denominator is unsupported, never a crash") {
+  CHECK_FALSE(try_run("rational(1, 0)").has_value());
+}
+
+TEST_CASE("run: rational(...) requires Integer arguments") {
+  CHECK_FALSE(try_run("rational(1.5, 2)").has_value());
+}
+
+TEST_CASE("run: r22-exact-family-equality.yaml -- Integer/Decimal/Rational mathematical equality") {
+  auto result =
+      try_run("[1 == 1.0, 1.0 == 1.00, 1 == rational(2, 2), rational(1, 2) == 0.5, 1 != 2]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, true, true, true, true]\n");
+}
+
+TEST_CASE("run: != is the logical negation of ==, verified directly against the reference host") {
+  auto result = try_run("[1 != 2, 1 != 1, 1 != 1.0]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, false, false]\n");
+}

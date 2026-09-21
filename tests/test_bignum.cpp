@@ -114,6 +114,24 @@ TEST_CASE("floor_remainder matches genia-2026's exact floor modulo, sign follows
   CHECK_FALSE(seven->floor_remainder(*zero).has_value());
 }
 
+TEST_CASE("gcd matches the ordinary Euclidean algorithm, always non-negative") {
+  auto twelve = Integer::from_unsigned_decimal("12");
+  auto eighteen = Integer::from_unsigned_decimal("18");
+  auto zero = Integer::from_unsigned_decimal("0");
+  auto seven = Integer::from_unsigned_decimal("7");
+  REQUIRE(twelve.has_value());
+  REQUIRE(eighteen.has_value());
+  REQUIRE(zero.has_value());
+  REQUIRE(seven.has_value());
+
+  CHECK(Integer::gcd(*twelve, *eighteen).to_decimal_string() == "6");
+  CHECK(Integer::gcd(twelve->negate(), *eighteen).to_decimal_string() == "6");
+  CHECK(Integer::gcd(*twelve, eighteen->negate()).to_decimal_string() == "6");
+  CHECK(Integer::gcd(*seven, *twelve).to_decimal_string() == "1");  // coprime
+  CHECK(Integer::gcd(*twelve, *zero).to_decimal_string() == "12");
+  CHECK(Integer::gcd(*zero, *twelve).to_decimal_string() == "12");
+}
+
 TEST_CASE("mul by zero is zero") {
   auto value = Integer::from_unsigned_decimal("123456789123456789");
   auto zero = Integer::from_unsigned_decimal("0");

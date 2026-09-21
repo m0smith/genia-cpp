@@ -21,6 +21,7 @@ inline std::optional<core_ir::Op> lower_op(const std::string& symbol) {
   if (symbol == "/") return core_ir::Op::Slash;
   if (symbol == "%") return core_ir::Op::Percent;
   if (symbol == "==") return core_ir::Op::EqEq;
+  if (symbol == "!=") return core_ir::Op::NotEq;
   return std::nullopt;
 }
 

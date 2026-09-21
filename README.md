@@ -1,21 +1,23 @@
 # genia-cpp
 
-**Status: E24-6 complete, E24-7 in progress (increment 1 landed).
+**Status: E24-6 complete, E24-7 in progress (increments 1-2 landed).
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...; negation and canonical
-display only -- no arithmetic beyond negation yet), unary minus,
-bare-name references, assignment, `+ - * / == %` binary expressions,
-lambdas/closures, named functions (ordinary and local case/pattern-
-dispatch bodies), local R20 open functions (grouped and repeated
-top-level clause spellings, single module only), pipelines (`|>`), the
-`err(...)` Outcome constructor and its rendering, the R18 Integer/
-Decimal numeric-equality bridge, one deterministic undefined-name
-runtime error, calls to the native `map_*`/`utf8_encode`/`err`/`sum`
-functions, and `-c`/file-mode CLI -- end to end (source -> parser ->
-portable Core IR -> evaluator -> normalized adapter result), hardened
-against a C++ stack-overflow crash from adversarially deep recursion/
-nesting (E24-5). Every other Genia behavior remains honestly
-`unsupported`.**
+display only -- no arithmetic beyond negation yet), the exact Rational
+runtime value and `rational(numerator, denominator)` construction
+(gcd-reduced, canonical `<numerator>/<denominator>` display -- no
+arithmetic yet either), unary minus, bare-name references, assignment,
+`+ - * / == != %` binary expressions, lambdas/closures, named functions
+(ordinary and local case/pattern-dispatch bodies), local R20 open
+functions (grouped and repeated top-level clause spellings, single
+module only), pipelines (`|>`), the `err(...)` Outcome constructor and
+its rendering, the R22 exact-family (Integer/Decimal/Rational)
+numeric-equality bridge, one deterministic undefined-name runtime
+error, calls to the native `map_*`/`utf8_encode`/`err`/`sum` functions,
+and `-c`/file-mode CLI -- end to end (source -> parser -> portable Core
+IR -> evaluator -> normalized adapter result), hardened against a C++
+stack-overflow crash from adversarially deep recursion/nesting (E24-5).
+Every other Genia behavior remains honestly `unsupported`.**
 
 This is the planned production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
@@ -31,8 +33,8 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-6 are complete; E24-7 is in progress (increment 1 of
-several); E24-8 remains.
+E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-2
+of several); E24-8 remains.
 
 ## Authority
 
@@ -124,9 +126,23 @@ slice's own full-corpus run caught before merging: R18's Integer/
 Decimal numeric-equality bridge (`1 == 1.0`) was unimplemented, which
 would have silently turned two previously-honestly-`unsupported`
 `spec/eval/r18-*.yaml` cases into wrong `ok` results -- fixed via exact
-(never lossy-float) comparison, since Decimal is always exact. Decimal
-arithmetic beyond negation, Rational, Float64, the format-spec engine,
-and the JSON boundary all remain further E24-7 increments:
+(never lossy-float) comparison, since Decimal is always exact.
+**Increment 2** adds R22 section 3's exact Rational runtime value
+(`bignum::Integer` numerator/denominator, gcd-reduced via a new
+`Integer::gcd`, denominator positive, denominator-one collapsing to
+Integer -- `src/rational.hpp`'s `construct_rational`), the
+`rational(numerator, denominator)` constructor, canonical
+`<numerator>/<denominator>` rendering (R23 section 2.3), and `!=` (the
+logical negation of `==`, R18: "equality is ONE relation (==, !=)").
+`equality.hpp`'s cross-kind numeric bridge is generalized from
+increment 1's Integer/Decimal-only special case into R22 section 10.1's
+full "Exact family" rule: Integer/Decimal/Rational compare by
+mathematical value in every pairing, via converting each to an exact
+numerator/denominator pair and comparing by cross-multiplication --
+never rounding through a host binary float. Rational arithmetic,
+comparison operators (`< <= > >=`, absent from this slice's grammar
+entirely), Float64, the format-spec engine, and the JSON boundary all
+remain further E24-7 increments:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
@@ -149,10 +165,12 @@ and the JSON boundary all remain further E24-7 increments:
   every other identifier now resolves to (whether a name is actually
   *bound* is a runtime concern -- see `src/evaluator.hpp` -- not a
   parse-time restriction, matching genia-2026's real grammar), and
-  `+ - * / == %` binary expressions with standard precedence (`%` is
+  `+ - * / == != %` binary expressions with standard precedence (`%` is
   exact floor-remainder, Python-style, sign follows the divisor --
   verified directly against `src/genia/numeric_runtime.py`'s
-  `exact_remainder`, not C++'s native truncating `%`), Decimal source
+  `exact_remainder`, not C++'s native truncating `%`; `!=` is exactly
+  the logical negation of `==`, R18: "equality is ONE relation
+  (==, !=)"), Decimal source
   literals (R21 section 2's `DIGIT+ "." DIGIT+`/`DIGIT+ exponent`/
   `DIGIT+ "." DIGIT+ exponent` forms -- classified in the tokenizer, not
   guessed at by pattern-matching the digit run after the fact), and
@@ -200,30 +218,41 @@ and the JSON boundary all remain further E24-7 increments:
 - `src/value.hpp`, `src/environment.hpp` — the runtime value
   representation (exact Integer, exact Decimal (E24-7: coefficient
   `bignum::Integer` + `int64_t` exponent, R22 section 2 -- literal
-  construction and negation only, no arithmetic beyond that yet),
+  construction and negation only, no arithmetic beyond that yet), exact
+  Rational (E24-7 increment 2: `bignum::Integer` numerator/denominator,
+  R22 section 3 -- construction and display only, no arithmetic yet),
   Boolean, String, Bytes, List, the native in-house insertion-ordered
   `OrderedMap`, Outcome (`err(...)` only -- `some`/`none` remain
   unimplemented), Closure, and an opaque placeholder for `print`) and
   the parent-chained lexical environment lambda/function calls evaluate
   their bodies in.
+- `src/rational.hpp` — R22 section 3 exact Rational construction/
+  canonicalization (`construct_rational`): reduces by the positive gcd
+  (`src/bignum.hpp`'s new `Integer::gcd`, the ordinary Euclidean
+  algorithm), keeps the denominator positive with sign carried by the
+  numerator, and collapses a reduced denominator of 1 to Integer.
 - `src/equality.hpp` — R18 structural/legal-key equality: one internal
   dispatch over Genia semantic kinds, kind-tagged map-key encoding so
   distinct kinds never collide (booleans vs. numbers vs. strings), plus
-  R18's own Integer/Decimal numeric-equality bridge (`1 == 1.0`,
-  `decimal_equals_integer`) -- exact comparison, never the lossy
-  integer-to-host-float cast the contract forbids, since Decimal is
-  always exact. No fallback to host container/language equality.
+  R22 section 10.1's "Exact family" numeric-equality bridge
+  (Integer/Decimal/Rational compare by mathematical value in every
+  pairing, `exact_family_equal`) -- each value converts to an exact
+  numerator/denominator pair, compared via cross-multiplication, never
+  the lossy integer-to-host-float cast the contract forbids. No
+  fallback to host container/language equality.
 - `src/pattern_match.hpp` — pattern matching for lambda parameters and
   local case dispatch, mirroring genia-2026's real
   `src/genia/pattern_match.py` `match_pattern`/`match_pattern_atom`
   exactly for the pattern kinds this slice implements, including the
   "duplicate binding must agree" conflict rule (`([x, x]) -> true`
   against unequal values does not match).
-- `src/native_functions.hpp` — the native `map_new`/`map_get`/
-  `map_put`/`map_has?`/`map_remove`/`map_count`/`map_items`/
-  `utf8_encode`/`err`/`_sum`/`_seq_type_error` callables (each a
-  trivial, argument-pass-through-only wrapper in genia-2026's real
-  prelude, or itself a native primitive there).
+- `src/native_functions.hpp` — the native `rational`/`map_new`/
+  `map_get`/`map_put`/`map_has?`/`map_remove`/`map_count`/`map_items`/
+  `utf8_encode`/`err`/`_sum`/`_seq_type_error` callables. Most are each
+  a trivial, argument-pass-through-only wrapper in genia-2026's real
+  prelude, or a native primitive there already; `rational(numerator,
+  denominator)` requires both arguments to be Integers and delegates
+  its actual construction to `src/rational.hpp`.
 - `src/global_env.hpp`, `src/evaluator.hpp`, `src/genia2026_known_globals.hpp`
   — `evaluator.hpp` is the Core IR evaluator: closures, named-function
   calls (ordinary and case-dispatch bodies, including recursion),
@@ -239,11 +268,14 @@ and the JSON boundary all remain further E24-7 increments:
   reimplementation of `map`'s dispatch/recursion, per
   `docs/design/r24/native-primitive-inventory.md`'s "list/map prelude
   helpers ... interpreted from the shared Genia prelude source" rule.
-- `src/render.hpp` — canonical Integer/Decimal/Boolean/String/List/Map/
-  Outcome display rendering for command/file mode's auto-display
-  result; Decimal rendering (`render_decimal`) implements R23 section
-  2.2's fixed/scientific notation rule verbatim, verified directly
-  against `src/genia/numeric_runtime.py`'s `_canonical_decimal_text`.
+- `src/render.hpp` — canonical Integer/Decimal/Rational/Boolean/String/
+  List/Map/Outcome display rendering for command/file mode's
+  auto-display result; Decimal rendering (`render_decimal`) implements
+  R23 section 2.2's fixed/scientific notation rule verbatim, verified
+  directly against `src/genia/numeric_runtime.py`'s
+  `_canonical_decimal_text`; Rational rendering is R23 section 2.3's
+  `<numerator>/<denominator>` atom (denominator always positive after
+  canonicalization, so no separate sign handling is needed).
 - `src/ast_projection.hpp`, `src/ir_projection.hpp`, `src/engine.hpp` —
   wire projections for the `parse`/`lower` operations and the
   parse -> lower -> eval pipeline `eval`/`cli` share; both projections
@@ -281,19 +313,21 @@ and the JSON boundary all remain further E24-7 increments:
   `unsupported` per case, or are gated out entirely by every
   cross-module case's separate `multi_file_eval` requirement (see
   `m0smith/genia-2026#973`/`#974`). Running the full shared spec corpus
-  against it: `total=755 passed=87 failed=0 unsupported=668
+  against it: `total=755 passed=89 failed=0 unsupported=666
   protocol_error=0 crash=0 timeout=0 invalid=0` — the 7 pinned E24-4
   cases (`outcome_values`, `lambda_function_call`,
   `pattern_case_dispatch`, `pipeline_composition`,
   `deterministic_runtime_error_behavior`), the 2 pinned E24-6
   `open_functions_r20` cases (`r20-gcd-grouped-clause-equivalent`,
-  `r20-gcd-repeated-clauses`), and E24-7 increment 1's R21 Decimal-
-  literal `parse`/`ir` cases (classification, equivalent-spelling
-  normalization, the tagged Decimal payload, unary-negative lowering)
-  all pass, plus the E24-2/E24-3 pinned cases, the two `spec/eval/
-  r18-*.yaml` cases the Integer/Decimal equality-bridge fix restored to
-  passing, and further incidental cases this slice's honest,
-  evidence-matched grammar/lowering/evaluation also happens to satisfy.
+  `r20-gcd-repeated-clauses`), E24-7 increment 1's R21 Decimal-literal
+  `parse`/`ir` cases (classification, equivalent-spelling
+  normalization, the tagged Decimal payload, unary-negative lowering),
+  and increment 2's `r22-rational-construction.yaml`/
+  `r22-exact-family-equality.yaml` all pass, plus the E24-2/E24-3
+  pinned cases, the two `spec/eval/r18-*.yaml` cases the Integer/
+  Decimal equality-bridge fix restored to passing, and further
+  incidental cases this slice's honest, evidence-matched
+  grammar/lowering/evaluation also happens to satisfy.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
   equality, and display for any well-formed UTF-8 input, but is not yet
@@ -301,16 +335,20 @@ and the JSON boundary all remain further E24-7 increments:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- `some`/`none` Option values, Rational, Float64, general diagnostic
-  normalization (beyond the one undefined-name case), and general
-  postfix call application (calling the result of a call or a
-  parenthesized expression, e.g. immediately-invoked lambdas) remain
-  entirely unimplemented. Decimal is only *partly* implemented: source
-  literals, negation, canonical display, and the R18 Integer/Decimal
-  equality bridge work end to end, but Decimal arithmetic (`+ - * /
-  %`), comparison beyond `==`/`!=`, the `rational(...)`/`float64(...)`/
-  `exact(...)` conversions, field-format-spec integration, and the JSON
-  boundary all remain unimplemented. R20 open functions are only
+- `some`/`none` Option values, Float64, ordered comparison operators
+  (`< <= > >=`, absent from this slice's grammar for every numeric
+  kind, not just the newer ones), general diagnostic normalization
+  (beyond the one undefined-name case), and general postfix call
+  application (calling the result of a call or a parenthesized
+  expression, e.g. immediately-invoked lambdas) remain entirely
+  unimplemented. Decimal and Rational are only *partly* implemented:
+  source literals/construction, negation (Decimal only), canonical
+  display, and R22 section 10.1's exact-family `==`/`!=` bridge across
+  Integer/Decimal/Rational all work end to end, but arithmetic
+  (`+ - * / %`) for anything beyond plain Integer/Integer, the
+  `float64(...)`/`exact(...)` conversions, field-format-spec
+  integration, and the JSON boundary all remain unimplemented. R20 open
+  functions are only
   *partly* implemented: local (single-module) grouped/repeated clause
   dispatch works end to end, but cross-module `extend`/`use`
   contribution and selection, the R20 diagnostic family
@@ -334,7 +372,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=755 passed=87 failed=0 unsupported=668 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=755 passed=89 failed=0 unsupported=666 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

@@ -297,6 +297,12 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       if (node.op == core_ir::Op::EqEq) {
         return value::Value::make_boolean(equality::structural_equal(*lhs, *rhs));
       }
+      if (node.op == core_ir::Op::NotEq) {
+        // R18: equality is ONE relation (==, !=); != is exactly the
+        // logical negation of == (verified directly against the
+        // reference host, not guessed).
+        return value::Value::make_boolean(!equality::structural_equal(*lhs, *rhs));
+      }
       if (lhs->kind != value::Kind::Integer || rhs->kind != value::Kind::Integer) {
         return std::nullopt;
       }
@@ -329,6 +335,7 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           return value::Value::make_integer(*remainder);
         }
         case core_ir::Op::EqEq:
+        case core_ir::Op::NotEq:
           break;  // handled above
       }
       return std::nullopt;
