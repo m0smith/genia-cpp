@@ -58,6 +58,12 @@ enum class Kind : std::uint8_t {
   Map,
   Pipeline,
   Spread,
+  // E24-6: portable IrOpenFuncDef (see ir_projection.hpp for the wire
+  // shape). Reuses FuncDef's case-body fields verbatim; its own Kind
+  // only because IrOpenFuncDef and IrFuncDef are distinct portable node
+  // types (docs/design/r20-open-functions-syntax-ir-design.md section
+  // 3), not because evaluation differs.
+  OpenFuncDef,
 };
 
 enum class LiteralKind : std::uint8_t { Integer, String, Bool };
@@ -65,7 +71,7 @@ enum class LiteralKind : std::uint8_t { Integer, String, Bool };
 // Binary operator token names, matching genia-2026's parser token names
 // (see src/genia/lowering.py: `IrBinary(lower(left), node.op, lower(right))`
 // where `node.op` is the raw lexer token name, not the symbol).
-enum class Op : std::uint8_t { Plus, Minus, Star, Slash, EqEq };
+enum class Op : std::uint8_t { Plus, Minus, Star, Slash, Percent, EqEq };
 
 inline const char* op_token_name(Op op) {
   switch (op) {
@@ -77,6 +83,8 @@ inline const char* op_token_name(Op op) {
       return "STAR";
     case Op::Slash:
       return "SLASH";
+    case Op::Percent:
+      return "PERCENT";
     case Op::EqEq:
       return "EQEQ";
   }
@@ -236,6 +244,17 @@ struct Node {
     n.kind = Kind::FuncDef;
     n.name = std::move(func_name);
     n.header_param_names = std::move(header_names);
+    n.is_case_body = true;
+    n.case_patterns = std::move(clause_patterns);
+    n.case_results = std::move(clause_results);
+    return n;
+  }
+
+  static Node open_func_def(std::string func_name, std::vector<pattern::Pattern> clause_patterns,
+                            std::vector<Node> clause_results) {
+    Node n;
+    n.kind = Kind::OpenFuncDef;
+    n.name = std::move(func_name);
     n.is_case_body = true;
     n.case_patterns = std::move(clause_patterns);
     n.case_results = std::move(clause_results);

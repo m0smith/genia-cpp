@@ -54,6 +54,7 @@ enum class TokenKind : std::uint8_t {
   Minus,
   Star,
   Slash,
+  Percent,
   EqEq,
   Eq,
   LBracket,
@@ -192,6 +193,10 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
         tokens.push_back({TokenKind::Slash, "/"});
         ++i;
         continue;
+      case '%':
+        tokens.push_back({TokenKind::Percent, "%"});
+        ++i;
+        continue;
       case '[':
         tokens.push_back({TokenKind::LBracket, "["});
         ++i;
@@ -279,6 +284,24 @@ class Parser {
       if (!stmt.has_value()) {
         return std::nullopt;
       }
+      // R20: a contiguous run of top-level clauses for the same open
+      // interface merges into one AST node so grouped and repeated
+      // local clause syntax normalize identically (design doc section
+      // 4's "merge into one IrOpenFuncDef.clauses list happens during
+      // AST lowering ... before any node becomes a separate top-level
+      // IR statement" -- this project's AST layer is where genia-2026's
+      // own parser performs that merge, per its `_merge_open_toplevel`,
+      // so this mirrors that exactly). Only the immediately preceding
+      // top-level node is eligible: any intervening statement closes
+      // the run for further un-annotated repetition.
+      if (!program.empty() && stmt->kind == ast::Kind::OpenFuncDef &&
+          program.back().kind == ast::Kind::OpenFuncDef && program.back().name == stmt->name) {
+        for (size_t i = 0; i < stmt->case_patterns.size(); ++i) {
+          program.back().case_patterns.push_back(std::move(stmt->case_patterns[i]));
+          program.back().case_results.push_back(std::move(stmt->case_results[i]));
+        }
+        continue;
+      }
       program.push_back(std::move(*stmt));
     }
     return program;
@@ -287,6 +310,24 @@ class Parser {
  private:
   std::vector<Token> tokens_;
   size_t pos_ = 0;
+
+  // E24-6: names declared `open` earlier in this parse, for
+  // redeclaration detection and for recognizing a bare repeated clause
+  // as belonging to that interface -- mirrors genia-2026's real
+  // src/genia/parser.py `Parser._open_names` set exactly (verified
+  // directly against that source). Cross-module `extend`/`use` targets
+  // are out of this slice's scope (require `multi_file_eval`), so only
+  // local `open` names are tracked here.
+  std::vector<std::string> open_names_;
+
+  bool is_open_name(const std::string& name) const {
+    for (const auto& existing : open_names_) {
+      if (existing == name) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   // E24-5 (m0smith/genia-2026#959) diagnostic-normalization hardening:
   // recursive-descent nesting (parenthesized grouping, lambdas, nested
@@ -335,6 +376,26 @@ class Parser {
     // shares a root cause with).
     if (peek().kind == TokenKind::Ident && peek().text == "pattern") {
       return std::nullopt;
+    }
+    // R20 cross-module `extend`/`use` require `multi_file_eval`
+    // (docs/design/r24/capability-floor.json's
+    // generic_manifest_optional_capabilities_explicitly_out_of_r24_scope),
+    // which is out of this slice's scope entirely -- no parsing support
+    // is implemented for either. genia-2026's real parser sometimes
+    // backtracks "extend"/"use" back to an ordinary bare identifier
+    // when the full statement shape isn't present (src/genia/parser.py's
+    // `try_parse_open_related_toplevel`); this slice deliberately does
+    // not replicate that nuance (real SyntaxError conditions exist deep
+    // inside those productions this slice has no diagnostic for), and
+    // unconditionally rejects the whole program instead of risking a
+    // silent misparse into a different, wrong AST -- the same
+    // ambiguity-stop rule as the "pattern" keyword just above.
+    if (peek().kind == TokenKind::Ident && (peek().text == "extend" || peek().text == "use")) {
+      return std::nullopt;
+    }
+    auto open_related = try_parse_open_related_toplevel();
+    if (open_related.has_value()) {
+      return open_related;
     }
     auto func_def = try_parse_func_def();
     if (func_def.has_value()) {
@@ -419,12 +480,165 @@ class Parser {
     return ast::Node::func_def(func_name, param_names, std::move(patterns), std::move(*body));
   }
 
+  // ---- R20 open functions (local scope only) ------------------------
+  //
+  // Recognizes exactly the two top-level productions
+  // docs/design/r20-open-functions-syntax-ir-design.md section 2.1
+  // describes for LOCAL clause syntax: `open name(<pattern>, ...) =
+  // <body>` (the first clause of a new open interface) and a bare
+  // `name(<pattern>, ...) = <body>` for a name already declared open
+  // (a repeated clause, merged into the same interface only when it
+  // immediately follows -- see `parse_program`'s merge loop below).
+  // Cross-module `extend`/`use` require `multi_file_eval`
+  // (docs/design/r24/capability-floor.json's
+  // generic_manifest_optional_capabilities_explicitly_out_of_r24_scope),
+  // so they are out of this slice's scope and not recognized at all --
+  // `extend`/`use` remain ordinary identifiers, falling through to
+  // ordinary expression parsing exactly like any other non-keyword.
+  //
+  // Mirrors src/genia/parser.py's `try_parse_open_related_toplevel`/
+  // `_parse_open_pattern_clause`/`_header_looks_like_open_clause`
+  // exactly for these two shapes (verified directly against that
+  // source). Once a header has been confirmed via lookahead to be an
+  // open/repeated clause, any further parse failure is a genuine
+  // failure of this slice's supported grammar -- it is never
+  // backtracked to be reinterpreted as some other statement shape,
+  // matching `try_parse_func_def`'s own post-'=' commit behavior above.
+  std::optional<ast::Node> try_parse_open_related_toplevel() {
+    if (peek().kind == TokenKind::Ident && peek().text == "open") {
+      const size_t save = pos_;
+      advance();  // 'open'
+      if (!(peek().kind == TokenKind::Ident && peek_at(1).kind == TokenKind::LParen)) {
+        pos_ = save;
+        return std::nullopt;
+      }
+      return parse_open_pattern_clause(/*is_open_decl=*/true);
+    }
+    if (peek().kind == TokenKind::Ident && peek_at(1).kind == TokenKind::LParen &&
+        is_open_name(peek().text)) {
+      if (!header_looks_like_open_clause()) {
+        return std::nullopt;
+      }
+      return parse_open_pattern_clause(/*is_open_decl=*/false);
+    }
+    return std::nullopt;
+  }
+
+  // Speculative lookahead, always restoring `pos_`: confirms
+  // `name(...)` is followed by `=` before committing to clause parsing,
+  // so an ordinary call statement for an open name (e.g. `gcd(48, 18)`)
+  // is never misparsed as a failed repeated-clause attempt. This slice
+  // does not implement the `? guard` syntax (no pinned evidence needs
+  // it), so unlike the reference parser's `? | = | {` check, only `=`
+  // is accepted here.
+  bool header_looks_like_open_clause() {
+    const size_t save = pos_;
+    advance();  // name
+    advance();  // '('
+    int depth = 1;
+    while (depth > 0) {
+      if (peek().kind == TokenKind::End) {
+        pos_ = save;
+        return false;
+      }
+      if (peek().kind == TokenKind::LParen) {
+        ++depth;
+      } else if (peek().kind == TokenKind::RParen) {
+        --depth;
+      }
+      advance();
+    }
+    const bool result = peek().kind == TokenKind::Eq;
+    pos_ = save;
+    return result;
+  }
+
+  std::optional<ast::Node> parse_open_pattern_clause(bool is_open_decl) {
+    const std::string name = advance().text;
+    if (is_open_decl) {
+      if (is_open_name(name)) {
+        // open-function-redeclaration: this slice implements no
+        // diagnostic for it (no pinned evidence needs one), so the
+        // whole program is honestly unsupported rather than silently
+        // reinterpreted as a second, independent interface.
+        return std::nullopt;
+      }
+      open_names_.push_back(name);
+    }
+    auto clauses = parse_open_clause_list();
+    if (!clauses.has_value()) {
+      return std::nullopt;
+    }
+    std::vector<pattern::Pattern> patterns;
+    std::vector<ast::Node> results;
+    patterns.reserve(clauses->size());
+    results.reserve(clauses->size());
+    for (auto& clause : *clauses) {
+      patterns.push_back(std::move(clause.first));
+      results.push_back(std::move(clause.second));
+    }
+    return ast::Node::open_func_def(name, std::move(patterns), std::move(results));
+  }
+
+  // Shared header parsing for an open/repeated clause: `(<pattern>,
+  // ...) = body`, where `<pattern>` reuses the existing per-argument
+  // pattern grammar (`parse_pattern_atom`) verbatim -- R20 adds no new
+  // pattern grammar (design doc section 1). A grouped case-with-`|`
+  // body flattens into one clause per arm, exactly like
+  // `try_parse_func_def`'s existing grouped-clause handling above, so
+  // grouped and repeated local clause syntax normalize to the identical
+  // ordered clause list (design doc section 3).
+  std::optional<std::vector<std::pair<pattern::Pattern, ast::Node>>> parse_open_clause_list() {
+    if (peek().kind != TokenKind::LParen) {
+      return std::nullopt;
+    }
+    advance();  // '('
+    std::vector<pattern::Pattern> header_patterns;
+    if (peek().kind != TokenKind::RParen) {
+      while (true) {
+        auto item = parse_pattern_atom();
+        if (!item.has_value()) {
+          return std::nullopt;
+        }
+        header_patterns.push_back(std::move(*item));
+        if (peek().kind == TokenKind::Comma) {
+          advance();
+          continue;
+        }
+        break;
+      }
+    }
+    if (peek().kind != TokenKind::RParen) {
+      return std::nullopt;
+    }
+    advance();  // ')'
+    if (peek().kind != TokenKind::Eq) {
+      return std::nullopt;
+    }
+    advance();  // '='
+
+    if (looks_like_case_clause_start()) {
+      return parse_case_clauses();
+    }
+
+    auto body = parse_pipeline_expr();
+    if (!body.has_value()) {
+      return std::nullopt;
+    }
+    std::vector<std::pair<pattern::Pattern, ast::Node>> clauses;
+    clauses.emplace_back(pattern::Pattern::tuple(std::move(header_patterns)), std::move(*body));
+    return clauses;
+  }
+
   // ---- Patterns ------------------------------------------------------
 
   std::optional<pattern::Pattern> parse_pattern_atom() {
     NestingGuard guard(nesting_depth_);
     if (nesting_depth_ > kMaxNestingDepth) {
       return std::nullopt;
+    }
+    if (peek().kind == TokenKind::Integer) {
+      return pattern::Pattern::integer_literal(advance().text);
     }
     if (peek().kind == TokenKind::Ident) {
       const std::string text = peek().text;
@@ -648,7 +862,8 @@ class Parser {
       return std::nullopt;
     }
     ast::Node result = std::move(*lhs);
-    while (peek().kind == TokenKind::Star || peek().kind == TokenKind::Slash) {
+    while (peek().kind == TokenKind::Star || peek().kind == TokenKind::Slash ||
+           peek().kind == TokenKind::Percent) {
       const std::string op = advance().text;
       auto rhs = parse_factor_checked();
       if (!rhs.has_value()) {

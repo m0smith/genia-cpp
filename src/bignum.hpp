@@ -162,6 +162,38 @@ class Integer {
   // division as producing a Rational, which this slice does not
   // implement -- callers must treat std::nullopt as "not supported by
   // this slice", never as a language-level error.
+  // Exact floor-remainder (`%`), per genia-2026's R22 contract
+  // (src/genia/numeric_runtime.py's `exact_remainder`): `left - floor(left
+  // / other) * other` -- Python-style, sign follows the divisor, distinct
+  // from C++'s own truncating `%` (sign follows the dividend). Returns
+  // std::nullopt for a zero divisor, matching exact_divide's convention.
+  std::optional<Integer> floor_remainder(const Integer& other) const {
+    if (other.is_zero()) {
+      return std::nullopt;
+    }
+    if (is_zero()) {
+      return Integer();
+    }
+    Integer magnitude_remainder;
+    divmod_magnitude(*this, other, magnitude_remainder);
+    // `magnitude_remainder` is |this| mod |other|, always >= 0. The
+    // truncating remainder (this = trunc_quotient * other + trunc_rem)
+    // takes its sign from `this` (or is zero).
+    Integer truncating_remainder = magnitude_remainder;
+    truncating_remainder.positive_ = positive_;
+    truncating_remainder.normalize();
+    if (truncating_remainder.is_zero()) {
+      return truncating_remainder;
+    }
+    // Floor and truncating division agree unless the operands' signs
+    // differ, in which case floor rounds one further away from zero:
+    // floor_remainder = truncating_remainder + other.
+    if (positive_ != other.positive_) {
+      return truncating_remainder.add(other);
+    }
+    return truncating_remainder;
+  }
+
   std::optional<Integer> exact_divide(const Integer& other) const {
     if (other.is_zero()) {
       return std::nullopt;

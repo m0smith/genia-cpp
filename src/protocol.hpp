@@ -37,7 +37,13 @@ inline constexpr const char* kProtocolVersion = "1";
 // pinned E24-3 bootstrap categories cited cases requiring E24-4/E24-7-
 // scope pattern dispatch, recursion, or Decimal numbers, replaced with
 // narrower cases proving the same already-approved R17/R18 behavior.
-inline constexpr const char* kContractRevision = "df309a9c1610b9989dd730cc41b44ad350287637";
+// Re-pinned again for E24-6 (m0smith/genia-2026#960) after merging
+// #972 (the pinned open_functions_r20 bootstrap case required
+// out-of-scope multi_file_eval, replaced with a single-file sibling
+// case) and #974 (the roadmap's own guidance to declare
+// open_functions `partial` was itself wrong -- `supported` is the
+// correct declaration; see protocol.hpp's capability_overrides()).
+inline constexpr const char* kContractRevision = "eb171afc434b3b9110007b8be76f6b0eff850311";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -85,14 +91,15 @@ inline const std::vector<std::string>& known_capabilities() {
 }
 
 inline constexpr const char* kUnsupportedReason =
-    "genia-cpp implements only the E24-2..E24-4 vertical slice (integer "
+    "genia-cpp implements only the E24-2..E24-6 vertical slice (integer "
     "literals, string/boolean/list/map literals, bare-name references, "
-    "assignment, `+ - * / ==` binary expressions, lambdas, named-function "
-    "definitions (ordinary and local case/pattern-dispatch bodies), "
-    "pipelines, `err(...)` Outcomes, the one deterministic undefined-name "
-    "runtime error, calls to this slice's native map_*/utf8_encode/err/sum "
-    "functions, and `-c`/file-mode CLI); this request is outside that "
-    "scope -- see https://github.com/m0smith/genia-cpp AGENTS.md";
+    "assignment, `+ - * / == %` binary expressions, lambdas, named-function "
+    "definitions (ordinary and local case/pattern-dispatch bodies), local "
+    "R20 open functions (single module only), pipelines, `err(...)` "
+    "Outcomes, the one deterministic undefined-name runtime error, calls "
+    "to this slice's native map_*/utf8_encode/err/sum functions, and "
+    "`-c`/file-mode CLI); this request is outside that scope -- see "
+    "https://github.com/m0smith/genia-cpp AGENTS.md";
 
 // Per E24-2 (m0smith/genia-2026#956), E24-3 (m0smith/genia-2026#957), and
 // E24-4 (m0smith/genia-2026#958): `parser`, `ast_lowering`,
@@ -101,16 +108,28 @@ inline constexpr const char* kUnsupportedReason =
 // entry points are fully wired); `core_ir_eval` remains `partial` (E24-4
 // added Outcome values, lambdas/closures, local case/pattern dispatch,
 // pipelines, and one deterministic runtime-error diagnostic over this
-// slice's minimal grammar, but Decimal/Rational/Float64, open functions,
-// and general diagnostic normalization all remain unimplemented). Every
-// other capability remains `unsupported`. This map is the single source
-// of truth for both the `capabilities` response and this project's own
-// honesty: a name absent here defaults to `unsupported`.
+// slice's minimal grammar, but Decimal/Rational/Float64, `some`/`none`,
+// and general diagnostic normalization all remain unimplemented).
+// E24-6 (m0smith/genia-2026#960) declares `open_functions` `supported`
+// -- deliberately, not `partial`: `tools/spec_runner/capabilities.py`'s
+// requires-gate only attempts a case whose `requires` list names
+// `open_functions` when it is declared exactly `supported` (`partial`
+// grants zero evidence credit; see `m0smith/genia-2026#973`/`#974`).
+// This does not claim cross-module `extend`/`use`, the R20 diagnostic
+// family (no-matching-case/duplicate-clause/varargs-ambiguity), or bare
+// varargs patterns are implemented -- those remain genuinely
+// `unsupported` per case (or are gated out entirely by every
+// cross-module case's separate `multi_file_eval` requirement), exactly
+// like `parser`/`ast_lowering` being `supported` has never meant every
+// possible parse-category case passes. Every other capability remains
+// `unsupported`. This map is the single source of truth for both the
+// `capabilities` response and this project's own honesty: a name
+// absent here defaults to `unsupported`.
 inline const std::vector<std::pair<std::string, std::string>>& capability_overrides() {
   static const std::vector<std::pair<std::string, std::string>> kOverrides = {
       {"parser", "supported"},        {"ast_lowering", "supported"},
       {"core_ir_eval", "partial"},    {"cli_command_mode", "supported"},
-      {"cli_file_mode", "supported"},
+      {"cli_file_mode", "supported"}, {"open_functions", "supported"},
   };
   return kOverrides;
 }

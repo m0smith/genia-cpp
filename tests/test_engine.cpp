@@ -381,3 +381,107 @@ TEST_CASE("run: map literal with a string key renders identically to an identifi
 TEST_CASE("run: a lambda is not itself renderable as a final program result") {
   CHECK_FALSE(try_run("(x) -> x").has_value());
 }
+
+// --- E24-6: R20 local open functions -----------------------------------
+
+TEST_CASE("run: r20-gcd-repeated-clauses.yaml -- repeated bare clauses merge into one interface") {
+  auto result = try_run(
+      "open gcd(a, 0) = a\n"
+      "gcd(a, b) = gcd(b, a % b)\n"
+      "\n"
+      "gcd(48, 18)");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "6\n");
+  CHECK(result->exit_code == 0);
+}
+
+TEST_CASE(
+    "run: r20-gcd-grouped-clause-equivalent.yaml -- the grouped spelling dispatches identically") {
+  auto result = try_run(
+      "open gcd(a, b) = (a, 0) -> a | (a, b) -> gcd(b, a % b)\n"
+      "\n"
+      "gcd(48, 18)");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "6\n");
+}
+
+TEST_CASE("parse: parse-r20-open-repeated-clauses.yaml -- merges into one OpenFuncDef") {
+  auto ast = try_parse(
+      "open gcd(a, 0) = a\n"
+      "gcd(a, b) = gcd(b, a % b)");
+  REQUIRE(ast.has_value());
+  CHECK((*ast)["kind"] == "OpenFuncDef");
+  CHECK((*ast)["name"] == "gcd");
+  CHECK((*ast)["clause_count"] == 2);
+}
+
+TEST_CASE("parse: parse-r20-ordinary-funcdef-unaffected.yaml -- an ordinary def stays FuncDef") {
+  auto ast = try_parse("square(x) = x * x");
+  REQUIRE(ast.has_value());
+  CHECK((*ast)["kind"] == "FuncDef");
+}
+
+TEST_CASE("lower: r20-open-repeated-clauses.yaml -- lowers to one IrOpenFuncDef") {
+  auto ir = try_lower(
+      "open gcd(a, 0) = a\n"
+      "gcd(a, b) = gcd(b, a % b)");
+  REQUIRE(ir.has_value());
+  REQUIRE(ir->is_array());
+  REQUIRE(ir->size() == 1);
+  CHECK((*ir)[0]["node"] == "IrOpenFuncDef");
+  CHECK((*ir)[0]["name"] == "gcd");
+  CHECK((*ir)[0]["clauses"].size() == 2);
+}
+
+TEST_CASE("parse: open-function-redeclaration is unsupported, never a silent second interface") {
+  CHECK_FALSE(try_parse("open gcd(a, 0) = a\n"
+                        "open gcd(a, b) = a")
+                  .has_value());
+}
+
+TEST_CASE("parse: a nested open declaration inside a block is unsupported") {
+  CHECK_FALSE(try_parse("f(x) = {\n"
+                        "  open gcd(a, 0) = a\n"
+                        "  gcd(x, 1)\n"
+                        "}")
+                  .has_value());
+}
+
+TEST_CASE("parse: extend/use remain unsupported, never silently misparsed as bare identifiers") {
+  // R20 cross-module `extend`/`use` require `multi_file_eval`, out of
+  // R24 scope -- these must never succeed as some other, wrong program
+  // (e.g. a sequence of bare Var references).
+  CHECK_FALSE(try_parse("extend base.get(Database(db), key) = db_get(db, key)").has_value());
+  CHECK_FALSE(try_parse("use get from base with db_ext, cache_ext").has_value());
+  CHECK_FALSE(try_parse("use get from base").has_value());
+}
+
+TEST_CASE("run: a call to an open function with no matching clause is unsupported") {
+  CHECK_FALSE(try_run("open f(1) = \"one\"\n"
+                      "f(2)")
+                  .has_value());
+}
+
+TEST_CASE("run: a duplicate open-function clause is unsupported, never silently shadowed") {
+  // No diagnostic is implemented for open-function-duplicate-clause; the
+  // program still has no renderable final result (the last statement
+  // defines a Closure, which display() cannot render), so this stays
+  // honestly unsupported rather than a wrong "ok".
+  CHECK_FALSE(try_run("open f(0) = 1\n"
+                      "f(0) = 2")
+                  .has_value());
+}
+
+TEST_CASE("run: an ordinary call to an open name is never misparsed as a failed clause attempt") {
+  auto result = try_run(
+      "open gcd(a, 0) = a\n"
+      "gcd(a, b) = gcd(b, a % b)\n"
+      "gcd(9, 6)\n"
+      "gcd(48, 18)");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "6\n");
+}
+
+TEST_CASE("lower: a bare top-level varargs rest pattern is unsupported, not misparsed") {
+  CHECK_FALSE(try_lower("open total(x, ..rest) = x").has_value());
+}

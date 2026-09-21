@@ -199,6 +199,14 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       closure->captured_env = env;
       return value::Value::make_closure(closure);
     }
+    // E24-6: a local open function's runtime representation is
+    // identical to a case-body FuncDef's -- dispatching against only
+    // its own clauses IS the whole contract §5 algorithm when exactly
+    // one unit participates (docs/design/r20-open-functions-syntax-ir-
+    // design.md section 5's `GeniaOpenFunction`, "dispatches using only
+    // its own clauses as the single participating unit"). No new
+    // dispatch code, so both Kinds share this block.
+    case core_ir::Kind::OpenFuncDef:
     case core_ir::Kind::FuncDef: {
       auto closure = std::make_shared<value::Closure>();
       closure->name = node.name;
@@ -280,6 +288,16 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
             return std::nullopt;
           }
           return value::Value::make_integer(*quotient);
+        }
+        case core_ir::Op::Percent: {
+          // Exact floor-remainder (R22: src/genia/numeric_runtime.py's
+          // exact_remainder) -- division by zero is unsupported, never a
+          // crash or a fabricated error, matching Slash's own convention.
+          auto remainder = lhs->integer.floor_remainder(rhs->integer);
+          if (!remainder.has_value()) {
+            return std::nullopt;
+          }
+          return value::Value::make_integer(*remainder);
         }
         case core_ir::Op::EqEq:
           break;  // handled above
