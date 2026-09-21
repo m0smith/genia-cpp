@@ -62,9 +62,18 @@ TEST_CASE("parse: parenthesized grouping and lambdas are supported as of E24-4")
   REQUIRE(lambda.has_value());
 }
 
-TEST_CASE("parse: unary minus, guard clauses, and decimal literals remain unsupported") {
-  CHECK_FALSE(try_parse("-5").has_value());   // unary minus is out of this slice's grammar
-  CHECK_FALSE(try_parse("1.5").has_value());  // Decimal literals are R21/E24-7 scope
+TEST_CASE(
+    "parse: unary minus and Decimal literals are supported as of E24-7; guard clauses remain "
+    "unsupported") {
+  auto negated = try_parse("-5");
+  REQUIRE(negated.has_value());
+  CHECK((*negated)["kind"] == "Unary");
+
+  auto decimal = try_parse("1.5");
+  REQUIRE(decimal.has_value());
+  CHECK((*decimal)["kind"] == "Literal");
+  CHECK((*decimal)["value"] == 1.5);
+
   CHECK_FALSE(try_parse("x ? true -> x")
                   .has_value());  // case-clause guards are out of this slice's grammar
 }
@@ -115,15 +124,32 @@ TEST_CASE("lower: top-level statements are wrapped in IrExprStmt, matching genia
   CHECK((*ir)[0]["expr"]["op"] == "SLASH");
 }
 
-TEST_CASE("parse: a digit run immediately followed by 'e' or '.' is unsupported, never split") {
+TEST_CASE(
+    "parse: a digit run immediately followed by 'e' or '.' is a single Decimal literal, never "
+    "split (E24-7)") {
   // Regression: "1e3"/"100e-2" are single Decimal-literal source
   // attempts in genia-2026's real grammar (R21), never an Integer
   // token immediately followed by an unrelated bare identifier.
-  CHECK_FALSE(try_parse("1e3").has_value());
-  CHECK_FALSE(try_parse("100e-2").has_value());
+  auto exp_only = try_parse("1e3");
+  REQUIRE(exp_only.has_value());
+  CHECK((*exp_only)["value"] == 1000.0);
+
+  auto exp_form = try_parse("100e-2");
+  REQUIRE(exp_form.has_value());
+  CHECK((*exp_form)["value"] == 1.0);
+
+  // A malformed exponent (no digits after the marker/sign) remains
+  // genuinely invalid, never guessed at.
   CHECK_FALSE(try_parse("1e").has_value());
-  CHECK_FALSE(try_parse("1.5").has_value());
-  CHECK_FALSE(try_run("1e3").has_value());
+  CHECK_FALSE(try_parse("1e+").has_value());
+
+  auto dotted = try_parse("1.5");
+  REQUIRE(dotted.has_value());
+  CHECK((*dotted)["value"] == 1.5);
+
+  auto run_result = try_run("1e3");
+  REQUIRE(run_result.has_value());
+  CHECK(run_result->stdout_text == "1000.0\n");
 }
 
 TEST_CASE(
@@ -195,8 +221,26 @@ TEST_CASE("run: division by zero is unsupported, never a crash or a fabricated e
   CHECK_FALSE(try_run("1 / 0").has_value());
 }
 
-TEST_CASE("run: unary minus is unsupported at this slice") {
-  CHECK_FALSE(try_run("-5").has_value());
+TEST_CASE("run: unary minus negates an Integer or Decimal literal (E24-7)") {
+  auto negated_integer = try_run("-5");
+  REQUIRE(negated_integer.has_value());
+  CHECK(negated_integer->stdout_text == "-5\n");
+
+  auto negated_decimal = try_run("-1.25");
+  REQUIRE(negated_decimal.has_value());
+  CHECK(negated_decimal->stdout_text == "-1.25\n");
+
+  auto double_negated = try_run("--5");
+  REQUIRE(double_negated.has_value());
+  CHECK(double_negated->stdout_text == "5\n");
+
+  auto binary_minus_unaffected = try_run("5 - 3");
+  REQUIRE(binary_minus_unaffected.has_value());
+  CHECK(binary_minus_unaffected->stdout_text == "2\n");
+
+  auto negated_operand_of_binary = try_run("1 + -5");
+  REQUIRE(negated_operand_of_binary.has_value());
+  CHECK(negated_operand_of_binary->stdout_text == "-4\n");
 }
 
 TEST_CASE("run: an empty program is unsupported") { CHECK_FALSE(try_run("").has_value()); }
@@ -484,4 +528,122 @@ TEST_CASE("run: an ordinary call to an open name is never misparsed as a failed 
 
 TEST_CASE("lower: a bare top-level varargs rest pattern is unsupported, not misparsed") {
   CHECK_FALSE(try_lower("open total(x, ..rest) = x").has_value());
+}
+
+// --- E24-7: R21 Decimal literal classification + unary minus ----------
+
+TEST_CASE("parse: r21-decimal-dotted-classification.yaml") {
+  auto ast = try_parse("1.25");
+  REQUIRE(ast.has_value());
+  CHECK((*ast)["kind"] == "Literal");
+  CHECK((*ast)["value"] == 1.25);
+}
+
+TEST_CASE("parse: r21-decimal-equivalent-spelling-exponent-form.yaml") {
+  auto dotted = try_parse("1.00");
+  auto exponent_form = try_parse("100e-2");
+  REQUIRE(dotted.has_value());
+  REQUIRE(exponent_form.has_value());
+  CHECK((*dotted)["value"] == 1.0);
+  CHECK((*exponent_form)["value"] == 1.0);
+}
+
+TEST_CASE("parse: r21-huge-integer-source-classification.yaml is unaffected by Decimal support") {
+  auto ast = try_parse("123456789012345678901234567890");
+  CHECK_FALSE(ast.has_value());  // still unsupported: no safe int64 JSON projection
+}
+
+TEST_CASE("parse: leading-dot and trailing-dot forms are rejected, never split") {
+  CHECK_FALSE(try_parse("5.").has_value());
+  CHECK_FALSE(try_parse(".5").has_value());
+}
+
+TEST_CASE("parse: malformed exponents are rejected deterministically") {
+  CHECK_FALSE(try_parse("1e").has_value());
+  CHECK_FALSE(try_parse("1e+").has_value());
+}
+
+TEST_CASE("lower: r21-decimal-dotted-literal-tagged-payload.yaml") {
+  auto ir = try_lower("1.25");
+  REQUIRE(ir.has_value());
+  REQUIRE(ir->size() == 1);
+  const auto& value = (*ir)[0]["expr"]["value"];
+  CHECK(value["kind"] == "decimal");
+  CHECK(value["coefficient"] == "125");
+  CHECK(value["exponent"] == "-2");
+}
+
+TEST_CASE("lower: r21-decimal-equivalent-spellings-identical-payload.yaml") {
+  auto ir = try_lower("1.00\n100e-2");
+  REQUIRE(ir.has_value());
+  REQUIRE(ir->size() == 2);
+  for (const auto& stmt : *ir) {
+    CHECK(stmt["expr"]["value"]["coefficient"] == "1");
+    CHECK(stmt["expr"]["value"]["exponent"] == "0");
+  }
+}
+
+TEST_CASE("lower: r21-unary-negative-decimal-tagged-payload.yaml") {
+  auto ir = try_lower("-1.25");
+  REQUIRE(ir.has_value());
+  const auto& expr = (*ir)[0]["expr"];
+  CHECK(expr["node"] == "IrUnary");
+  CHECK(expr["op"] == "MINUS");
+  CHECK(expr["expr"]["value"]["coefficient"] == "125");
+  CHECK(expr["expr"]["value"]["exponent"] == "-2");
+}
+
+TEST_CASE("lower: r21-slash-remains-ordinary-binary.yaml is unaffected") {
+  auto ir = try_lower("10 / 2");
+  REQUIRE(ir.has_value());
+  CHECK((*ir)[0]["expr"]["node"] == "IrBinary");
+  CHECK((*ir)[0]["expr"]["op"] == "SLASH");
+}
+
+void check_run_stdout(const std::string& source, const std::string& expected_stdout) {
+  auto result = genia::engine::try_run(source);
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == expected_stdout);
+}
+
+TEST_CASE("run: canonical Decimal rendering matches R23 section 2.2 fixed/scientific boundary") {
+  check_run_stdout("1.25", "1.25\n");
+  check_run_stdout("1e3", "1000.0\n");
+  check_run_stdout("100e-2", "1.0\n");
+  check_run_stdout("5.00001", "5.00001\n");
+  check_run_stdout("0.000001", "0.000001\n");  // adjusted_exponent == -6: still fixed
+  check_run_stdout("0.0000001", "1.0e-7\n");   // adjusted_exponent == -7: scientific
+  check_run_stdout("123456789012345678901.5",
+                   "123456789012345678901.5\n");  // adjusted_exponent == 20: still fixed
+  check_run_stdout("1234567890123456789012.5",
+                   "1.2345678901234567890125e+21\n");  // adjusted_exponent == 21: scientific
+}
+
+TEST_CASE("run: unary minus negates an Integer or Decimal literal") {
+  check_run_stdout("-5", "-5\n");
+  check_run_stdout("-1.25", "-1.25\n");
+  check_run_stdout("--5", "5\n");
+  check_run_stdout("5 - 3", "2\n");    // binary minus unaffected
+  check_run_stdout("1 + -5", "-4\n");  // unary minus as a binary operand
+}
+
+TEST_CASE("run: r18-equality-exact-int-float-bridge.yaml -- Integer/Decimal numeric equality") {
+  // Regression: enabling Decimal literals without this bridge silently
+  // turned this previously-unsupported case into a wrong `ok` result
+  // (every cross-kind comparison returning false) -- caught by running
+  // genia-2026's full shared spec corpus, not just this slice's own
+  // pinned evidence.
+  auto result = try_run(
+      "exact = 9007199254740993\n"
+      "nearby = 9007199254740992.0\n"
+      "[1 == 1.0, 1.0 == 1, 1 == 1.5, 1.5 == 1, 2 == 2.0, exact == nearby, nearby == exact, "
+      "9007199254740992 == nearby]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, true, false, false, true, false, false, true]\n");
+}
+
+TEST_CASE("run: r18-map-structural-equality.yaml's Integer/Decimal mapped-value case") {
+  auto result = try_run("{\"k\": 1} == {\"k\": 1.0}");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "true\n");
 }

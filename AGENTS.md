@@ -43,7 +43,8 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-6 complete.** E24-1 (`m0smith/genia-2026#955`) built
+**E24-1 through E24-6 complete. E24-7 in progress (increment 1 of
+several, see below).** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
 added the first real vertical slice: integer literals, one evidenced
@@ -108,20 +109,49 @@ cases permanently un-runnable; `supported` is correct here, matching
 the same precedent already used for `parser`/`ast_lowering`/
 `cli_command_mode`/`cli_file_mode`).
 
+E24-7 (`m0smith/genia-2026#961`) is a large ticket (R21 source
+classification + R22 exact numeric runtime + R23 rendering/format-spec/
+JSON boundary) implemented as a sequence of coherent increments rather
+than one change, matching this project's established per-slice
+discipline. **Increment 1** adds: unary minus (`-<expr>`, a real
+`ast::Kind::Unary`/`core_ir::Kind::Unary` node — genia-2026's own
+`Unary`/`IrUnary`, not a special case of Binary), and R21 Decimal
+source-literal classification/canonicalization/lowering (`1.25`,
+`1e3`, `1.25e-2`, equivalent-spelling normalization, rejected leading-/
+trailing-dot and malformed-exponent forms — `docs/design/r21-numeric-
+source-portable-representation-contract.md`), plus just enough Decimal
+runtime support to close the loop end to end for a literal: a `Decimal`
+value kind (coefficient `bignum::Integer` + `int64_t` exponent),
+negation, and canonical display/debug rendering (R23 section 2.2's
+fixed/scientific notation rule, verified directly against
+`src/genia/numeric_runtime.py`'s `_canonical_decimal_text`). Decimal
+arithmetic/comparison beyond negation, Rational, Float64, the format-
+spec engine, and the JSON boundary all remain further increments.
+Enabling Decimal literals immediately exposed a real, pre-existing gap
+this slice's own full-corpus run caught before merging: R18's
+Integer/Decimal numeric-equality bridge (`1 == 1.0`,
+`docs/design/r18-portable-value-equality-contract.md`'s "Numeric
+equality" table) was unimplemented, silently turning two previously-
+honestly-`unsupported` `spec/eval/r18-*.yaml` cases into wrong `ok`
+results; `equality.hpp`'s `decimal_equals_integer` fixes this via exact
+(never lossy-float) comparison, since Decimal is always exact.
+
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
 varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
 is the honest declaration here). Declared `partial`: `core_ir_eval`
-(exact Integer arithmetic, structural equality, list/map construction,
-lambdas/closures, local case/pattern dispatch, pipelines, `err(...)`
-Outcomes, and the one deterministic undefined-name diagnostic, over
-this slice's grammar only — no Decimal/Rational/Float64 or
-`some`/`none`). Every other `spec/manifest.json` capability remains
-`unsupported`. Running the full shared spec corpus:
-`total=744 passed=73 failed=0 unsupported=671 protocol_error=0 crash=0
-timeout=0 invalid=0` (see README.md for the exact case list).
+(exact Integer arithmetic, Decimal literals/negation/display and the
+Integer/Decimal equality bridge, structural equality, list/map
+construction, lambdas/closures, local case/pattern dispatch, pipelines,
+`err(...)` Outcomes, and the one deterministic undefined-name
+diagnostic — no Decimal arithmetic beyond negation, Rational, Float64,
+format-spec, JSON boundary, or `some`/`none`). Every other
+`spec/manifest.json` capability remains `unsupported`. Running the full
+shared spec corpus: `total=755 passed=87 failed=0 unsupported=668
+protocol_error=0 crash=0 timeout=0 invalid=0` (see README.md for the
+exact case list).
 
 The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
@@ -131,7 +161,9 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime) has not started.**
+numeric runtime) is in progress (increment 1 of several landed;
+Rational, Float64, exact arithmetic, format-spec, and the JSON boundary
+remain).**
 
 Known commands:
 

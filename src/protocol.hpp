@@ -91,13 +91,14 @@ inline const std::vector<std::string>& known_capabilities() {
 }
 
 inline constexpr const char* kUnsupportedReason =
-    "genia-cpp implements only the E24-2..E24-6 vertical slice (integer "
-    "literals, string/boolean/list/map literals, bare-name references, "
-    "assignment, `+ - * / == %` binary expressions, lambdas, named-function "
-    "definitions (ordinary and local case/pattern-dispatch bodies), local "
-    "R20 open functions (single module only), pipelines, `err(...)` "
-    "Outcomes, the one deterministic undefined-name runtime error, calls "
-    "to this slice's native map_*/utf8_encode/err/sum functions, and "
+    "genia-cpp implements only the E24-2..E24-7(increment 1) vertical "
+    "slice (integer/Decimal literals, unary minus, string/boolean/list/map "
+    "literals, bare-name references, assignment, `+ - * / == %` binary "
+    "expressions, lambdas, named-function definitions (ordinary and local "
+    "case/pattern-dispatch bodies), local R20 open functions (single "
+    "module only), pipelines, `err(...)` Outcomes, the R18 Integer/Decimal "
+    "equality bridge, the one deterministic undefined-name runtime error, "
+    "calls to this slice's native map_*/utf8_encode/err/sum functions, and "
     "`-c`/file-mode CLI); this request is outside that scope -- see "
     "https://github.com/m0smith/genia-cpp AGENTS.md";
 

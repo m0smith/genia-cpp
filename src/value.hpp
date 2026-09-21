@@ -1,15 +1,19 @@
-// Runtime values for the E24-2..E24-4 vertical slice.
+// Runtime values for the E24-2..E24-7 vertical slice.
 //
-// Kinds: exact Integer, Boolean, String, Bytes (from utf8_encode), List,
-// Map (the native in-house insertion-ordered map), Outcome (E24-4: the
-// `err(reason)`/`err(reason, context)` recoverable-failure constructor
-// only -- `some`/`none` remain unimplemented, no pinned evidence needs
-// them), Closure (E24-4: a lambda or named-function value -- either a
-// single ordinary body evaluated after positional-pattern parameter
-// binding, or a local case/pattern-dispatch body tried clause by
-// clause), and an opaque placeholder for a known-but-not-yet-callable
-// global binding (see global_env.hpp). Decimal/Rational/Float64 remain
-// E24-7 scope -- this is deliberately not a general Genia value
+// Kinds: exact Integer, exact Decimal (E24-7: R22 section 2's
+// coefficient/exponent value; literal construction and unary negation
+// only at this point in the slice -- Decimal arithmetic/comparison and
+// Rational/Float64 remain further E24-7 increments), Boolean, String,
+// Bytes (from utf8_encode), List, Map (the native in-house
+// insertion-ordered map), Outcome (E24-4: the `err(reason)`/
+// `err(reason, context)` recoverable-failure constructor only --
+// `some`/`none` remain unimplemented, no pinned evidence needs them),
+// Closure (E24-4: a lambda or named-function value -- either a single
+// ordinary body evaluated after positional-pattern parameter binding,
+// or a local case/pattern-dispatch body tried clause by clause), and an
+// opaque placeholder for a known-but-not-yet-callable global binding
+// (see global_env.hpp). Rational/Float64 remain further E24-7
+// increments -- this is deliberately not a general Genia value
 // representation yet.
 #pragma once
 
@@ -36,6 +40,7 @@ namespace genia::value {
 
 enum class Kind : std::uint8_t {
   Integer,
+  Decimal,
   Boolean,
   String,
   Bytes,
@@ -76,8 +81,15 @@ struct Closure {
 struct Value {
   Kind kind = Kind::Opaque;
   bignum::Integer integer;  // valid when kind == Integer
-  bool boolean = false;     // valid when kind == Boolean
-  std::string text;         // valid when kind == String or Bytes (raw UTF-8/byte content)
+  // valid when kind == Decimal (R22 section 2): value is
+  // decimal_coefficient * 10^decimal_exponent, canonicalized (zero is
+  // exactly coefficient 0/exponent 0; a nonzero coefficient's magnitude
+  // has no trailing base-10 zeros -- see parser.hpp's
+  // `canonicalize_decimal_literal`).
+  bignum::Integer decimal_coefficient;
+  int64_t decimal_exponent = 0;
+  bool boolean = false;  // valid when kind == Boolean
+  std::string text;      // valid when kind == String or Bytes (raw UTF-8/byte content)
   std::shared_ptr<std::vector<Value>> list_items;  // valid when kind == List
   std::shared_ptr<OrderedMap> map;                 // valid when kind == Map
 
@@ -92,6 +104,20 @@ struct Value {
     Value value;
     value.kind = Kind::Integer;
     value.integer = std::move(v);
+    return value;
+  }
+
+  // `coefficient`/`exponent` must already be canonical (R22 section 2)
+  // -- this constructor does not re-canonicalize, matching how
+  // `make_integer` trusts its caller. The parser's
+  // `canonicalize_decimal_literal` (parser.hpp) is the only producer of
+  // canonical coefficient/exponent pairs at this slice's scope; negating
+  // one (unary minus) preserves canonical form trivially.
+  static Value make_decimal(bignum::Integer coefficient, int64_t exponent) {
+    Value value;
+    value.kind = Kind::Decimal;
+    value.decimal_coefficient = std::move(coefficient);
+    value.decimal_exponent = exponent;
     return value;
   }
 

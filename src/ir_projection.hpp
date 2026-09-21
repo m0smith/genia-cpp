@@ -137,12 +137,32 @@ inline std::optional<json> project(const core_ir::Node& node) {
         case core_ir::LiteralKind::Integer:
           return json{{"node", "IrLiteral"},
                       {"value", json{{"kind", "integer"}, {"digits", node.integer_digits}}}};
+        case core_ir::LiteralKind::Decimal:
+          // R21 section 4.2's tagged Decimal payload: both fields are
+          // canonical base-10 STRINGS (the exponent included, unlike a
+          // JSON number) -- verified directly against
+          // spec/ir/r21-decimal-*-tagged-payload.yaml.
+          return json{{"node", "IrLiteral"},
+                      {"value", json{{"kind", "decimal"},
+                                     {"coefficient", node.decimal_coefficient_digits},
+                                     {"exponent", std::to_string(node.decimal_exponent)}}}};
         case core_ir::LiteralKind::String:
           return json{{"node", "IrLiteral"}, {"value", node.string_value}};
         case core_ir::LiteralKind::Bool:
           return json{{"node", "IrLiteral"}, {"value", node.bool_value}};
       }
       return std::nullopt;
+    case core_ir::Kind::Unary: {
+      // hosts/python/ir_normalize.py's real IrUnary handler:
+      // {"node": "IrUnary", "op": <token name>, "expr": <ir>} --
+      // verified directly against spec/ir/r21-unary-negative-decimal-
+      // tagged-payload.yaml.
+      auto operand = project(*node.left);
+      if (!operand.has_value()) {
+        return std::nullopt;
+      }
+      return json{{"node", "IrUnary"}, {"op", core_ir::op_token_name(node.op)}, {"expr", *operand}};
+    }
     case core_ir::Kind::Var:
       return json{{"node", "IrVar"}, {"name", node.name}};
     case core_ir::Kind::Binary: {

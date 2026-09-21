@@ -49,6 +49,21 @@ enum class Kind : std::uint8_t {
   // (hosts/python/parse_adapter.py's normalize_ast) -- runtime
   // evaluation is otherwise identical to a case-body FuncDef.
   OpenFuncDef,
+  // E24-7 (R21 numeric source classification): a Decimal source literal
+  // (`1.25`, `1e3`, `1.25e-2`, ...). Its own Kind, not a Literal flag,
+  // because the two carry different payload fields (coefficient digits
+  // + exponent vs a bare integer digit string) and project to different
+  // wire shapes at both layers (parse-category plain numeric `value`
+  // vs the R21 tagged `{kind:"decimal", coefficient, exponent}`
+  // Core IR payload -- docs/design/r21-numeric-source-portable-
+  // representation-contract.md section 4.2).
+  DecimalLiteral,
+  // E24-7: unary minus (`-<expr>`), genia-2026's real `Unary` AST node
+  // (src/genia/ast_nodes.py) -- source sign is never part of a numeric
+  // literal itself (R21 section 2: "-1.25 is unary minus applied to the
+  // positive Decimal literal"), so negating a literal is this slice's
+  // first real use of this node.
+  Unary,
 };
 
 struct Node {
@@ -58,6 +73,15 @@ struct Node {
   // literal -- R21 keeps sign outside as a unary operator, which this
   // slice's grammar does not include at all).
   std::string integer_digits;
+
+  // DecimalLiteral: canonical unsigned coefficient digit text (no
+  // leading zeros except a lone "0") and the paired exponent, per R21
+  // section 4.2's canonicalization rule -- value is
+  // `decimal_coefficient_digits * 10^decimal_exponent`. Sign is never
+  // part of a Decimal literal either (same rule as Integer); a negative
+  // Decimal source form is Unary(MINUS, DecimalLiteral(...)).
+  std::string decimal_coefficient_digits;
+  int64_t decimal_exponent = 0;
 
   // StringLiteral: decoded UTF-8 text (escape processing is minimal --
   // see parser.hpp).
@@ -73,6 +97,8 @@ struct Node {
 
   // Binary: symbolic operator ("+", "-", "*", "/", "==", matching the
   // parse AST projection's op_symbol_map spelling) plus operands.
+  // Unary: the same symbolic operator ("-") plus the single operand
+  // (reuses `left`; `right` is unused).
   std::string op;
   std::shared_ptr<Node> left;
   std::shared_ptr<Node> right;
@@ -113,6 +139,22 @@ struct Node {
     Node n;
     n.kind = Kind::Literal;
     n.integer_digits = std::move(digits);
+    return n;
+  }
+
+  static Node decimal_literal(std::string coefficient_digits, int64_t exponent) {
+    Node n;
+    n.kind = Kind::DecimalLiteral;
+    n.decimal_coefficient_digits = std::move(coefficient_digits);
+    n.decimal_exponent = exponent;
+    return n;
+  }
+
+  static Node unary(std::string op_symbol, Node operand) {
+    Node n;
+    n.kind = Kind::Unary;
+    n.op = std::move(op_symbol);
+    n.left = std::make_shared<Node>(std::move(operand));
     return n;
   }
 

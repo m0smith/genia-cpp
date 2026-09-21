@@ -98,12 +98,41 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           }
           return value::Value::make_integer(*integer);
         }
+        case core_ir::LiteralKind::Decimal: {
+          auto coefficient =
+              bignum::Integer::from_unsigned_decimal(node.decimal_coefficient_digits);
+          if (!coefficient.has_value()) {
+            return std::nullopt;
+          }
+          return value::Value::make_decimal(*coefficient, node.decimal_exponent);
+        }
         case core_ir::LiteralKind::String:
           return value::Value::make_string(node.string_value);
         case core_ir::LiteralKind::Bool:
           return value::Value::make_boolean(node.bool_value);
       }
       return std::nullopt;
+    case core_ir::Kind::Unary: {
+      // R22 section 4: Decimal negation preserves canonical form
+      // trivially (negating a canonical coefficient never introduces a
+      // trailing zero or changes zero-ness). Only MINUS is in this
+      // slice's grammar (parser.hpp never produces another unary op).
+      if (node.op != core_ir::Op::Minus) {
+        return std::nullopt;
+      }
+      auto operand = eval_node(*node.left, env);
+      if (!operand.has_value()) {
+        return std::nullopt;
+      }
+      if (operand->kind == value::Kind::Integer) {
+        return value::Value::make_integer(operand->integer.negate());
+      }
+      if (operand->kind == value::Kind::Decimal) {
+        return value::Value::make_decimal(operand->decimal_coefficient.negate(),
+                                          operand->decimal_exponent);
+      }
+      return std::nullopt;
+    }
     case core_ir::Kind::Var: {
       auto found = env->lookup(node.name);
       if (found.has_value()) {
