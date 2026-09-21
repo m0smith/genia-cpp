@@ -117,6 +117,14 @@ inline std::optional<json> project(const ast::Node& node) {
                   {"params", node.header_param_names},
                   {"body", body}};
     }
+    case ast::Kind::OpenFuncDef:
+      // hosts/python/parse_adapter.py's real OpenFuncDef handler
+      // projects only `name` and the clause count, never the clauses
+      // themselves (unlike FuncDef's `body`) -- verified directly
+      // against that source.
+      return json{{"kind", "OpenFuncDef"},
+                  {"name", node.name},
+                  {"clause_count", node.case_patterns.size()}};
   }
   return std::nullopt;
 }

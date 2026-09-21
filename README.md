@@ -1,16 +1,17 @@
 # genia-cpp
 
-**Status: E24-5 complete. `genia-adapter` implements
+**Status: E24-6 complete. `genia-adapter` implements
 integer/string/boolean/list/map literals, bare-name references,
-assignment, `+ - * / ==` binary expressions, lambdas/closures, named
-functions (ordinary and local case/pattern-dispatch bodies), pipelines
-(`|>`), the `err(...)` Outcome constructor and its rendering, one
-deterministic undefined-name runtime error, calls to the native
-`map_*`/`utf8_encode`/`err`/`sum` functions, and `-c`/file-mode CLI --
-end to end (source -> parser -> portable Core IR -> evaluator ->
-normalized adapter result), hardened against a C++ stack-overflow crash
-from adversarially deep recursion/nesting (E24-5). Every other Genia
-behavior remains honestly `unsupported`.**
+assignment, `+ - * / == %` binary expressions, lambdas/closures, named
+functions (ordinary and local case/pattern-dispatch bodies), local R20
+open functions (grouped and repeated top-level clause spellings, single
+module only), pipelines (`|>`), the `err(...)` Outcome constructor and
+its rendering, one deterministic undefined-name runtime error, calls to
+the native `map_*`/`utf8_encode`/`err`/`sum` functions, and
+`-c`/file-mode CLI -- end to end (source -> parser -> portable Core IR
+-> evaluator -> normalized adapter result), hardened against a C++
+stack-overflow crash from adversarially deep recursion/nesting (E24-5).
+Every other Genia behavior remains honestly `unsupported`.**
 
 This is the planned production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
@@ -26,7 +27,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-5 are complete; E24-6 through E24-8 remain.
+E24-1 through E24-6 are complete; E24-7 through E24-8 remain.
 
 ## Authority
 
@@ -60,14 +61,21 @@ before implementing:
 - `#968`/`#969` (E24-3): three of the four pinned E24-3 bootstrap
   categories cited cases requiring E24-4-scope pattern dispatch/
   recursion or E24-7-scope Decimal numbers.
+- `#971`/`#972` (E24-6): the pinned `open_functions_r20` bootstrap case
+  required out-of-R24-scope `multi_file_eval` (cross-module dispatch).
+- `#973`/`#974` (E24-6): the roadmap's own guidance that `open_functions`
+  must be declared `partial` (not `supported`) was itself wrong --
+  `tools/spec_runner/capabilities.py`'s requires-gate grants zero
+  evidence credit for `partial`, which would have made the two pinned
+  `open_functions_r20` cases permanently un-runnable.
 
 ## Pinned contract
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`df309a9c1610b9989dd730cc41b44ad350287637`](https://github.com/m0smith/genia-2026/commit/df309a9c1610b9989dd730cc41b44ad350287637) |
+| `genia-2026` contract revision | [`eb171afc434b3b9110007b8be76f6b0eff850311`](https://github.com/m0smith/genia-2026/commit/eb171afc434b3b9110007b8be76f6b0eff850311) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | `genia-2026` `main` after merging `#969` (E24-3 bootstrap evidence fix), found necessary while preparing E24-3. This is the exact revision `src/protocol.hpp`'s `kContractRevision` declares and `genia-adapter`'s `capabilities` response reports. |
+| Represents | `genia-2026` `main` after merging `#974` (the `open_functions` `supported`-not-`partial` guidance correction), found necessary while preparing E24-6. This is the exact revision `src/protocol.hpp`'s `kContractRevision` declares and `genia-adapter`'s `capabilities` response reports. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
@@ -80,12 +88,28 @@ identity.
 
 E24-4 (`m0smith/genia-2026#958`) widens E24-3's vertical slice to cover
 Outcome values, lambdas/closures, local case/pattern dispatch,
-pipelines, and one deterministic runtime-error diagnostic:
+pipelines, and one deterministic runtime-error diagnostic. E24-6
+(`m0smith/genia-2026#960`) adds R20 open functions, but only their
+*local* (single-module) form: `open name(<pattern>, ...) = <body>`
+declares the first clause of a new open interface, and every
+subsequent bare top-level `name(<pattern>, ...) = <body>` clause for
+that same name -- in a contiguous run, exactly like the grouped
+case-with-`|` spelling -- merges into it. Local dispatch is identical
+to the existing E24-4 case-dispatch mechanism (one participating unit,
+first-match-in-source-order), so no new evaluator machinery was added,
+only new grammar and two new portable Core IR node types
+(`IrOpenFuncDef`, reusing `IrCaseClause`/`IrPatTuple`/`IrPatLiteral`
+verbatim) plus the `%` (exact floor-remainder) operator the pinned
+`gcd` evidence needs. Cross-module `extend`/`use` (contribution/
+selection) require `multi_file_eval`, explicitly out of R24 scope per
+`docs/design/r24/capability-floor.json` -- both are hard-rejected at
+parse time (never silently misparsed as ordinary identifiers) rather
+than attempted:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
-  `cli_command_mode`/`cli_file_mode` `supported`, `core_ir_eval`
-  `partial`) this slice earned with real evidence.
+  `cli_command_mode`/`cli_file_mode`/`open_functions` `supported`,
+  `core_ir_eval` `partial`) this slice earned with real evidence.
 - `src/adapter.hpp` — request classification/dispatch for
   `capabilities`/`parse`/`lower`/`eval`/`cli` (including both `-c`
   command mode and bare-file-path file mode), routing the latter four
@@ -94,36 +118,52 @@ pipelines, and one deterministic runtime-error diagnostic:
   recursive-descent parser for exactly this slice's grammar:
   integer/string/boolean/list/map literals, assignment, named-function
   definitions (`name(params) = body`, ordinary or local
-  case/pattern-dispatch), lambdas (`(params) -> body`, including
+  case/pattern-dispatch), local R20 open functions (`open name(<pattern>,
+  ...) = body` and contiguous repeated bare clauses, per-argument
+  pattern grammar reused verbatim, including integer-literal patterns
+  like `open gcd(a, 0) = a`), lambdas (`(params) -> body`, including
   list/map-destructuring parameters), pipelines (`|>`), general
   parenthesized grouping, function calls, the bare-name references
   every other identifier now resolves to (whether a name is actually
   *bound* is a runtime concern -- see `src/evaluator.hpp` -- not a
   parse-time restriction, matching genia-2026's real grammar), and
-  `+ - * / ==` binary expressions with standard precedence. `pattern.hpp`
-  holds the one pattern-shape struct (Bind/Wildcard/Rest/List/Map/Tuple)
-  shared by the parser and evaluator, matching
-  `docs/architecture/core-ir-portability.md`'s named pattern families.
-  Genia's own reserved keywords/special forms this slice does not
-  implement (`import`, `pattern`, `quote`, `delay`, `quasiquote`,
-  `unquote`, `unquote_splicing`, `some`, `none`, `nil`) are rejected
-  outright rather than silently misparsed as ordinary names or calls --
-  a real bug this slice's own preparation caught and fixed by running
-  genia-2026's *full* shared spec corpus (not just this slice's pinned
-  evidence) against early builds. Anything else outside this grammar
-  (parens as anything but grouping/lambda, unary minus, general postfix
-  call application on a non-identifier expression, guard clauses,
-  decimal/exponent literals, string escapes, ...) is rejected at the
-  tokenizer/parser level and reported `unsupported`, never guessed at.
+  `+ - * / == %` binary expressions with standard precedence (`%` is
+  exact floor-remainder, Python-style, sign follows the divisor --
+  verified directly against `src/genia/numeric_runtime.py`'s
+  `exact_remainder`, not C++'s native truncating `%`). `pattern.hpp`
+  holds the one pattern-shape struct
+  (Bind/Wildcard/Rest/List/Map/Tuple/Literal) shared by the parser and
+  evaluator, matching `docs/architecture/core-ir-portability.md`'s named
+  pattern families. Genia's own reserved keywords/special forms this
+  slice does not implement (`import`, `pattern`, `extend`, `use`,
+  `quote`, `delay`, `quasiquote`, `unquote`, `unquote_splicing`, `some`,
+  `none`, `nil`) are rejected outright rather than silently misparsed as
+  ordinary names or calls -- a real bug this slice's own preparation
+  caught and fixed by running genia-2026's *full* shared spec corpus
+  (not just this slice's pinned evidence) against early builds (`extend`/
+  `use` are R20 cross-module contribution/selection, which require
+  `multi_file_eval` and are hard-rejected rather than given the
+  reference parser's own partial-backtrack nuance, to avoid the same
+  class of silent-misparse risk with no diagnostic to fall back on).
+  Anything else outside this grammar (parens as anything but
+  grouping/lambda, unary minus, general postfix call application on a
+  non-identifier expression, guard clauses, bare/top-level varargs rest
+  patterns, decimal/exponent literals, string escapes, ...) is rejected
+  at the tokenizer/parser level and reported `unsupported`, never
+  guessed at.
 - `src/core_ir.hpp`, `src/lowering.hpp` — the portable Core IR subset
   this slice produces (`IrLiteral`, `IrVar`, `IrBinary`, `IrExprStmt`,
   `IrList`, `IrMap`, `IrAssign`, `IrCall`, `IrLambda`, `IrFuncDef`,
-  `IrCase`/`IrCaseClause`, `IrPipeline`, `IrSpread`) and real AST -> IR
-  lowering, matching genia-2026's
+  `IrOpenFuncDef`, `IrCase`/`IrCaseClause`, `IrPipeline`, `IrSpread`) and
+  real AST -> IR lowering, matching genia-2026's
   `docs/architecture/core-ir-portability.md` wire shapes exactly
-  (`src/ir_projection.hpp`; not yet exercised by pinned `lower`-category
-  evidence, but built honestly against the documented contract rather
-  than deferred).
+  (`src/ir_projection.hpp`, verified directly against
+  `hosts/python/ir_normalize.py`). `IrOpenFuncDef` reuses `IrCaseClause`/
+  `IrPatTuple`/`IrPatLiteral` verbatim (no new pattern or dispatch
+  representation -- local open-function dispatch against one
+  participating unit is identical to the existing case-dispatch
+  mechanism, per `docs/design/r20-open-functions-syntax-ir-design.md`
+  section 5).
 - `src/bignum.hpp` — the in-house arbitrary-precision Integer kernel
   (sign + base-2^32 limbs) per the R24 dependency/toolchain policy: no
   third-party bignum library.
@@ -189,16 +229,29 @@ pipelines, and one deterministic runtime-error diagnostic:
   `unsupported` with no change to any normal-sized program's behavior.
   E24-5 adds no new Genia semantics or capabilities.
 - `genia-adapter` (the built binary) declares `parser`, `ast_lowering`,
-  `cli_command_mode`, and `cli_file_mode` `supported`, `core_ir_eval`
-  `partial`, and every other `spec/manifest.json` capability
-  `unsupported`. Running the full shared spec corpus against it:
-  `total=744 passed=64 failed=0 unsupported=680 protocol_error=0
-  crash=0 timeout=0 invalid=0` — the 7 pinned E24-4 cases
-  (`outcome_values`, `lambda_function_call`, `pattern_case_dispatch`,
-  `pipeline_composition`, `deterministic_runtime_error_behavior`) all
-  pass, plus the E24-2/E24-3 pinned cases and further incidental cases
-  this slice's honest, evidence-matched grammar/lowering/evaluation also
-  happens to satisfy.
+  `cli_command_mode`, `cli_file_mode`, and `open_functions` `supported`,
+  `core_ir_eval` `partial`, and every other `spec/manifest.json`
+  capability `unsupported`. `open_functions` is declared `supported`
+  rather than `partial` deliberately: `tools/spec_runner/capabilities.py`'s
+  requires-gate only attempts a case whose `requires` list names
+  `open_functions` when it is declared exactly `supported` (`partial`
+  grants zero evidence credit, by that module's own design), and this
+  declaration does not claim cross-module `extend`/`use`, the R20
+  diagnostic family (no-matching-case/duplicate-clause/varargs-ambiguity),
+  or bare varargs patterns are implemented -- those remain genuinely
+  `unsupported` per case, or are gated out entirely by every
+  cross-module case's separate `multi_file_eval` requirement (see
+  `m0smith/genia-2026#973`/`#974`). Running the full shared spec corpus
+  against it: `total=744 passed=73 failed=0 unsupported=671
+  protocol_error=0 crash=0 timeout=0 invalid=0` — the 7 pinned E24-4
+  cases (`outcome_values`, `lambda_function_call`,
+  `pattern_case_dispatch`, `pipeline_composition`,
+  `deterministic_runtime_error_behavior`) and the 2 pinned E24-6
+  `open_functions_r20` cases (`r20-gcd-grouped-clause-equivalent`,
+  `r20-gcd-repeated-clauses`) all pass, plus the E24-2/E24-3 pinned
+  cases and further incidental cases (including several `parse`/`ir`
+  category R20 local-open-function cases) this slice's honest,
+  evidence-matched grammar/lowering/evaluation also happens to satisfy.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
   equality, and display for any well-formed UTF-8 input, but is not yet
@@ -206,11 +259,18 @@ pipelines, and one deterministic runtime-error diagnostic:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- `some`/`none` Option values, Decimal/Rational/Float64, open functions,
-  general diagnostic normalization (beyond the one undefined-name case),
-  and general postfix call application (calling the result of a call or
-  a parenthesized expression, e.g. immediately-invoked lambdas) remain
-  entirely unimplemented — later slices'/`genia-2026`'s
+- `some`/`none` Option values, Decimal/Rational/Float64, general
+  diagnostic normalization (beyond the one undefined-name case), and
+  general postfix call application (calling the result of a call or a
+  parenthesized expression, e.g. immediately-invoked lambdas) remain
+  entirely unimplemented. R20 open functions are only *partly*
+  implemented: local (single-module) grouped/repeated clause dispatch
+  works end to end, but cross-module `extend`/`use` contribution and
+  selection, the R20 diagnostic family
+  (`open-function-no-matching-case`/`open-function-duplicate-clause`/
+  `open-function-varargs-ambiguity`), and bare/top-level varargs rest
+  patterns (`open f(x, ..rest) = ...`) all remain unimplemented — see
+  later slices'/`genia-2026`'s
   [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md).
 
 ## Building and running the adapter
@@ -227,7 +287,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=744 passed=64 failed=0 unsupported=680 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=744 passed=73 failed=0 unsupported=671 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

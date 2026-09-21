@@ -3,11 +3,15 @@
 //
 // genia-2026's docs/architecture/core-ir-portability.md lists pattern
 // families as their own portable node set (`IrPatBind`, `IrPatWildcard`,
-// `IrPatRest`, `IrPatTuple`, `IrPatList`, `IrPatMap`, plus others this
-// slice does not implement: `IrPatLiteral`, `IrPatGlob`, `IrPatSome`,
+// `IrPatRest`, `IrPatTuple`, `IrPatList`, `IrPatMap`, `IrPatLiteral`,
+// plus others this slice does not implement: `IrPatGlob`, `IrPatSome`,
 // `IrPatNone`). This slice implements exactly the subset its grammar
-// produces -- Bind/Wildcard/Rest/List/Map/Tuple -- matching the names in
-// that contract.
+// produces -- Bind/Wildcard/Rest/List/Map/Tuple/Literal -- matching the
+// names in that contract. Literal is deliberately narrow (integer
+// digits only, matching genia-2026's real IrPatLiteral value shape for
+// this case but not its full generality: no string/bool/nil literal
+// patterns, since no pinned evidence needs them -- e.g. R20's
+// `open gcd(a, 0) = a` needs only an integer-literal clause pattern).
 //
 // Unlike expression nodes (which have a real, separately-shaped parser
 // AST and Core IR -- see ast.hpp/core_ir.hpp/lowering.hpp), no pinned
@@ -24,13 +28,16 @@
 
 namespace genia::pattern {
 
-enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple };
+enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple, Literal };
 
 struct Pattern {
   Kind kind = Kind::Wildcard;
 
   // Bind, Rest: the name to bind (Rest's name may be empty, meaning the
-  // spread remainder is discarded rather than bound).
+  // spread remainder is discarded rather than bound). Literal: the
+  // canonical unsigned decimal digit text to match against (see
+  // ast.hpp's Literal node -- sign is never part of a literal pattern,
+  // matching this slice's expression-literal grammar).
   std::string name;
 
   // List: element patterns, at most one of which may be Kind::Rest (and
@@ -61,6 +68,13 @@ struct Pattern {
     Pattern p;
     p.kind = Kind::Rest;
     p.name = std::move(bound_name);
+    return p;
+  }
+
+  static Pattern integer_literal(std::string digits) {
+    Pattern p;
+    p.kind = Kind::Literal;
+    p.name = std::move(digits);
     return p;
   }
 

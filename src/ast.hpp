@@ -39,6 +39,16 @@ enum class Kind : std::uint8_t {
   FuncDef,
   Map,
   Spread,
+  // E24-6 (m0smith/genia-2026#958->959 R20 local open functions):
+  // reuses FuncDef's case-body shape verbatim (name/case_patterns/
+  // case_results) -- see docs/design/r20-open-functions-syntax-ir-
+  // design.md section 4, which lowers OpenFuncDef 1:1 from the same
+  // CaseClause list a case-body FuncDef already carries. This is its
+  // own Kind (not a FuncDef flag) only because the parse-category wire
+  // shape distinguishes `kind: "OpenFuncDef"` from `kind: "FuncDef"`
+  // (hosts/python/parse_adapter.py's normalize_ast) -- runtime
+  // evaluation is otherwise identical to a case-body FuncDef.
+  OpenFuncDef,
 };
 
 struct Node {
@@ -185,6 +195,24 @@ struct Node {
     n.kind = Kind::FuncDef;
     n.name = std::move(func_name);
     n.header_param_names = std::move(header_names);
+    n.is_case_body = true;
+    n.case_patterns = std::move(clause_patterns);
+    n.case_results = std::move(clause_results);
+    return n;
+  }
+
+  // R20 local open function: `name`, in declaration order, one
+  // IrCaseClause-equivalent pair per clause -- whether those clauses
+  // came from a single grouped case-with-`|` body or from repeated
+  // bare top-level statements merged by the parser (see parser.hpp's
+  // `try_parse_open_related_toplevel`) is not observable here, matching
+  // the design doc's "grouped/repeated equivalence is a lowering
+  // property" rule (section 3).
+  static Node open_func_def(std::string func_name, std::vector<pattern::Pattern> clause_patterns,
+                            std::vector<Node> clause_results) {
+    Node n;
+    n.kind = Kind::OpenFuncDef;
+    n.name = std::move(func_name);
     n.is_case_body = true;
     n.case_patterns = std::move(clause_patterns);
     n.case_results = std::move(clause_results);

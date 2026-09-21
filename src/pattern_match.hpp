@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "bignum.hpp"
 #include "equality.hpp"
 #include "pattern.hpp"
 #include "value.hpp"
@@ -143,6 +144,23 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
       // nested inside another pattern -- no pinned evidence needs a
       // nested tuple.
       return std::nullopt;
+    case pattern::Kind::Literal: {
+      // "A literal pattern matches exactly when the literal and the
+      // candidate are Genia-equal" (R18, mirrored from
+      // pattern_match.py's IrPatLiteral case) -- reusing the one
+      // canonical equality relation rather than a separate comparison,
+      // so a kind mismatch (e.g. matching an Integer literal against a
+      // Boolean) is correctly never a match.
+      auto literal_integer = bignum::Integer::from_unsigned_decimal(pattern.name);
+      if (!literal_integer.has_value()) {
+        return std::nullopt;
+      }
+      const value::Value literal_value = value::Value::make_integer(*literal_integer);
+      if (!equality::structural_equal(literal_value, arg)) {
+        return std::nullopt;
+      }
+      return Bindings{};
+    }
   }
   return std::nullopt;
 }

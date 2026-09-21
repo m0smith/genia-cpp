@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-5 complete.** E24-1 (`m0smith/genia-2026#955`) built
+**E24-1 through E24-6 complete.** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
 added the first real vertical slice: integer literals, one evidenced
@@ -80,17 +80,47 @@ depth guard well below the measured crash threshold (`src/evaluator.hpp`'s
 `kMaxCallDepth`, `src/parser.hpp`'s `kMaxNestingDepth`), converting the
 crash into an honest `unsupported` with no change to any
 normal-sized program's behavior. There is still no Python code anywhere
-in this repository's build or execution path.
+in this repository's build or execution path. E24-6
+(`m0smith/genia-2026#960`) adds R20 open functions, but only their
+*local* (single-module) form: `open name(<pattern>, ...) = <body>`
+declares the first clause of a new open interface, and every
+subsequent bare top-level `name(<pattern>, ...) = <body>` clause for
+that same name (in a contiguous run, exactly like the grouped
+case-with-`|` spelling) merges into it. Local dispatch against one
+participating unit is identical to E24-4's existing case-dispatch
+mechanism, so no new evaluator machinery was needed — only new grammar,
+two new portable Core IR node types (`IrOpenFuncDef`, reusing
+`IrCaseClause`/`IrPatTuple`/`IrPatLiteral` verbatim per
+`docs/design/r20-open-functions-syntax-ir-design.md`), a new integer
+`Literal` pattern kind (`open gcd(a, 0) = a`'s `0`), and the `%`
+(exact floor-remainder, Python-style) operator the pinned `gcd`
+evidence needs. Cross-module `extend`/`use` (contribution/selection)
+require `multi_file_eval`, explicitly out of R24 scope per
+`docs/design/r24/capability-floor.json`, and are hard-rejected at parse
+time rather than attempted. This slice's own preparation found and
+fixed two real evidence/guidance gaps in `genia-2026` before and after
+implementing: `#971`/`#972` (the pinned `open_functions_r20` bootstrap
+case required out-of-scope `multi_file_eval`) and `#973`/`#974` (the
+roadmap's own guidance to declare `open_functions` `partial` was itself
+wrong — `tools/spec_runner/capabilities.py`'s requires-gate grants zero
+evidence credit for `partial`, which would have made the two pinned
+cases permanently un-runnable; `supported` is correct here, matching
+the same precedent already used for `parser`/`ast_lowering`/
+`cli_command_mode`/`cli_file_mode`).
 
 Capabilities declared `supported`: `parser`, `ast_lowering`,
-`cli_command_mode`, `cli_file_mode`. Declared `partial`: `core_ir_eval`
+`cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
+cross-module `extend`/`use`, the R20 diagnostic family, and bare
+varargs patterns remain genuinely `unsupported` per case, never
+fabricated; see `#973`/`#974` for why `supported` rather than `partial`
+is the honest declaration here). Declared `partial`: `core_ir_eval`
 (exact Integer arithmetic, structural equality, list/map construction,
 lambdas/closures, local case/pattern dispatch, pipelines, `err(...)`
 Outcomes, and the one deterministic undefined-name diagnostic, over
-this slice's grammar only — no Decimal/Rational/Float64, `some`/`none`,
-or open functions). Every other `spec/manifest.json` capability remains
+this slice's grammar only — no Decimal/Rational/Float64 or
+`some`/`none`). Every other `spec/manifest.json` capability remains
 `unsupported`. Running the full shared spec corpus:
-`total=744 passed=64 failed=0 unsupported=680 protocol_error=0 crash=0
+`total=744 passed=73 failed=0 unsupported=671 protocol_error=0 crash=0
 timeout=0 invalid=0` (see README.md for the exact case list).
 
 The real C++ host implementation is numbered **R24** (originally
@@ -98,10 +128,10 @@ planned as R21; `genia-2026` planning issue #845 decomposed the Exact
 Numeric Model into R21-R23 and moved the C++ host to R24). The R24
 pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 `docs/design/r24-cpp-host-preflight.md` and the four pinned entry
-artifacts under `docs/design/r24/` there. E24-1 through E24-5 are the
-first five implementation slices of the E24 sequence
-(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-6 (R20 open
-functions) has not started.**
+artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
+first six implementation slices of the E24 sequence
+(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
+numeric runtime) has not started.**
 
 Known commands:
 

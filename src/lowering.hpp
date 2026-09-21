@@ -19,6 +19,7 @@ inline std::optional<core_ir::Op> lower_op(const std::string& symbol) {
   if (symbol == "-") return core_ir::Op::Minus;
   if (symbol == "*") return core_ir::Op::Star;
   if (symbol == "/") return core_ir::Op::Slash;
+  if (symbol == "%") return core_ir::Op::Percent;
   if (symbol == "==") return core_ir::Op::EqEq;
   return std::nullopt;
 }
@@ -147,6 +148,18 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       return core_ir::Node::func_def(node.name, node.header_param_names, node.params,
                                      std::move(*body));
     }
+    case ast::Kind::OpenFuncDef: {
+      std::vector<core_ir::Node> results;
+      results.reserve(node.case_results.size());
+      for (const auto& result : node.case_results) {
+        auto lowered_result = lower_node(result);
+        if (!lowered_result.has_value()) {
+          return std::nullopt;
+        }
+        results.push_back(std::move(*lowered_result));
+      }
+      return core_ir::Node::open_func_def(node.name, node.case_patterns, std::move(results));
+    }
     case ast::Kind::Map: {
       std::vector<std::pair<std::string, core_ir::Node>> entries;
       entries.reserve(node.map_entries.size());
@@ -191,7 +204,8 @@ inline std::optional<std::vector<core_ir::Node>> lower_program(const ast::Progra
     if (!lowered.has_value()) {
       return std::nullopt;
     }
-    if (lowered->kind == core_ir::Kind::Assign || lowered->kind == core_ir::Kind::FuncDef) {
+    if (lowered->kind == core_ir::Kind::Assign || lowered->kind == core_ir::Kind::FuncDef ||
+        lowered->kind == core_ir::Kind::OpenFuncDef) {
       result.push_back(std::move(*lowered));
     } else {
       result.push_back(core_ir::Node::expr_stmt(std::move(*lowered)));

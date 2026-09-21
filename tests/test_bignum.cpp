@@ -92,6 +92,28 @@ TEST_CASE("exact_divide succeeds only for evenly-dividing quotients") {
   CHECK_FALSE(six->exact_divide(*zero).has_value());
 }
 
+TEST_CASE("floor_remainder matches genia-2026's exact floor modulo, sign follows the divisor") {
+  // Verified directly against src/genia/numeric_runtime.py's
+  // exact_remainder (Python-style floor modulo), not C++'s native
+  // truncating `%` (sign follows the dividend) -- e.g. -7 % 3 == 2 in
+  // Genia/Python, but native C++ `-7 % 3 == -1`.
+  auto seven = Integer::from_unsigned_decimal("7");
+  auto three = Integer::from_unsigned_decimal("3");
+  auto zero = Integer::from_unsigned_decimal("0");
+  REQUIRE(seven.has_value());
+  REQUIRE(three.has_value());
+  REQUIRE(zero.has_value());
+  Integer neg_seven = seven->negate();
+  Integer neg_three = three->negate();
+
+  CHECK(seven->floor_remainder(*three)->to_decimal_string() == "1");
+  CHECK(neg_seven.floor_remainder(*three)->to_decimal_string() == "2");
+  CHECK(seven->floor_remainder(neg_three)->to_decimal_string() == "-2");
+  CHECK(neg_seven.floor_remainder(neg_three)->to_decimal_string() == "-1");
+  CHECK(zero->floor_remainder(*three)->to_decimal_string() == "0");
+  CHECK_FALSE(seven->floor_remainder(*zero).has_value());
+}
+
 TEST_CASE("mul by zero is zero") {
   auto value = Integer::from_unsigned_decimal("123456789123456789");
   auto zero = Integer::from_unsigned_decimal("0");

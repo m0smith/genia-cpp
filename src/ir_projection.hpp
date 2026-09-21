@@ -42,8 +42,40 @@ inline bool is_simple_bind_shape(const std::vector<pattern::Pattern>& params) {
   return true;
 }
 
+// A JSON number can only exactly represent this project's bignum
+// literal text when it fits a native 64-bit integer (see
+// ast_projection.hpp's `digits_to_safe_int64`, duplicated narrowly here
+// rather than introducing a cross-dependency between the two projection
+// headers for one small helper).
+inline std::optional<int64_t> pattern_digits_to_safe_int64(const std::string& digits) {
+  if (digits.size() > 18) {
+    return std::nullopt;
+  }
+  try {
+    size_t consumed = 0;
+    const long long value = std::stoll(digits, &consumed);
+    if (consumed != digits.size()) {
+      return std::nullopt;
+    }
+    return static_cast<int64_t>(value);
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
 inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
   switch (pattern.kind) {
+    case pattern::Kind::Literal: {
+      // genia-2026's real IrPatLiteral carries the raw value (unlike
+      // ordinary IrLiteral's R21 tagged numeric payload -- case-pattern
+      // numeric literals are explicitly unaffected by that ticket, see
+      // pattern.hpp's header comment).
+      auto value = pattern_digits_to_safe_int64(pattern.name);
+      if (!value.has_value()) {
+        return std::nullopt;
+      }
+      return json{{"node", "IrPatLiteral"}, {"value", *value}};
+    }
     case pattern::Kind::Bind:
       return json{{"node", "IrPatBind"}, {"name", pattern.name}};
     case pattern::Kind::Wildcard:
@@ -217,6 +249,22 @@ inline std::optional<json> project(const core_ir::Node& node) {
                   {"name", node.name},
                   {"params", node.header_param_names},
                   {"body", body}};
+    }
+    case core_ir::Kind::OpenFuncDef: {
+      // hosts/python/ir_normalize.py's real IrOpenFuncDef handler:
+      // {"node": "IrOpenFuncDef", "name": ..., "clauses": [...]} --
+      // `docstring`/`annotations` are only added when non-None/non-empty,
+      // and this slice's parser never produces either, so they never
+      // appear (verified directly against that source).
+      json clauses = json::array();
+      for (size_t i = 0; i < node.case_patterns.size(); ++i) {
+        auto clause = project_case_clause(node.case_patterns[i], node.case_results[i]);
+        if (!clause.has_value()) {
+          return std::nullopt;
+        }
+        clauses.push_back(*clause);
+      }
+      return json{{"node", "IrOpenFuncDef"}, {"name", node.name}, {"clauses", clauses}};
     }
     case core_ir::Kind::Pipeline: {
       auto source = project(*node.left);
