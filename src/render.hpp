@@ -88,6 +88,13 @@ inline std::optional<std::string> display(const value::Value& value) {
       return value.integer.to_decimal_string();
     case value::Kind::Decimal:
       return render_decimal(value.decimal_coefficient, value.decimal_exponent);
+    case value::Kind::Rational:
+      // R23 section 2.3: "<numerator>/<denominator>" with no spaces --
+      // denominator is always positive after canonicalization (sign
+      // carried by the numerator), so no separate sign handling is
+      // needed here (unlike Decimal's render_decimal).
+      return value.rational_numerator.to_decimal_string() + "/" +
+             value.rational_denominator.to_decimal_string();
     case value::Kind::Boolean:
       return value.boolean ? "true" : "false";
     case value::Kind::String: {

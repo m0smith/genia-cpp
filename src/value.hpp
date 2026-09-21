@@ -41,6 +41,7 @@ namespace genia::value {
 enum class Kind : std::uint8_t {
   Integer,
   Decimal,
+  Rational,
   Boolean,
   String,
   Bytes,
@@ -88,6 +89,12 @@ struct Value {
   // `canonicalize_decimal_literal`).
   bignum::Integer decimal_coefficient;
   int64_t decimal_exponent = 0;
+  // valid when kind == Rational (R22 section 3): a *surviving* Rational
+  // (one that was not collapsed to Integer at construction time, see
+  // rational.hpp's `construct_rational`) always has
+  // rational_denominator > 1, sign carried by rational_numerator.
+  bignum::Integer rational_numerator;
+  bignum::Integer rational_denominator;
   bool boolean = false;  // valid when kind == Boolean
   std::string text;      // valid when kind == String or Bytes (raw UTF-8/byte content)
   std::shared_ptr<std::vector<Value>> list_items;  // valid when kind == List
@@ -118,6 +125,19 @@ struct Value {
     value.kind = Kind::Decimal;
     value.decimal_coefficient = std::move(coefficient);
     value.decimal_exponent = exponent;
+    return value;
+  }
+
+  // `numerator`/`denominator` must already be canonical (R22 section 3:
+  // reduced by their positive gcd, denominator positive, denominator
+  // never 1 for a surviving Rational) -- this constructor does not
+  // re-canonicalize, matching `make_decimal`. `rational.hpp`'s
+  // `construct_rational` is the only producer of canonical pairs.
+  static Value make_rational(bignum::Integer numerator, bignum::Integer denominator) {
+    Value value;
+    value.kind = Kind::Rational;
+    value.rational_numerator = std::move(numerator);
+    value.rational_denominator = std::move(denominator);
     return value;
   }
 

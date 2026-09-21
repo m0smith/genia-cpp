@@ -211,6 +211,29 @@ class Integer {
     return quotient;
   }
 
+  // Greatest common divisor of the two operands' magnitudes (always
+  // non-negative), via the ordinary Euclidean algorithm. `gcd(0, 0)` is
+  // zero (no divisor makes both operands' quotients well-defined);
+  // R22 section 3's Rational canonicalization only ever calls this on
+  // a nonzero numerator/denominator pair. Reuses `floor_remainder`,
+  // which is exactly the ordinary Euclidean remainder for two
+  // non-negative operands (floor and truncating division agree when
+  // signs match).
+  static Integer gcd(Integer a, Integer b) {
+    if (!a.positive_) {
+      a = a.negate();
+    }
+    if (!b.positive_) {
+      b = b.negate();
+    }
+    while (!b.is_zero()) {
+      Integer remainder = a.floor_remainder(b).value_or(Integer());
+      a = b;
+      b = remainder;
+    }
+    return a;
+  }
+
   // Canonical decimal string, sign included for negative values, no
   // leading zeros (matches R21's "canonical unsigned decimal text" for
   // the magnitude, with sign kept outside per the IrLiteral contract).

@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "equality.hpp"
+#include "rational.hpp"
 #include "value.hpp"
 
 namespace genia::native_functions {
@@ -45,6 +46,17 @@ using value::Value;
 // Callers must treat std::nullopt as "this case is unsupported", never
 // attempt a fallback value.
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
+  if (name == "rational" && args.size() == 2) {
+    // R22 section 3: both arguments must be Integers; a zero
+    // denominator is deterministic numeric misuse (this slice has no
+    // diagnostic-worthy error path yet -- see rational.hpp's
+    // `construct_rational` -- so it is honestly unsupported rather than
+    // a fabricated diagnostic, matching `1 / 0`'s own convention).
+    if (args[0].kind != value::Kind::Integer || args[1].kind != value::Kind::Integer) {
+      return std::nullopt;
+    }
+    return rational::construct_rational(args[0].integer, args[1].integer);
+  }
   if (name == "map_new" && args.empty()) {
     return Value::make_map(std::make_shared<value::OrderedMap>());
   }

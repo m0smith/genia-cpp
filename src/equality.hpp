@@ -1,6 +1,7 @@
 // R18 portable value equality for the E24-2..E24-7 vertical slice's
-// supported kinds (Integer, Decimal, Boolean, String, Bytes, List; Map
-// is compared structurally too though no pinned evidence exercises it).
+// supported kinds (Integer, Decimal, Rational, Boolean, String, Bytes,
+// List; Map is compared structurally too though no pinned evidence
+// exercises it).
 //
 // docs/design/r18-portable-value-equality-contract.md: equality is ONE
 // relation (==, !=), implemented as a single internal dispatch over
@@ -9,19 +10,21 @@
 // container's own key rules decide map-key identity (see
 // map_key_encoding below, which every OrderedMap operation in
 // evaluator.hpp routes through). Different kinds compare unequal,
-// except the contract's own Integer/Decimal numeric-equality bridge
-// (`1 == 1.0`, "Numeric equality" table -- see `decimal_equals_integer`
-// below), required as soon as Decimal literals parse at all (E24-7
-// discovered this the hard way: enabling Decimal literals without this
-// bridge turned two previously-honestly-`unsupported`
-// spec/eval/r18-*.yaml cases into wrong `ok` results). R22's further
-// Rational/Float64 cross-kind bridges (sections 10.1/10.2) remain later
-// E24-7 increments -- neither value kind exists yet at this point in
-// the slice.
+// except R22 section 10.1's "Exact family" bridge (Integer/Decimal/
+// Rational compare by mathematical value in every pairing -- see
+// `exact_family_equal` below), which extends R18's own pre-R22
+// Integer/"float" numeric-equality bridge ("Numeric equality" table).
+// This was required as soon as Decimal literals parse at all (E24-7
+// increment 1 discovered this the hard way: enabling Decimal literals
+// without it turned two previously-honestly-`unsupported`
+// spec/eval/r18-*.yaml cases into wrong `ok` results). The Float64
+// bridge (R22 section 10.2) remains a later E24-7 increment -- that
+// value kind does not exist yet at this point in the slice.
 #pragma once
 
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "bignum.hpp"
 #include "value.hpp"
@@ -55,54 +58,69 @@ inline std::string map_key_encoding(const value::Value& key) {
   return encoding.value_or(std::string());
 }
 
-// R18's Integer/Decimal numeric equality bridge (contract's "Numeric
-// equality" table, pre-dating R22's Integer/Decimal/Rational/Float64
-// split but still the authoritative rule for this pair -- R22 section
-// 14: "R18 owns equality/key architecture; R22 extends only the
-// numeric cases inside that architecture"): an Integer equals a
-// Decimal iff the Decimal's exact mathematical value is a whole number
-// equal to the Integer. Decimal is always exact (arbitrary-precision
-// base-10, never a host binary float), so this is ordinary exact-value
-// comparison -- never the lossy integer-to-host-float cast the
-// contract explicitly forbids. A canonical Decimal with a negative
-// exponent can never be a whole number (canonicalization already
-// strips every trailing base-10 zero from a nonzero coefficient, so a
-// negative exponent always denotes a genuine fractional part).
-inline bool decimal_equals_integer(const value::Value& decimal, const bignum::Integer& integer) {
-  if (decimal.decimal_exponent < 0) {
-    return false;
+// R22 section 10.1 "Exact family": Integer, Decimal, and Rational
+// compare by mathematical value for `==`/`!=`, in every pairing --
+// extending R18's own pre-R22 Integer/"float" numeric-equality bridge
+// ("Numeric equality" table; R22 section 14: "R18 owns equality/key
+// architecture; R22 extends only the numeric cases inside that
+// architecture"). Every exact-family value has a unique exact
+// numerator/denominator representation (Integer I -> I/1; Decimal
+// coefficient*10^exponent -> coefficient/1 when exponent >= 0,
+// otherwise coefficient/10^-exponent; Rational is already
+// numerator/denominator), so two exact-family values are mathematically
+// equal exactly when their numerator/denominator pairs are equal after
+// cross-multiplication (`n1*d2 == n2*d1`) -- this never rounds either
+// operand through a host binary float, matching the contract's explicit
+// prohibition on lossy integer/Decimal-to-float conversion.
+inline bool is_exact_family_kind(value::Kind kind) {
+  return kind == value::Kind::Integer || kind == value::Kind::Decimal ||
+         kind == value::Kind::Rational;
+}
+
+inline std::pair<bignum::Integer, bignum::Integer> exact_family_numerator_denominator(
+    const value::Value& v) {
+  const bignum::Integer one = bignum::Integer::from_u64(1);
+  if (v.kind == value::Kind::Integer) {
+    return {v.integer, one};
   }
-  bignum::Integer scaled = decimal.decimal_coefficient;
+  if (v.kind == value::Kind::Rational) {
+    return {v.rational_numerator, v.rational_denominator};
+  }
+  // Decimal: coefficient * 10^exponent, as an exact fraction.
   const bignum::Integer ten = bignum::Integer::from_u64(10);
-  for (int64_t i = 0; i < decimal.decimal_exponent; ++i) {
-    scaled = scaled.mul(ten);
+  if (v.decimal_exponent >= 0) {
+    bignum::Integer numerator = v.decimal_coefficient;
+    for (int64_t i = 0; i < v.decimal_exponent; ++i) {
+      numerator = numerator.mul(ten);
+    }
+    return {numerator, one};
   }
-  return bignum::Integer::compare(scaled, integer) == 0;
+  bignum::Integer denominator = one;
+  for (int64_t i = 0; i < -v.decimal_exponent; ++i) {
+    denominator = denominator.mul(ten);
+  }
+  return {v.decimal_coefficient, denominator};
+}
+
+inline bool exact_family_equal(const value::Value& a, const value::Value& b) {
+  const auto [numerator_a, denominator_a] = exact_family_numerator_denominator(a);
+  const auto [numerator_b, denominator_b] = exact_family_numerator_denominator(b);
+  return bignum::Integer::compare(numerator_a.mul(denominator_b), numerator_b.mul(denominator_a)) ==
+         0;
 }
 
 inline bool structural_equal(const value::Value& a, const value::Value& b) {
-  if (a.kind == value::Kind::Integer && b.kind == value::Kind::Decimal) {
-    return decimal_equals_integer(b, a.integer);
-  }
-  if (a.kind == value::Kind::Decimal && b.kind == value::Kind::Integer) {
-    return decimal_equals_integer(a, b.integer);
+  if (is_exact_family_kind(a.kind) && is_exact_family_kind(b.kind)) {
+    return exact_family_equal(a, b);
   }
   if (a.kind != b.kind) {
     return false;
   }
   switch (a.kind) {
     case value::Kind::Integer:
-      return bignum::Integer::compare(a.integer, b.integer) == 0;
     case value::Kind::Decimal:
-      // Same-kind case: canonical form is unique (R22 section 2), so
-      // comparing coefficient/exponent directly is equivalent to
-      // mathematical equality for two Decimals. Rational/Float64
-      // cross-kind bridges (R22 sections 10.1/10.2) remain further
-      // E24-7 increments -- neither value kind exists yet at this
-      // point in the slice, so no evidence is left unhandled by their
-      // absence here.
-      return a.decimal_exponent == b.decimal_exponent &&
-             bignum::Integer::compare(a.decimal_coefficient, b.decimal_coefficient) == 0;
+    case value::Kind::Rational:
+      return exact_family_equal(a, b);  // unreachable: handled above, kept for switch coverage
     case value::Kind::Boolean:
       return a.boolean == b.boolean;
     case value::Kind::String:
