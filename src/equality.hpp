@@ -17,11 +17,13 @@
 // This was required as soon as Decimal literals parse at all (E24-7
 // increment 1 discovered this the hard way: enabling Decimal literals
 // without it turned two previously-honestly-`unsupported`
-// spec/eval/r18-*.yaml cases into wrong `ok` results). The Float64 value
-// now exists for explicit conversion/rendering, while its R22 section
-// 10.2 equality bridge remains a later E24-7 increment.
+// spec/eval/r18-*.yaml cases into wrong `ok` results). Increment 7 extends
+// that same relation to Float64 comparison and numeric map-key identity.
 #pragma once
 
+#include <bit>
+#include <cmath>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -30,33 +32,6 @@
 #include "value.hpp"
 
 namespace genia::equality {
-
-// Encodes a value as its map-key identity string: kind-tagged so
-// distinct kinds (e.g. Boolean true vs Integer 1) never collide, per
-// R18's "legal map keys" rule. Returns std::nullopt for a kind that is
-// not (yet) a legal key at this slice -- callers must treat that as the
-// whole case being unsupported, never a silent fallback to some other
-// identity.
-inline std::optional<std::string> map_key_encoding_checked(const value::Value& key) {
-  switch (key.kind) {
-    case value::Kind::Integer:
-      return "I:" + key.integer.to_decimal_string();
-    case value::Kind::Boolean:
-      return std::string("B:") + (key.boolean ? "1" : "0");
-    case value::Kind::String:
-      return "S:" + key.text;
-    default:
-      return std::nullopt;
-  }
-}
-
-// Unchecked convenience wrapper for callers that already know `key` is
-// legal (e.g. re-encoding a key already stored in an OrderedMap, which
-// only ever stores legal keys).
-inline std::string map_key_encoding(const value::Value& key) {
-  auto encoding = map_key_encoding_checked(key);
-  return encoding.value_or(std::string());
-}
 
 // R22 section 10.1 "Exact family": Integer, Decimal, and Rational
 // compare by mathematical value for `==`/`!=`, in every pairing --
@@ -75,6 +50,10 @@ inline std::string map_key_encoding(const value::Value& key) {
 inline bool is_exact_family_kind(value::Kind kind) {
   return kind == value::Kind::Integer || kind == value::Kind::Decimal ||
          kind == value::Kind::Rational;
+}
+
+inline bool is_numeric_kind(value::Kind kind) {
+  return is_exact_family_kind(kind) || kind == value::Kind::Float64;
 }
 
 inline std::pair<bignum::Integer, bignum::Integer> exact_family_numerator_denominator(
@@ -125,9 +104,100 @@ inline int exact_family_compare(const value::Value& a, const value::Value& b) {
   return bignum::Integer::compare(numerator_a.mul(denominator_b), numerator_b.mul(denominator_a));
 }
 
+// Exact numerator/denominator for a finite IEEE-754 binary64 value.
+// This decodes the represented dyadic value directly from its bits;
+// the exact operand in a mixed comparison is never converted to double.
+inline std::pair<bignum::Integer, bignum::Integer> finite_float64_numerator_denominator(double v) {
+  const uint64_t bits = std::bit_cast<uint64_t>(v);
+  const uint64_t fraction = bits & ((uint64_t{1} << 52) - 1);
+  const int biased = static_cast<int>((bits >> 52) & 0x7ffu);
+  if (biased == 0 && fraction == 0) {
+    return {bignum::Integer(), bignum::Integer::from_u64(1)};
+  }
+  const uint64_t significand = biased == 0 ? fraction : ((uint64_t{1} << 52) | fraction);
+  const int exponent2 = biased == 0 ? -1074 : biased - 1023 - 52;
+  bignum::Integer numerator = bignum::Integer::from_u64(significand);
+  bignum::Integer denominator = bignum::Integer::from_u64(1);
+  if (exponent2 >= 0) {
+    numerator = numerator.shift_left(static_cast<size_t>(exponent2));
+  } else {
+    denominator = denominator.shift_left(static_cast<size_t>(-exponent2));
+  }
+  if ((bits >> 63) != 0) numerator = numerator.negate();
+  return {numerator, denominator};
+}
+
+enum class NumericOrder : std::uint8_t { Less, Equal, Greater, Unordered };
+
+inline NumericOrder numeric_compare(const value::Value& a, const value::Value& b) {
+  if (!is_numeric_kind(a.kind) || !is_numeric_kind(b.kind)) return NumericOrder::Unordered;
+  if ((a.kind == value::Kind::Float64 && std::isnan(a.float64)) ||
+      (b.kind == value::Kind::Float64 && std::isnan(b.float64))) {
+    return NumericOrder::Unordered;
+  }
+  if (a.kind == value::Kind::Float64 && std::isinf(a.float64)) {
+    if (b.kind == value::Kind::Float64 && std::isinf(b.float64) &&
+        std::signbit(a.float64) == std::signbit(b.float64)) {
+      return NumericOrder::Equal;
+    }
+    return std::signbit(a.float64) ? NumericOrder::Less : NumericOrder::Greater;
+  }
+  if (b.kind == value::Kind::Float64 && std::isinf(b.float64)) {
+    return std::signbit(b.float64) ? NumericOrder::Greater : NumericOrder::Less;
+  }
+  const auto [numerator_a, denominator_a] = a.kind == value::Kind::Float64
+                                                ? finite_float64_numerator_denominator(a.float64)
+                                                : exact_family_numerator_denominator(a);
+  const auto [numerator_b, denominator_b] = b.kind == value::Kind::Float64
+                                                ? finite_float64_numerator_denominator(b.float64)
+                                                : exact_family_numerator_denominator(b);
+  const int comparison =
+      bignum::Integer::compare(numerator_a.mul(denominator_b), numerator_b.mul(denominator_a));
+  if (comparison < 0) return NumericOrder::Less;
+  if (comparison > 0) return NumericOrder::Greater;
+  return NumericOrder::Equal;
+}
+
+// One canonical identity for every legal numeric key. Reducing the
+// exact fraction makes Integer/Decimal/Rational/finite-Float64 keys
+// collide iff the ordinary numeric equality relation says they are equal.
+inline std::optional<std::string> numeric_map_key_encoding(const value::Value& key) {
+  if (key.kind == value::Kind::Float64) {
+    if (std::isnan(key.float64)) return std::nullopt;
+    if (std::isinf(key.float64)) return std::signbit(key.float64) ? "N:-inf" : "N:+inf";
+  }
+  auto [numerator, denominator] = key.kind == value::Kind::Float64
+                                      ? finite_float64_numerator_denominator(key.float64)
+                                      : exact_family_numerator_denominator(key);
+  const bignum::Integer divisor = bignum::Integer::gcd(numerator, denominator);
+  auto reduced_numerator = numerator.exact_divide(divisor);
+  auto reduced_denominator = denominator.exact_divide(divisor);
+  if (!reduced_numerator.has_value() || !reduced_denominator.has_value()) return std::nullopt;
+  numerator = std::move(*reduced_numerator);
+  denominator = std::move(*reduced_denominator);
+  return "N:" + numerator.to_decimal_string() + "/" + denominator.to_decimal_string();
+}
+
+inline std::optional<std::string> map_key_encoding_checked(const value::Value& key) {
+  if (is_numeric_kind(key.kind)) return numeric_map_key_encoding(key);
+  switch (key.kind) {
+    case value::Kind::Boolean:
+      return std::string("B:") + (key.boolean ? "1" : "0");
+    case value::Kind::String:
+      return "S:" + key.text;
+    default:
+      return std::nullopt;
+  }
+}
+
+inline std::string map_key_encoding(const value::Value& key) {
+  auto encoding = map_key_encoding_checked(key);
+  return encoding.value_or(std::string());
+}
+
 inline bool structural_equal(const value::Value& a, const value::Value& b) {
-  if (is_exact_family_kind(a.kind) && is_exact_family_kind(b.kind)) {
-    return exact_family_equal(a, b);
+  if (is_numeric_kind(a.kind) && is_numeric_kind(b.kind)) {
+    return numeric_compare(a, b) == NumericOrder::Equal;
   }
   if (a.kind != b.kind) {
     return false;
@@ -138,7 +208,7 @@ inline bool structural_equal(const value::Value& a, const value::Value& b) {
     case value::Kind::Rational:
       return exact_family_equal(a, b);  // unreachable: handled above, kept for switch coverage
     case value::Kind::Float64:
-      return a.float64 == b.float64;
+      return false;  // unreachable: all numeric pairs are handled above
     case value::Kind::Boolean:
       return a.boolean == b.boolean;
     case value::Kind::String:

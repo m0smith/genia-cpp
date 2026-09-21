@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: E24-6 complete, E24-7 in progress (increments 1-6 landed).
+**Status: E24-6 complete, E24-7 in progress (increments 1-7 landed).
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -16,7 +16,8 @@ module only), pipelines (`|>`), the `err(...)` Outcome constructor and
 its rendering, the R22 exact-family (Integer/Decimal/Rational)
 numeric-equality bridge, one deterministic undefined-name runtime
 error, boxed Float64 values with explicit `float64(...)` / `exact(...)`
-conversion and canonical rendering, calls to the native
+conversion, canonical rendering, exact represented-value comparison, and
+cross-kind numeric map-key identity, calls to the native
 `map_*`/`utf8_encode`/`err`/`sum` functions,
 and `-c`/file-mode CLI -- end to end (source -> parser -> portable Core
 IR -> evaluator -> normalized adapter result), hardened against a C++
@@ -37,7 +38,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-6
+E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-7
 of several); E24-8 remains.
 
 ## Authority
@@ -186,9 +187,10 @@ the exact family. Increment 5 adds the boxed Float64 value, explicit
 overflow rejection, direct bit-decoding to the represented dyadic Decimal,
 and R23 canonical rendering including signed zero. Increment 6 adds unary and
 binary Float64 arithmetic with floor remainder, normalized zero-divisor
-diagnostics, and strict rejection of mixed exact/Float64 arithmetic. Float64
-comparison/map keys, the format-spec engine, and the JSON boundary remain further
-E24-7 increments:
+diagnostics, and strict rejection of mixed exact/Float64 arithmetic. Increment 7
+adds exact represented-value Float64 equality/ordering and one reduced-fraction
+numeric map-key identity across all four numeric kinds. The format-spec engine
+and JSON boundary remain further E24-7 increments:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
@@ -381,7 +383,7 @@ E24-7 increments:
   `unsupported` per case, or are gated out entirely by every
   cross-module case's separate `multi_file_eval` requirement (see
   `m0smith/genia-2026#973`/`#974`). Running the full shared spec corpus
-  against it: `total=755 passed=97 failed=0 unsupported=658
+  against it: `total=755 passed=100 failed=0 unsupported=655
   protocol_error=0 crash=0 timeout=0 invalid=0` — the 7 pinned E24-4
   cases (`outcome_values`, `lambda_function_call`,
   `pattern_case_dispatch`, `pipeline_composition`,
@@ -401,8 +403,10 @@ E24-7 increments:
   grammar/lowering/evaluation also happens to satisfy. Increment 5 adds
   `r22-float64-exact-round-trip.yaml` and
   `r22-float64-magnitude-overflow-rejected.yaml`; increment 6 adds
-  `r22-float64-arithmetic.yaml` and both Float64 zero-divisor error cases.
-  Comparison-dependent cases remain unsupported.
+  `r22-float64-arithmetic.yaml` and both Float64 zero-divisor error cases;
+  increment 7 adds `r22-exact-family-and-float64-ordering.yaml`,
+  `r22-numeric-map-key-cross-kind.yaml`, and the now-reachable
+  `r18-map-equal-keys-share-every-operation.yaml`.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
   equality, and display for any well-formed UTF-8 input, but is not yet
@@ -410,9 +414,7 @@ E24-7 increments:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- `some`/`none` Option values and the Float64/exact-family comparison and
-  map-key bridge remain unimplemented (the boxed value, explicit conversions,
-  canonical rendering, and closed-domain arithmetic are implemented),
+- `some`/`none` Option values,
   general diagnostic normalization (beyond the one undefined-name
   case), and general postfix call application (calling the result of a
   call or a parenthesized expression, e.g. immediately-invoked lambdas)
@@ -421,9 +423,9 @@ E24-7 increments:
   display, and the full R22 section 6-8, 10.1 exact-family
   arithmetic/division/floor-remainder/equality/ordering rules
   (`+ - * / % == != < <= > >=`) all work end to end across
-  Integer/Decimal/Rational, but comparing an exact-family value against
-  Float64 (section 10.2's bridge), field-format-spec integration, and
-  the JSON boundary all remain unimplemented. R20 open
+  Integer/Decimal/Rational, and comparison with Float64 now follows section
+  10.2's exact represented-value bridge. Field-format-spec integration and the
+  JSON boundary remain unimplemented. R20 open
   functions are only
   *partly* implemented: local (single-module) grouped/repeated clause
   dispatch works end to end, but cross-module `extend`/`use`
@@ -448,7 +450,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=755 passed=97 failed=0 unsupported=658 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=755 passed=100 failed=0 unsupported=655 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

@@ -225,6 +225,7 @@ class OrderedMap {
   size_t put(const std::string& key_encoding, Value key, Value mapped_value) {
     auto it = index_.find(key_encoding);
     if (it != index_.end()) {
+      entries_[it->second].first = std::move(key);
       entries_[it->second].second = std::move(mapped_value);
       return it->second;
     }

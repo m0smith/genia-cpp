@@ -862,6 +862,79 @@ TEST_CASE("run: comparison operators are unsupported for non-exact-family operan
   CHECK_FALSE(try_run("\"a\" < \"b\"").has_value());
 }
 
+// --- E24-7 increment 7: Float64 comparison + numeric map keys --------
+
+TEST_CASE("run: Float64 equality uses one exact mathematical-value relation") {
+  check_run_stdout(
+      "[float64(1) == float64(1), float64(1) != float64(2), "
+      "float64(1) == 1, 1 == float64(1), float64(1.5) == 1, "
+      "float64(0.1) == 0.1, float64(0.5) == rational(1, 2)]",
+      "[true, true, true, true, false, false, true]\n");
+}
+
+TEST_CASE("run: Float64 ordering bridges exact operands symmetrically without rounding") {
+  check_run_stdout(
+      "[float64(1) < 2, 2 > float64(1), rational(1, 2) < float64(1), "
+      "float64(1) >= rational(1, 2), float64(0.5) <= 0.5, "
+      "0.1 < float64(0.1), float64(0.1) > 0.1]",
+      "[true, true, true, true, true, true, true]\n");
+}
+
+TEST_CASE("run: Float64 signed zero has IEEE value equality and ordering") {
+  check_run_stdout(
+      "[float64(0) == -float64(0), -float64(0) == 0, "
+      "float64(0) <= -float64(0), float64(0) >= -float64(0), "
+      "float64(0) < -float64(0), float64(0) > -float64(0)]",
+      "[true, true, true, true, false, false]\n");
+}
+
+TEST_CASE("unit: Float64 NaN is unequal and unordered, including against itself") {
+  using genia::value::Value;
+  const Value nan = Value::make_float64(std::numeric_limits<double>::quiet_NaN());
+  const Value one = Value::make_integer(genia::bignum::Integer::from_u64(1));
+  CHECK_FALSE(genia::equality::structural_equal(nan, nan));
+  CHECK_FALSE(genia::equality::structural_equal(nan, one));
+  CHECK_FALSE(genia::equality::structural_equal(one, nan));
+  CHECK(genia::equality::numeric_compare(nan, nan) == genia::equality::NumericOrder::Unordered);
+  CHECK(genia::equality::numeric_compare(nan, one) == genia::equality::NumericOrder::Unordered);
+  CHECK(genia::equality::numeric_compare(one, nan) == genia::equality::NumericOrder::Unordered);
+}
+
+TEST_CASE("unit: Float64 infinities use IEEE value equality and ordering") {
+  using genia::equality::NumericOrder;
+  using genia::value::Value;
+  const Value positive = Value::make_float64(std::numeric_limits<double>::infinity());
+  const Value negative = Value::make_float64(-std::numeric_limits<double>::infinity());
+  const Value one = Value::make_integer(genia::bignum::Integer::from_u64(1));
+  CHECK(genia::equality::structural_equal(positive, positive));
+  CHECK(genia::equality::structural_equal(negative, negative));
+  CHECK_FALSE(genia::equality::structural_equal(positive, negative));
+  CHECK(genia::equality::numeric_compare(negative, one) == NumericOrder::Less);
+  CHECK(genia::equality::numeric_compare(one, positive) == NumericOrder::Less);
+}
+
+TEST_CASE("run: equal cross-kind numeric map keys share every operation and preserve order") {
+  check_run_stdout(
+      "m = map_put(map_put(map_new(), 1, \"one\"), \"b\", \"two\")\n"
+      "replaced = map_put(m, float64(1), \"ONE\")\n"
+      "removed = map_remove(replaced, 1.0)\n"
+      "[map_get(m, 1.0), map_get(m, rational(2, 2)), map_has?(m, float64(1)), "
+      "map_count(replaced), map_items(replaced), map_count(removed), map_has?(removed, 1)]",
+      "[\"one\", \"one\", true, 2, [[float64(1.0), \"ONE\"], [\"b\", \"two\"]], 1, false]\n");
+}
+
+TEST_CASE("run: unequal nearby exact and Float64 map keys remain distinct") {
+  check_run_stdout(
+      "m = map_put(map_put(map_new(), 0.1, \"exact\"), float64(0.1), \"binary\")\n"
+      "[map_count(m), map_get(m, 0.1), map_get(m, float64(0.1))]",
+      "[2, \"exact\", \"binary\"]\n");
+}
+
+TEST_CASE("unit: NaN is not a legal map key") {
+  const auto nan = genia::value::Value::make_float64(std::numeric_limits<double>::quiet_NaN());
+  CHECK_FALSE(genia::equality::map_key_encoding_checked(nan).has_value());
+}
+
 TEST_CASE("run: `+`/`-` bind tighter than `<`/`<=`/`>`/`>=`, which bind tighter than `==`/`!=`") {
   // Verified directly against genia-2026's src/genia/parser.py
   // PRECEDENCE table (EQEQ/NE=30 < LT/LE/GT/GE=40 < PLUS/MINUS=50).
