@@ -729,3 +729,33 @@ TEST_CASE("run: exact division/remainder by zero is unsupported, never a crash")
   CHECK_FALSE(try_run("1.0 / 0").has_value());
   CHECK_FALSE(try_run("rational(1, 2) / 0").has_value());
 }
+
+TEST_CASE("run: r22-exact-family-and-float64-ordering.yaml's exact-family <, <=, >, >= cases") {
+  // The pinned yaml case also exercises float64(...), a further E24-7
+  // increment; this covers exactly its Integer/Decimal/Rational subset.
+  auto result = try_run(
+      "[1 < rational(3, 2), rational(1, 2) <= rational(1, 2), "
+      "rational(2, 3) > rational(1, 2), 1.5 >= 1]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, true, true, true]\n");
+}
+
+TEST_CASE(
+    "run: ordered comparison across Integer/Decimal/Rational compares by mathematical value") {
+  auto result = try_run("[1.5 < 2, 2 < 1.5, 1.5 <= 1.5, 1 < 1, 1 <= 1, rational(1, 3) < 0.34]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, false, true, false, true, true]\n");
+}
+
+TEST_CASE("run: comparison operators are unsupported for non-exact-family operands") {
+  CHECK_FALSE(try_run("true < false").has_value());
+  CHECK_FALSE(try_run("\"a\" < \"b\"").has_value());
+}
+
+TEST_CASE("run: `+`/`-` bind tighter than `<`/`<=`/`>`/`>=`, which bind tighter than `==`/`!=`") {
+  // Verified directly against genia-2026's src/genia/parser.py
+  // PRECEDENCE table (EQEQ/NE=30 < LT/LE/GT/GE=40 < PLUS/MINUS=50).
+  auto result = try_run("[1 + 1 < 3, 1 < 2 == true, 1 == 2 + 3, 1 == 1 + 0]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, true, false, true]\n");
+}

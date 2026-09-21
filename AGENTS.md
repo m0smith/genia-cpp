@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-6 complete. E24-7 in progress (increments 1-3 of
+**E24-1 through E24-6 complete. E24-7 in progress (increments 1-4 of
 several, see below).** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -189,6 +189,36 @@ zero-divisor convention already established (`1 / 0`,
 `rational(1, 0)`). No capability declaration changed (`core_ir_eval`
 stays `partial`).
 
+**Increment 4** adds R22 section 10.1's ordered comparison operators
+(`<`, `<=`, `>`, `>=`) for the exact family (Integer/Decimal/Rational),
+via a new `equality.hpp` function (`exact_family_compare`) that reuses
+`exact_family_equal`'s numerator/denominator cross-multiplication
+technique for ordering, safe because every exact-family kind's
+converted denominator is always strictly positive (Integer: 1;
+Decimal: a positive power of 10; Rational: positive by
+canonicalization), so no sign-flip caveat applies. This increment also
+fixes a latent parser conformance bug found while adding the new
+operator's precedence tier: `parser.hpp`'s `parse_expr` previously
+flattened `+`/`-` and `==`/`!=` into one precedence level, contrary to
+`src/genia/parser.py`'s own `PRECEDENCE` table (`EQEQ`/`NE` = 30 <
+`PLUS`/`MINUS` = 50) — e.g. `1 == 2 + 3` must group as `1 == (2 + 3)`,
+not `(1 == 2) + 3`. The bug never surfaced as a silently wrong `ok`
+result (a Boolean/Integer arithmetic mix like `(1 == 2) + 3` was
+already `unsupported` by this slice's exact-family-only arithmetic
+either way), but is fixed now via a proper precedence-climbing chain
+(`parse_expr` -> `parse_equality` (30) -> `parse_comparison` (40, the
+new tier) -> `parse_additive` (50) -> `parse_term` (60)), verified
+directly against the reference parser's own table, not guessed at.
+Comparing a non-exact-family operand (e.g. `true < false`,
+`"a" < "b"`) remains honestly `unsupported`, matching R22's own scope
+(section 10.1 covers only the exact family; string/Boolean ordering is
+not part of this contract). The one pinned
+`r22-exact-family-and-float64-ordering.yaml` case also exercises
+`float64(...)`, a further increment, so it does not yet flip to
+passing in the shared corpus -- this increment's own new Catch2 tests
+cover exactly its Integer/Decimal/Rational subset instead. No
+capability declaration changed.
+
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
@@ -196,16 +226,21 @@ varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
 is the honest declaration here). Declared `partial`: `core_ir_eval`
 (the full R22 section 6-8 exact-family arithmetic/division/
-floor-remainder promotion rules for Integer/Decimal/Rational,
-`rational(...)` construction/display, the R22 exact-family equality
-bridge, structural equality, list/map construction, lambdas/closures,
-local case/pattern dispatch, pipelines, `err(...)` Outcomes, and the
-one deterministic undefined-name diagnostic — no ordered comparison
-operators, Float64, format-spec, JSON boundary, or `some`/`none`).
-Every other `spec/manifest.json` capability remains `unsupported`.
-Running the full shared spec corpus: `total=755 passed=92 failed=0
-unsupported=663 protocol_error=0 crash=0 timeout=0 invalid=0` (see
-README.md for the exact case list).
+floor-remainder promotion rules for Integer/Decimal/Rational, section
+10.1's ordered-comparison (`< <= > >=`) bridge alongside `==`/`!=`,
+`rational(...)` construction/display, structural equality, list/map
+construction, lambdas/closures, local case/pattern dispatch,
+pipelines, `err(...)` Outcomes, and the one deterministic
+undefined-name diagnostic — no Float64, format-spec, JSON boundary, or
+`some`/`none`). Every other `spec/manifest.json` capability remains
+`unsupported`. Running the full shared spec corpus: `total=755
+passed=92 failed=0 unsupported=663 protocol_error=0 crash=0 timeout=0
+invalid=0` (unchanged from increment 3's count -- increment 4's new
+ordered-comparison behavior is real and covered by this repository's
+own Catch2 tests, but the one pinned shared-corpus case exercising it,
+`r22-exact-family-and-float64-ordering.yaml`, also requires
+`float64(...)`, a further increment, so it does not yet flip to
+passing; see README.md for the exact case list).
 
 The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
@@ -215,9 +250,8 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime) is in progress (increments 1-3 of several landed;
-comparison operators (`< <= > >=`), Float64, format-spec, and the JSON
-boundary remain).**
+numeric runtime) is in progress (increments 1-4 of several landed;
+Float64, format-spec, and the JSON boundary remain).**
 
 Known commands:
 

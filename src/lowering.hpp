@@ -22,6 +22,10 @@ inline std::optional<core_ir::Op> lower_op(const std::string& symbol) {
   if (symbol == "%") return core_ir::Op::Percent;
   if (symbol == "==") return core_ir::Op::EqEq;
   if (symbol == "!=") return core_ir::Op::NotEq;
+  if (symbol == "<") return core_ir::Op::Lt;
+  if (symbol == "<=") return core_ir::Op::Le;
+  if (symbol == ">") return core_ir::Op::Gt;
+  if (symbol == ">=") return core_ir::Op::Ge;
   return std::nullopt;
 }
 

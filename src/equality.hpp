@@ -109,6 +109,22 @@ inline bool exact_family_equal(const value::Value& a, const value::Value& b) {
          0;
 }
 
+// R22 section 10.1: "Integer, Decimal, and Rational compare by
+// mathematical value for ==, !=, <, <=, >, and >=." Same
+// numerator/denominator-pair + cross-multiplication technique as
+// `exact_family_equal`, extended to ordering: since
+// `exact_family_numerator_denominator` always produces a strictly
+// positive denominator for every exact-family kind (Integer: 1;
+// Decimal: a positive power of 10; Rational: positive by
+// canonicalization), `n_a/d_a` compares to `n_b/d_b` exactly as
+// `n_a*d_b` compares to `n_b*d_a`, with no sign-flip caveat. Returns a
+// negative/zero/positive int mirroring `bignum::Integer::compare`.
+inline int exact_family_compare(const value::Value& a, const value::Value& b) {
+  const auto [numerator_a, denominator_a] = exact_family_numerator_denominator(a);
+  const auto [numerator_b, denominator_b] = exact_family_numerator_denominator(b);
+  return bignum::Integer::compare(numerator_a.mul(denominator_b), numerator_b.mul(denominator_a));
+}
+
 inline bool structural_equal(const value::Value& a, const value::Value& b) {
   if (is_exact_family_kind(a.kind) && is_exact_family_kind(b.kind)) {
     return exact_family_equal(a, b);
