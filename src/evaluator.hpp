@@ -140,6 +140,9 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         return value::Value::make_rational(operand->rational_numerator.negate(),
                                            operand->rational_denominator);
       }
+      if (operand->kind == value::Kind::Float64) {
+        return float64::negate(*operand);
+      }
       return std::nullopt;
     }
     case core_ir::Kind::Var: {
@@ -311,6 +314,12 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         // logical negation of == (verified directly against the
         // reference host, not guessed).
         return value::Value::make_boolean(!equality::structural_equal(*lhs, *rhs));
+      }
+      if (lhs->kind == value::Kind::Float64 || rhs->kind == value::Kind::Float64) {
+        // R22 section 9: Float64 arithmetic is a closed domain. Both
+        // operands must already be Float64; exact-family mixing remains
+        // rejected rather than entering the exact promotion lattice.
+        return float64::arithmetic(node.op, *lhs, *rhs);
       }
       if (!equality::is_exact_family_kind(lhs->kind) ||
           !equality::is_exact_family_kind(rhs->kind)) {

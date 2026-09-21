@@ -9,12 +9,49 @@
 #include <utility>
 
 #include "arithmetic.hpp"
+#include "core_ir.hpp"
 #include "equality.hpp"
 #include "value.hpp"
 
 namespace genia::float64 {
 
 struct MagnitudeOverflowError {};
+struct DivisionByZeroError {};
+struct RemainderByZeroError {};
+
+inline value::Value negate(const value::Value& input) {
+  return value::Value::make_float64(-input.float64);
+}
+
+inline std::optional<value::Value> arithmetic(core_ir::Op op, const value::Value& left,
+                                              const value::Value& right) {
+  if (left.kind != value::Kind::Float64 || right.kind != value::Kind::Float64) {
+    return std::nullopt;
+  }
+  switch (op) {
+    case core_ir::Op::Plus:
+      return value::Value::make_float64(left.float64 + right.float64);
+    case core_ir::Op::Minus:
+      return value::Value::make_float64(left.float64 - right.float64);
+    case core_ir::Op::Star:
+      return value::Value::make_float64(left.float64 * right.float64);
+    case core_ir::Op::Slash:
+      if (right.float64 == 0.0) throw DivisionByZeroError{};
+      return value::Value::make_float64(left.float64 / right.float64);
+    case core_ir::Op::Percent: {
+      if (right.float64 == 0.0) throw RemainderByZeroError{};
+      double remainder = std::fmod(left.float64, right.float64);
+      if (remainder != 0.0 && std::signbit(remainder) != std::signbit(right.float64)) {
+        remainder += right.float64;
+      } else if (remainder == 0.0) {
+        remainder = std::copysign(0.0, right.float64);
+      }
+      return value::Value::make_float64(remainder);
+    }
+    default:
+      return std::nullopt;
+  }
+}
 
 inline std::optional<double> fraction_to_binary64(bignum::Integer numerator,
                                                   bignum::Integer denominator) {

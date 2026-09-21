@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: E24-6 complete, E24-7 in progress (increments 1-5 landed).
+**Status: E24-6 complete, E24-7 in progress (increments 1-6 landed).
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -37,7 +37,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-5
+E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-6
 of several); E24-8 remains.
 
 ## Authority
@@ -184,8 +184,10 @@ precedence-climbing chain (`parse_expr` -> `parse_equality` (30) ->
 the exact family. Increment 5 adds the boxed Float64 value, explicit
 `float64(value)` / `exact(value)` conversion, exact ties-to-even rounding and
 overflow rejection, direct bit-decoding to the represented dyadic Decimal,
-and R23 canonical rendering including signed zero. Float64 arithmetic and
-comparison, the format-spec engine, and the JSON boundary remain further
+and R23 canonical rendering including signed zero. Increment 6 adds unary and
+binary Float64 arithmetic with floor remainder, normalized zero-divisor
+diagnostics, and strict rejection of mixed exact/Float64 arithmetic. Float64
+comparison/map keys, the format-spec engine, and the JSON boundary remain further
 E24-7 increments:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
@@ -379,7 +381,7 @@ E24-7 increments:
   `unsupported` per case, or are gated out entirely by every
   cross-module case's separate `multi_file_eval` requirement (see
   `m0smith/genia-2026#973`/`#974`). Running the full shared spec corpus
-  against it: `total=755 passed=94 failed=0 unsupported=661
+  against it: `total=755 passed=97 failed=0 unsupported=658
   protocol_error=0 crash=0 timeout=0 invalid=0` — the 7 pinned E24-4
   cases (`outcome_values`, `lambda_function_call`,
   `pattern_case_dispatch`, `pipeline_composition`,
@@ -398,8 +400,9 @@ E24-7 increments:
   incidental cases this slice's honest, evidence-matched
   grammar/lowering/evaluation also happens to satisfy. Increment 5 adds
   `r22-float64-exact-round-trip.yaml` and
-  `r22-float64-magnitude-overflow-rejected.yaml`; Float64 arithmetic and
-  comparison-dependent cases remain unsupported.
+  `r22-float64-magnitude-overflow-rejected.yaml`; increment 6 adds
+  `r22-float64-arithmetic.yaml` and both Float64 zero-divisor error cases.
+  Comparison-dependent cases remain unsupported.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
   equality, and display for any well-formed UTF-8 input, but is not yet
@@ -407,9 +410,9 @@ E24-7 increments:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- `some`/`none` Option values, Float64 arithmetic, and the Float64/exact-family
-  comparison and map-key bridge remain unimplemented (the boxed value,
-  explicit conversions, and canonical rendering are implemented),
+- `some`/`none` Option values and the Float64/exact-family comparison and
+  map-key bridge remain unimplemented (the boxed value, explicit conversions,
+  canonical rendering, and closed-domain arithmetic are implemented),
   general diagnostic normalization (beyond the one undefined-name
   case), and general postfix call application (calling the result of a
   call or a parenthesized expression, e.g. immediately-invoked lambdas)
@@ -445,7 +448,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=755 passed=94 failed=0 unsupported=661 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=755 passed=97 failed=0 unsupported=658 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

@@ -315,6 +315,50 @@ TEST_CASE("E24-7 exact(Float64) handles signed zero, exact 0.1, and non-finite r
       call("exact", {Value::make_float64(std::numeric_limits<double>::quiet_NaN())}).has_value());
 }
 
+TEST_CASE("E24-7 Float64 arithmetic is IEEE binary64 with floor remainder") {
+  auto arithmetic = try_run(
+      "[float64(1) + float64(2), float64(3) - float64(1), "
+      "float64(2) * float64(3), float64(5) / float64(2), "
+      "float64(5) % float64(2), -float64(1)]");
+  REQUIRE(arithmetic.has_value());
+  CHECK(arithmetic->stdout_text ==
+        "[float64(3.0), float64(2.0), float64(6.0), float64(2.5), "
+        "float64(1.0), float64(-1.0)]\n");
+
+  auto negative_dividend = try_run("float64(-5) % float64(2)");
+  REQUIRE(negative_dividend.has_value());
+  CHECK(negative_dividend->stdout_text == "float64(1.0)\n");
+  auto negative_divisor = try_run("float64(5) % float64(-2)");
+  REQUIRE(negative_divisor.has_value());
+  CHECK(negative_divisor->stdout_text == "float64(-1.0)\n");
+}
+
+TEST_CASE("E24-7 Float64 division and remainder by either signed zero are normalized misuse") {
+  for (const std::string& source : {"float64(1) / float64(0)", "float64(1) / -float64(0)"}) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->stderr_text == "Error: float64 division by zero\n");
+    CHECK(result->exit_code == 1);
+  }
+  for (const std::string& source : {"float64(1) % float64(0)", "float64(1) % -float64(0)"}) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->stderr_text == "Error: float64 remainder by zero\n");
+    CHECK(result->exit_code == 1);
+  }
+}
+
+TEST_CASE("E24-7 rejects every mixed exact and Float64 arithmetic combination") {
+  const std::vector<std::string> exact_values = {"1", "1.5", "rational(1, 2)"};
+  const std::vector<std::string> operators = {"+", "-", "*", "/", "%"};
+  for (const auto& exact : exact_values) {
+    for (const auto& op : operators) {
+      CHECK_FALSE(try_run("float64(2) " + op + " " + exact).has_value());
+      CHECK_FALSE(try_run(exact + " " + op + " float64(2)").has_value());
+    }
+  }
+}
+
 TEST_CASE("run: an empty program is unsupported") { CHECK_FALSE(try_run("").has_value()); }
 
 TEST_CASE("run: standard precedence -- multiplication binds tighter than addition") {
