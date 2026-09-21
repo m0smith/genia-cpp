@@ -315,6 +315,25 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         // reference host, not guessed).
         return value::Value::make_boolean(!equality::structural_equal(*lhs, *rhs));
       }
+      if ((node.op == core_ir::Op::Lt || node.op == core_ir::Op::Le || node.op == core_ir::Op::Gt ||
+           node.op == core_ir::Op::Ge) &&
+          equality::is_numeric_kind(lhs->kind) && equality::is_numeric_kind(rhs->kind)) {
+        const auto order = equality::numeric_compare(*lhs, *rhs);
+        switch (node.op) {
+          case core_ir::Op::Lt:
+            return value::Value::make_boolean(order == equality::NumericOrder::Less);
+          case core_ir::Op::Le:
+            return value::Value::make_boolean(order == equality::NumericOrder::Less ||
+                                              order == equality::NumericOrder::Equal);
+          case core_ir::Op::Gt:
+            return value::Value::make_boolean(order == equality::NumericOrder::Greater);
+          case core_ir::Op::Ge:
+            return value::Value::make_boolean(order == equality::NumericOrder::Greater ||
+                                              order == equality::NumericOrder::Equal);
+          default:
+            break;
+        }
+      }
       if (lhs->kind == value::Kind::Float64 || rhs->kind == value::Kind::Float64) {
         // R22 section 9: Float64 arithmetic is a closed domain. Both
         // operands must already be Float64; exact-family mixing remains

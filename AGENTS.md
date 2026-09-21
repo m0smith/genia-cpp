@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-6 complete. E24-7 in progress (increments 1-6 of
+**E24-1 through E24-6 complete. E24-7 in progress (increments 1-7 of
 several, see below).** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -240,6 +240,17 @@ rejected in both directions for every binary arithmetic operator; this does
 not place Float64 in the exact promotion lattice. Equality, ordering, and map
 keys remain later work. No capability declaration changed.
 
+**Increment 7** adds R22 sections 10.2-10.3's Float64 comparison and
+numeric map-key bridge. Finite binary64 operands are decoded to their exact
+represented dyadic numerator/denominator before comparison, so exact operands
+are never rounded through `double`; the same relation drives `==`/`!=`,
+`< <= > >=`, and reduced-fraction map-key identity across Integer/Decimal/
+Rational/Float64. Signed zeros compare equal, infinities retain IEEE value
+ordering/equality, and NaN is unequal/unordered and rejected as a key.
+Replacement, lookup, membership, and removal all use that one key relation
+while preserving insertion order. Format specs and JSON remain later work. No
+capability declaration changed.
+
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
@@ -252,13 +263,13 @@ floor-remainder promotion rules for Integer/Decimal/Rational, section
 `rational(...)` construction/display, structural equality, list/map
 construction, lambdas/closures, local case/pattern dispatch,
 pipelines, `err(...)` Outcomes, the one deterministic undefined-name
-diagnostic, and explicit Float64 conversions/rendering — no Float64
-arithmetic/comparison, format-spec, JSON boundary, or
+diagnostic, explicit Float64 conversions/rendering/arithmetic, and the
+Float64 comparison/numeric-key bridge — no format-spec, JSON boundary, or
 `some`/`none`). Every other `spec/manifest.json` capability remains
 `unsupported`. Running the full shared spec corpus: `total=755
-passed=97 failed=0 unsupported=658 protocol_error=0 crash=0 timeout=0
-invalid=0`; increment 6 adds Float64 arithmetic plus the two normalized
-zero-divisor cases while comparison-dependent Float64 cases remain unsupported.
+passed=100 failed=0 unsupported=655 protocol_error=0 crash=0 timeout=0
+invalid=0`; increment 7 adds the Float64 ordering, numeric cross-kind map-key,
+and R18 equal-key-operation cases.
 
 The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
@@ -268,8 +279,8 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime) is in progress (increments 1-6 of several landed;
-Float64 comparison/map keys, format-spec, and the JSON boundary remain).**
+numeric runtime) is in progress (increments 1-7 of several landed;
+format-spec and the JSON boundary remain).**
 
 Known commands:
 
