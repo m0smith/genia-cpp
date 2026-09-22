@@ -33,6 +33,7 @@
 
 #include "equality.hpp"
 #include "float64.hpp"
+#include "format.hpp"
 #include "rational.hpp"
 #include "value.hpp"
 
@@ -47,6 +48,13 @@ using value::Value;
 // Callers must treat std::nullopt as "this case is unsupported", never
 // attempt a fallback value.
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
+  if (name == "format" && args.size() == 2) {
+    if (args[0].kind != value::Kind::String || args[1].kind != value::Kind::Map)
+      return std::nullopt;
+    auto rendered = format::render_template(args[0].text, *args[1].map);
+    if (!rendered.has_value()) return std::nullopt;
+    return Value::make_string(std::move(*rendered));
+  }
   if (name == "float64" && args.size() == 1) {
     return float64::from_exact(args[0]);
   }

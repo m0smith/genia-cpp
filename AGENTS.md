@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-6 complete. E24-7 in progress (increments 1-7 of
+**E24-1 through E24-6 complete. E24-7 in progress (increments 1-8 of
 several, see below).** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -248,8 +248,14 @@ are never rounded through `double`; the same relation drives `==`/`!=`,
 Rational/Float64. Signed zeros compare equal, infinities retain IEEE value
 ordering/equality, and NaN is unequal/unordered and rejected as a key.
 Replacement, lookup, membership, and removal all use that one key relation
-while preserving insertion order. Format specs and JSON remain later work. No
-capability declaration changed.
+while preserving insertion order. **Increment 8** adds R23 numeric field-format
+specs over the existing canonical renderer: alignment/width, sign-aware zero
+padding and locale-independent grouping for plain numeral atoms, and exact
+decimal half-up `.n` precision for Integer/Decimal/Rational/Float64. Decimal
+and Rational never pass through binary floating point; Float64 precision starts
+from its exact decoded dyadic ratio. Unsupported representation/spec pairings
+use normalized `format-error` diagnostics. First-class `Format(...)` values and
+JSON remain later work. No capability declaration changed.
 
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
@@ -264,12 +270,13 @@ floor-remainder promotion rules for Integer/Decimal/Rational, section
 construction, lambdas/closures, local case/pattern dispatch,
 pipelines, `err(...)` Outcomes, the one deterministic undefined-name
 diagnostic, explicit Float64 conversions/rendering/arithmetic, and the
-Float64 comparison/numeric-key bridge — no format-spec, JSON boundary, or
-`some`/`none`). Every other `spec/manifest.json` capability remains
+Float64 comparison/numeric-key bridge, and numeric field-format specs — no
+first-class `Format(...)` value, JSON boundary, or `some`/`none`). Every other
+`spec/manifest.json` capability remains
 `unsupported`. Running the full shared spec corpus: `total=755
-passed=100 failed=0 unsupported=655 protocol_error=0 crash=0 timeout=0
-invalid=0`; increment 7 adds the Float64 ordering, numeric cross-kind map-key,
-and R18 equal-key-operation cases.
+passed=132 failed=0 unsupported=623 protocol_error=0 crash=0 timeout=0
+invalid=0`; increment 8 adds the R23 numeric field-format cases and the older
+field-spec cases that use the same implemented surface.
 
 The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
@@ -279,8 +286,8 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime) is in progress (increments 1-7 of several landed;
-format-spec and the JSON boundary remain).**
+numeric runtime) is in progress (increments 1-8 of several landed; the JSON
+boundary and final E24-7 hardening/truth-completion work remain).**
 
 Known commands:
 

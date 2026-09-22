@@ -13,6 +13,7 @@
 #include "../third_party/nlohmann_json/json.hpp"
 #include "ast_projection.hpp"
 #include "evaluator.hpp"
+#include "format.hpp"
 #include "ir_projection.hpp"
 #include "lowering.hpp"
 #include "parser.hpp"
@@ -100,6 +101,11 @@ inline std::optional<RunResult> try_run(const std::string& source) {
   } catch (const float64::RemainderByZeroError&) {
     RunResult run_result;
     run_result.stderr_text = "Error: float64 remainder by zero\n";
+    run_result.exit_code = 1;
+    return run_result;
+  } catch (const format::FormatError& error) {
+    RunResult run_result;
+    run_result.stderr_text = "Error: " + error.message + "\n";
     run_result.exit_code = 1;
     return run_result;
   }
