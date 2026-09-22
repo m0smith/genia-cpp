@@ -942,3 +942,83 @@ TEST_CASE("run: `+`/`-` bind tighter than `<`/`<=`/`>`/`>=`, which bind tighter 
   REQUIRE(result.has_value());
   CHECK(result->stdout_text == "[true, true, false, true]\n");
 }
+
+// --- E24-7 increment 8: R23 numeric field-format specs ------------
+
+TEST_CASE("run: numeric alignment uses the full canonical rendered atom") {
+  check_run_stdout(
+      "[format(\"{n:<8}\", {n: 3.5}), format(\"{n:>8}\", {n: 3/4}), "
+      "format(\"{n:^14}\", {n: float64(1.5)}), format(\"{n:<3}\", {n: 3/4})]",
+      "[\"3.5     \", \"     3/4\", \" float64(1.5) \", \"3/4\"]\n");
+}
+
+TEST_CASE("run: zero-padding is sign-aware and limited to plain numeral atoms") {
+  check_run_stdout("[format(\"{n:06}\", {n: 3.5}), format(\"{n:06}\", {n: -3.5})]",
+                   "[\"0003.5\", \"-003.5\"]\n");
+
+  for (const std::string& source : {
+           "format(\"{n:06}\", {n: 3/4})",
+           "format(\"{n:010}\", {n: float64(1.5)})",
+           "format(\"{n:030}\", {n: 12345678901234567890123.5})",
+       }) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->stdout_text.empty());
+    CHECK(result->stderr_text.find("Error: format-error:") == 0);
+    CHECK(result->exit_code == 1);
+  }
+}
+
+TEST_CASE("run: grouping affects only the integer portion of plain numeral atoms") {
+  check_run_stdout("format(\"{n:,}\", {n: 1234.5})", "\"1,234.5\"\n");
+
+  for (const std::string& source : {
+           "format(\"{n:,}\", {n: 12345/7})",
+           "format(\"{n:,}\", {n: float64(1234.5)})",
+           "format(\"{n:,}\", {n: 12345678901234567890123.5})",
+       }) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->stderr_text.find("Error: format-error:") == 0);
+    CHECK(result->exit_code == 1);
+  }
+}
+
+TEST_CASE("run: Decimal precision uses exact coefficient/exponent half-up rounding") {
+  check_run_stdout(
+      "[format(\"{n:.2}\", {n: 1.005}), format(\"{n:.0}\", {n: -12.5}), "
+      "format(\"{n:.0}\", {n: 12.5}), format(\"{n:.4}\", {n: 3.5})]",
+      "[\"1.01\", \"-13\", \"13\", \"3.5000\"]\n");
+}
+
+TEST_CASE("run: Rational precision rounds the exact mathematical ratio") {
+  check_run_stdout(
+      "[format(\"{n:.2}\", {n: 1/3}), format(\"{n:.2}\", {n: 1/8}), "
+      "format(\"{n:.2}\", {n: -7/4}), format(\"{n:.0}\", {n: 5/2})]",
+      "[\"0.33\", \"0.13\", \"-1.75\", \"3\"]\n");
+}
+
+TEST_CASE("run: Float64 precision rounds the exact represented dyadic value") {
+  check_run_stdout(
+      "[format(\"{n:.2}\", {n: float64(2.675)}), "
+      "format(\"{n:.2}\", {n: float64(0.875)})]",
+      "[\"2.67\", \"0.88\"]\n");
+}
+
+TEST_CASE("unit: precision rejects non-finite Float64 with a normalized format diagnostic") {
+  using genia::value::Value;
+  auto fields = std::make_shared<genia::value::OrderedMap>();
+  const Value key = Value::make_string("n");
+  const auto key_encoding = genia::equality::map_key_encoding_checked(key);
+  REQUIRE(key_encoding.has_value());
+  fields->put(*key_encoding, key, Value::make_float64(std::numeric_limits<double>::quiet_NaN()));
+  CHECK_THROWS(genia::native_functions::call(
+      "format", {Value::make_string("{n:.2}"), Value::make_map(fields)}));
+}
+
+TEST_CASE("run: Integer formatting remains correct and canonical numeric display is unchanged") {
+  check_run_stdout(
+      "[format(\"{n:06}\", {n: -12}), format(\"{n:,}\", {n: 1234567}), "
+      "format(\"{n:.2}\", {n: 12}), 3.5, 3/4, float64(1.5)]",
+      "[\"-00012\", \"1,234,567\", \"12.00\", 3.5, 3/4, float64(1.5)]\n");
+}
