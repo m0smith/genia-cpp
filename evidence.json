@@ -47,10 +47,10 @@
     "crash": 0,
     "fail": 0,
     "invalid": 0,
-    "pass": 132,
+    "pass": 139,
     "protocol_error": 0,
     "timeout": 0,
-    "unsupported": 623
+    "unsupported": 616
   },
   "protocol_version": "1",
   "total_cases": 755
