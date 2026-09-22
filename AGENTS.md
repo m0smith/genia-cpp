@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-6 complete. E24-7 in progress (increments 1-8 of
+**E24-1 through E24-6 complete. E24-7 in progress (increments 1-9 of
 several, see below).** E24-1 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -257,6 +257,19 @@ from its exact decoded dyadic ratio. Unsupported representation/spec pairings
 use normalized `format-error` diagnostics. First-class `Format(...)` values and
 JSON remain later work. No capability declaration changed.
 
+**Increment 9** adds the strict R23 numeric JSON boundary required by the six
+shared `r23-json-*` eval cases. Integer encode/decode enforces the R9 safe
+interval; Decimal stability is decided by exact conversion and exact comparison
+against the existing shortest-roundtrip Float64 spelling; Rational encoding
+requires an exact terminating Decimal that passes the same stability predicate;
+finite Float64 emits the existing canonical inner spelling and non-finite values
+are rejected. Fraction/exponent decode is lexical and never materializes through
+binary64. The increment also adds only the narrow success-Option,
+JSON-representation, `unwrap_or`, `representation_match`, `display`, and
+`IrPatErr` support those six shared cases require. Compatibility JSON and final
+E24-7 hardening/truth-completion remain later work. No capability declaration
+changed.
+
 Capabilities declared `supported`: `parser`, `ast_lowering`,
 `cli_command_mode`, `cli_file_mode`, `open_functions` (local-only —
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
@@ -270,13 +283,15 @@ floor-remainder promotion rules for Integer/Decimal/Rational, section
 construction, lambdas/closures, local case/pattern dispatch,
 pipelines, `err(...)` Outcomes, the one deterministic undefined-name
 diagnostic, explicit Float64 conversions/rendering/arithmetic, and the
-Float64 comparison/numeric-key bridge, and numeric field-format specs — no
-first-class `Format(...)` value, JSON boundary, or `some`/`none`). Every other
+Float64 comparison/numeric-key bridge, numeric field-format specs, and the six-case
+strict R23 numeric JSON boundary — no first-class `Format(...)` value,
+compatibility JSON, or general `some`/`none`). Every other
 `spec/manifest.json` capability remains
 `unsupported`. Running the full shared spec corpus: `total=755
-passed=132 failed=0 unsupported=623 protocol_error=0 crash=0 timeout=0
+passed=139 failed=0 unsupported=616 protocol_error=0 crash=0 timeout=0
 invalid=0`; increment 8 adds the R23 numeric field-format cases and the older
-field-spec cases that use the same implemented surface.
+field-spec cases that use the same implemented surface; increment 9 adds all six
+shared `r23-json-*` cases.
 
 The real C++ host implementation is numbered **R24** (originally
 planned as R21; `genia-2026` planning issue #845 decomposed the Exact
@@ -286,8 +301,8 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime) is in progress (increments 1-8 of several landed; the JSON
-boundary and final E24-7 hardening/truth-completion work remain).**
+numeric runtime) is in progress (increments 1-9 of several landed; final E24-7
+hardening/truth-completion remains).**
 
 Known commands:
 

@@ -161,6 +161,17 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
       }
       return Bindings{};
     }
+    case pattern::Kind::Err: {
+      if (arg.kind != value::Kind::Outcome || !arg.outcome_is_err ||
+          arg.outcome_reason == nullptr || arg.outcome_context == nullptr) {
+        return std::nullopt;
+      }
+      auto reason = match_atom(pattern.items[0], *arg.outcome_reason);
+      auto context = match_atom(pattern.items[1], *arg.outcome_context);
+      if (!reason.has_value() || !context.has_value()) return std::nullopt;
+      if (!merge_bindings(*reason, std::move(*context))) return std::nullopt;
+      return reason;
+    }
   }
   return std::nullopt;
 }

@@ -91,7 +91,7 @@ inline const std::vector<std::string>& known_capabilities() {
 }
 
 inline constexpr const char* kUnsupportedReason =
-    "genia-cpp implements only the E24-2..E24-7(increment 8) vertical "
+    "genia-cpp implements only the E24-2..E24-7(increment 9) vertical "
     "slice (integer/Decimal literals, unary minus, string/boolean/list/map "
     "literals, bare-name references, assignment, `+ - * / == != % "
     "< <= > >=` binary expressions -- including the full R22 exact-family "
@@ -101,7 +101,8 @@ inline constexpr const char* kUnsupportedReason =
     "R20 open functions (single module only), pipelines, `err(...)` "
     "Outcomes, `rational(...)` construction, closed-domain Float64 "
     "arithmetic, the R22 exact-family/Float64 equality and ordering bridge, "
-    "cross-kind numeric map-key identity, R23 numeric field-format specs, the one "
+    "cross-kind numeric map-key identity, R23 numeric field-format specs and strict "
+    "numeric JSON shared cases, the one "
     "deterministic undefined-name "
     "runtime error, calls to this slice's native map_*/utf8_encode/err/sum "
     "functions, and `-c`/file-mode CLI); this request is outside that "

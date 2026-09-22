@@ -34,6 +34,7 @@
 #include "equality.hpp"
 #include "float64.hpp"
 #include "format.hpp"
+#include "json.hpp"
 #include "rational.hpp"
 #include "value.hpp"
 
@@ -48,6 +49,36 @@ using value::Value;
 // Callers must treat std::nullopt as "this case is unsupported", never
 // attempt a fallback value.
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
+  if (name == "json_encode" && args.size() == 1) {
+    auto encoded = strict_json::encode_value(args[0]);
+    if (encoded.value.has_value()) return Value::make_outcome_some(*encoded.value);
+    auto context = std::make_shared<value::OrderedMap>();
+    return Value::make_outcome_err(Value::make_string(strict_json::reason(encoded.error)),
+                                   Value::make_map(context));
+  }
+  if (name == "json_decode" && args.size() == 1 && args[0].kind == value::Kind::String) {
+    auto decoded = strict_json::decode_number(args[0].text);
+    if (decoded.value.has_value()) {
+      return Value::make_outcome_some(Value::make_represented("json", *decoded.value));
+    }
+    auto context = std::make_shared<value::OrderedMap>();
+    return Value::make_outcome_err(Value::make_string(strict_json::reason(decoded.error)),
+                                   Value::make_map(context));
+  }
+  if (name == "unwrap_or" && args.size() == 2 && args[1].kind == value::Kind::Outcome &&
+      !args[1].outcome_is_err && args[1].outcome_value != nullptr) {
+    return *args[1].outcome_value;
+  }
+  if (name == "representation_match" && args.size() == 2 && args[0].kind == value::Kind::String &&
+      args[1].kind == value::Kind::Represented && args[0].text == args[1].represented_facet) {
+    return Value::make_outcome_some(*args[1].represented_value);
+  }
+  if (name == "display" && args.size() == 1) {
+    if (args[0].kind == value::Kind::String) return args[0];
+    auto rendered = render::display(args[0]);
+    if (!rendered.has_value()) return std::nullopt;
+    return Value::make_string(*rendered);
+  }
   if (name == "format" && args.size() == 2) {
     if (args[0].kind != value::Kind::String || args[1].kind != value::Kind::Map)
       return std::nullopt;

@@ -241,6 +241,7 @@ inline bool structural_equal(const value::Value& a, const value::Value& b) {
       return true;
     }
     case value::Kind::Outcome:
+    case value::Kind::Represented:
     case value::Kind::Closure:
     case value::Kind::Opaque:
       // Never observed by any pinned evidence; no defined equality.

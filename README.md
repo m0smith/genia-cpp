@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: E24-6 complete, E24-7 in progress (increments 1-8 landed).
+**Status: E24-6 complete, E24-7 in progress (increments 1-9 landed).
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -17,7 +17,8 @@ its rendering, the R22 exact-family (Integer/Decimal/Rational)
 numeric-equality bridge, one deterministic undefined-name runtime
 error, boxed Float64 values with explicit `float64(...)` / `exact(...)`
 conversion, canonical rendering, exact represented-value comparison, and
-cross-kind numeric map-key identity, calls to the native
+cross-kind numeric map-key identity, the strict R23 numeric JSON boundary
+covered by the six shared E24-7 JSON cases, calls to the native
 `map_*`/`utf8_encode`/`err`/`sum` functions,
 and `-c`/file-mode CLI -- end to end (source -> parser -> portable Core
 IR -> evaluator -> normalized adapter result), hardened against a C++
@@ -38,7 +39,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-8
+E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-9
 of several); E24-8 remains.
 
 ## Authority
@@ -193,9 +194,12 @@ numeric map-key identity across all four numeric kinds. Increment 8 adds R23
 numeric field-format specs: alignment/width on canonical text; sign-aware
 zero-padding and locale-independent grouping for plain numeral atoms; exact
 decimal half-up precision for Integer, Decimal, Rational, and Float64; and
-normalized rejection of unsupported representation/spec combinations. The
-JSON boundary and final E24-7 hardening/truth-completion work remain further
-increments:
+normalized rejection of unsupported representation/spec combinations.
+Increment 9 adds the six-case strict R23 numeric JSON boundary: safe Integer
+numbers, exact stable Decimal encode/lexical decode, terminating-and-stable
+Rational encode, canonical finite Float64 encode, normalized rejection, and
+the required narrow success-Option/JSON-representation plumbing. Compatibility
+JSON and final E24-7 hardening/truth-completion remain further increments:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
@@ -395,7 +399,7 @@ increments:
   `unsupported` per case, or are gated out entirely by every
   cross-module case's separate `multi_file_eval` requirement (see
   `m0smith/genia-2026#973`/`#974`). Running the full shared spec corpus
-  against it: `total=755 passed=132 failed=0 unsupported=623
+  against it: `total=755 passed=139 failed=0 unsupported=616
   protocol_error=0 crash=0 timeout=0 invalid=0` — the 7 pinned E24-4
   cases (`outcome_values`, `lambda_function_call`,
   `pattern_case_dispatch`, `pipeline_composition`,
@@ -420,7 +424,7 @@ increments:
   `r22-numeric-map-key-cross-kind.yaml`, and the now-reachable
   `r18-map-equal-keys-share-every-operation.yaml`; increment 8 adds the
   R23 numeric field-format cases and older field-spec cases using the
-  same implemented surface.
+  same implemented surface; increment 9 adds all six `r23-json-*` cases.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
   equality, and display for any well-formed UTF-8 input, but is not yet
@@ -428,7 +432,7 @@ increments:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- `some`/`none` Option values,
+- General `some`/`none` Option behavior beyond increment 9's narrow JSON-success path,
   general diagnostic normalization (beyond the one undefined-name
   case), and general postfix call application (calling the result of a
   call or a parenthesized expression, e.g. immediately-invoked lambdas)
@@ -439,8 +443,8 @@ increments:
   (`+ - * / % == != < <= > >=`) all work end to end across
   Integer/Decimal/Rational, and comparison with Float64 now follows section
   10.2's exact represented-value bridge. Numeric field-format-spec integration
-  is implemented; first-class `Format(...)` values and the JSON boundary remain
-  unimplemented. R20 open
+  is implemented; first-class `Format(...)` values and compatibility/general JSON
+  behavior beyond the six shared strict-numeric cases remain unimplemented. R20 open
   functions are only
   *partly* implemented: local (single-module) grouped/repeated clause
   dispatch works end to end, but cross-module `extend`/`use`
@@ -465,7 +469,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=755 passed=132 failed=0 unsupported=623 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=755 passed=139 failed=0 unsupported=616 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

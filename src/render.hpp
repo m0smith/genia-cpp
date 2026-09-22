@@ -186,6 +186,11 @@ inline std::optional<std::string> display(const value::Value& value) {
       return rendered;
     }
     case value::Kind::Outcome: {
+      if (!value.outcome_is_err) {
+        auto inner = display(*value.outcome_value);
+        if (!inner.has_value()) return std::nullopt;
+        return "some(" + *inner + ")";
+      }
       auto reason_rendered = display(*value.outcome_reason);
       if (!reason_rendered.has_value()) {
         return std::nullopt;
@@ -201,6 +206,8 @@ inline std::optional<std::string> display(const value::Value& value) {
       rendered += ")";
       return rendered;
     }
+    case value::Kind::Represented:
+      return std::string("<represented>");
     case value::Kind::Bytes:
     case value::Kind::Closure:
     case value::Kind::Opaque:

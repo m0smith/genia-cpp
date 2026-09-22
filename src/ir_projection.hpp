@@ -115,6 +115,12 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
       }
       return json{{"node", "IrPatMap"}, {"items", items}};
     }
+    case pattern::Kind::Err: {
+      auto reason = project_pattern(pattern.items[0]);
+      auto context = project_pattern(pattern.items[1]);
+      if (!reason.has_value() || !context.has_value()) return std::nullopt;
+      return json{{"node", "IrPatErr"}, {"reason", *reason}, {"context", *context}};
+    }
   }
   return std::nullopt;
 }
