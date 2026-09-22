@@ -1022,3 +1022,55 @@ TEST_CASE("run: Integer formatting remains correct and canonical numeric display
       "format(\"{n:.2}\", {n: 12}), 3.5, 3/4, float64(1.5)]",
       "[\"-00012\", \"1,234,567\", \"12.00\", 3.5, 3/4, float64(1.5)]\n");
 }
+
+// --- E24-7 increment 9: R23 strict JSON numeric boundary -----------
+
+TEST_CASE("run: R23 stable Decimal encodes as its exact canonical JSON number", "[e24-7-json]") {
+  // spec/eval/r23-json-encode-decimal-stable.yaml
+  check_run_stdout("unwrap_or(\"\", json_encode(0.1))", "\"0.1\"\n");
+}
+
+TEST_CASE("run: R23 unstable Decimal JSON encoding returns the normalized range reason",
+          "[e24-7-json]") {
+  // spec/eval/r23-json-encode-decimal-unstable-rejected.yaml
+  check_run_stdout(
+      "reason(result) =\n"
+      "  err(why, _) -> display(why) |\n"
+      "  _ -> \"unexpected\"\n"
+      "reason(json_encode(0.1000000000000000000001))",
+      "\"json_number_out_of_range\"\n");
+}
+
+TEST_CASE("run: R23 finite Float64 JSON encoding uses canonical shortest-roundtrip text",
+          "[e24-7-json]") {
+  // spec/eval/r23-json-encode-float64-finite.yaml
+  check_run_stdout("unwrap_or(\"\", json_encode(float64(-123.456)))", "\"-123.456\"\n");
+}
+
+TEST_CASE("run: R23 non-terminating Rational JSON encoding is rejected without approximation",
+          "[e24-7-json]") {
+  // spec/eval/r23-json-encode-rational-nonterminating-rejected.yaml
+  check_run_stdout(
+      "reason(result) =\n"
+      "  err(why, _) -> display(why) |\n"
+      "  _ -> \"unexpected\"\n"
+      "reason(json_encode(1 / 3))",
+      "\"unsupported_json_value\"\n");
+}
+
+TEST_CASE("run: R23 terminating stable Rational encodes as an exact JSON Decimal number",
+          "[e24-7-json]") {
+  // spec/eval/r23-json-encode-rational-terminating.yaml
+  check_run_stdout("unwrap_or(\"\", json_encode(1 / 4))", "\"0.25\"\n");
+}
+
+TEST_CASE("run: R23 terminating Rational JSON round trip decodes to an equal Decimal",
+          "[e24-7-json]") {
+  // spec/eval/r23-json-round-trip-rational-terminating-cross-kind-equality.yaml
+  check_run_stdout(
+      "encoded = unwrap_or(\"\", json_encode(3 / 8))\n"
+      "decoded = unwrap_or(0, json_decode(encoded)) |> representation_match(\"json\") |> "
+      "unwrap_or(0)\n"
+      "[encoded, decoded, decoded == 3 / 8]",
+      "[\"0.375\", 0.375, true]\n");
+}
