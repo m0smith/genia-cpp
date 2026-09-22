@@ -28,7 +28,7 @@
 
 namespace genia::pattern {
 
-enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple, Literal };
+enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple, Literal, Err };
 
 struct Pattern {
   Kind kind = Kind::Wildcard;
@@ -96,6 +96,14 @@ struct Pattern {
     Pattern p;
     p.kind = Kind::Map;
     p.map_items = std::move(key_patterns);
+    return p;
+  }
+
+  static Pattern err(Pattern reason, Pattern context) {
+    Pattern p;
+    p.kind = Kind::Err;
+    p.items.push_back(std::move(reason));
+    p.items.push_back(std::move(context));
     return p;
   }
 };

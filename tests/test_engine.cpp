@@ -1074,3 +1074,41 @@ TEST_CASE("run: R23 terminating Rational JSON round trip decodes to an equal Dec
       "[encoded, decoded, decoded == 3 / 8]",
       "[\"0.375\", 0.375, true]\n");
 }
+
+TEST_CASE("unit: R23 strict JSON enforces the safe Integer interval", "[e24-7-json]") {
+  using genia::strict_json::Error;
+  using genia::value::Value;
+  auto boundary = genia::bignum::Integer::from_unsigned_decimal("9007199254740991");
+  auto outside = genia::bignum::Integer::from_unsigned_decimal("9007199254740992");
+  REQUIRE(boundary.has_value());
+  REQUIRE(outside.has_value());
+  CHECK(genia::strict_json::encode_value(Value::make_integer(*boundary)).value.has_value());
+  CHECK(
+      genia::strict_json::encode_value(Value::make_integer(boundary->negate())).value.has_value());
+  CHECK(genia::strict_json::encode_value(Value::make_integer(*outside)).error ==
+        Error::NumberOutOfRange);
+  CHECK(genia::strict_json::decode_number("-9007199254740992").error == Error::NumberOutOfRange);
+}
+
+TEST_CASE("unit: R23 strict JSON decodes fraction tokens lexically as exact Decimal",
+          "[e24-7-json]") {
+  using genia::strict_json::Error;
+  auto decoded = genia::strict_json::decode_number("0.1");
+  REQUIRE(decoded.value.has_value());
+  CHECK(decoded.value->kind == genia::value::Kind::Decimal);
+  CHECK(decoded.value->decimal_coefficient.to_decimal_string() == "1");
+  CHECK(decoded.value->decimal_exponent == -1);
+  CHECK(genia::strict_json::decode_number("0.1000000000000000000001").error ==
+        Error::NumberOutOfRange);
+}
+
+TEST_CASE("unit: R23 strict JSON rejects non-finite Float64 values", "[e24-7-json]") {
+  using genia::strict_json::Error;
+  using genia::value::Value;
+  for (double number :
+       {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity()}) {
+    CHECK(genia::strict_json::encode_value(Value::make_float64(number)).error ==
+          Error::NumberOutOfRange);
+  }
+}

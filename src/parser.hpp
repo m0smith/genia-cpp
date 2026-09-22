@@ -800,6 +800,16 @@ class Parser {
       if (text == "_") {
         return pattern::Pattern::wildcard();
       }
+      if (text == "err" && peek().kind == TokenKind::LParen) {
+        advance();
+        auto reason = parse_pattern_atom();
+        if (!reason.has_value() || peek().kind != TokenKind::Comma) return std::nullopt;
+        advance();
+        auto context = parse_pattern_atom();
+        if (!context.has_value() || peek().kind != TokenKind::RParen) return std::nullopt;
+        advance();
+        return pattern::Pattern::err(std::move(*reason), std::move(*context));
+      }
       return pattern::Pattern::bind(text);
     }
     if (peek().kind == TokenKind::LBracket) {

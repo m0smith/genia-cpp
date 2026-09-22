@@ -280,7 +280,7 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         return std::nullopt;
       }
       for (const auto& stage : node.items) {
-        if (stage_value->kind == value::Kind::Outcome) {
+        if (stage_value->kind == value::Kind::Outcome && stage_value->outcome_is_err) {
           // `err(...)` short-circuits the remaining stages unchanged,
           // matching genia-2026's src/genia/evaluator.py
           // `eval_pipeline`'s `is_err(stage_value)` check (this slice

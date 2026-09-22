@@ -49,6 +49,7 @@ enum class Kind : std::uint8_t {
   List,
   Map,
   Outcome,
+  Represented,
   Closure,
   Opaque
 };
@@ -106,6 +107,11 @@ struct Value {
   // is nullptr when the 1-argument form was used.
   std::shared_ptr<Value> outcome_reason;
   std::shared_ptr<Value> outcome_context;
+  std::shared_ptr<Value> outcome_value;
+  bool outcome_is_err = true;
+
+  std::string represented_facet;
+  std::shared_ptr<Value> represented_value;
 
   std::shared_ptr<Closure> closure;  // valid when kind == Closure
 
@@ -192,6 +198,22 @@ struct Value {
     if (context.has_value()) {
       value.outcome_context = std::make_shared<Value>(std::move(*context));
     }
+    return value;
+  }
+
+  static Value make_outcome_some(Value inner) {
+    Value value;
+    value.kind = Kind::Outcome;
+    value.outcome_is_err = false;
+    value.outcome_value = std::make_shared<Value>(std::move(inner));
+    return value;
+  }
+
+  static Value make_represented(std::string facet, Value inner) {
+    Value value;
+    value.kind = Kind::Represented;
+    value.represented_facet = std::move(facet);
+    value.represented_value = std::make_shared<Value>(std::move(inner));
     return value;
   }
 
