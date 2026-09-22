@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: genia-cpp-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-conformance:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: Build, test, and conformance
+    runs-on: [self-hosted, linux, x64, genia]
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out genia-cpp
+        uses: actions/checkout@v6
+        with:
+          path: genia-cpp
+
+      - name: Check out pinned genia-2026 contract
+        uses: actions/checkout@v6
+        with:
+          repository: m0smith/genia-2026
+          ref: eb171afc434b3b9110007b8be76f6b0eff850311
+          path: genia-2026
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Verify required toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --version
+          c++ --version
+          python --version
+          clang-format --version
+          clang-tidy --version
+
+      - name: Configure release build
+        working-directory: genia-cpp
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        working-directory: genia-cpp
+        run: cmake --build build
+
+      - name: Run C++ tests
+        working-directory: genia-cpp
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Check formatting
+        working-directory: genia-cpp
+        run: clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp
+
+      - name: Run static analysis
+        working-directory: genia-cpp
+        run: clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp
+
+      - name: Bootstrap uv
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input uv
+          echo "UV_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
+          echo "UV_PYTHON_DOWNLOADS=never" >> "$GITHUB_ENV"
+
+      - name: Sync conformance dependencies
+        working-directory: genia-2026
+        run: python -m uv sync --dev --python "$UV_PYTHON"
+
+      - name: Run pinned shared conformance
+        working-directory: genia-2026
+        run: >-
+          python -m uv run --python "$UV_PYTHON" python -m tools.spec_runner
+          --host "$GITHUB_WORKSPACE/genia-cpp/build/genia-adapter"
+          --evidence "$RUNNER_TEMP/genia-cpp-evidence.json"
+
+      - name: Verify conformance failure invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/genia-cpp-evidence.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          evidence = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          failing = ("fail", "protocol_error", "crash", "timeout", "invalid")
+          nonzero = {name: evidence["counts"][name] for name in failing if evidence["counts"][name]}
+          if nonzero:
+              raise SystemExit(f"conformance failure counts are nonzero: {nonzero}")
+          print(json.dumps(evidence["counts"], sort_keys=True))
+          PY
+
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: genia-cpp-conformance-evidence
+          path: ${{ runner.temp }}/genia-cpp-evidence.json
+          if-no-files-found: warn
