@@ -36,6 +36,7 @@
 #include "format.hpp"
 #include "json.hpp"
 #include "rational.hpp"
+#include "ref.hpp"
 #include "value.hpp"
 
 namespace genia::native_functions {
@@ -49,6 +50,21 @@ using value::Value;
 // Callers must treat std::nullopt as "this case is unsupported", never
 // attempt a fallback value.
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
+  if (name == "ref" && args.empty()) {
+    return Value::make_ref(std::make_shared<value::Ref>());
+  }
+  if (name == "ref" && args.size() == 1) {
+    return Value::make_ref(std::make_shared<value::Ref>(args[0]));
+  }
+  if (name == "ref_get" && args.size() == 1 && args[0].kind == value::Kind::Ref) {
+    return args[0].ref->get();
+  }
+  if (name == "ref_set" && args.size() == 2 && args[0].kind == value::Kind::Ref) {
+    return args[0].ref->set(args[1]);
+  }
+  if (name == "ref_is_set" && args.size() == 1 && args[0].kind == value::Kind::Ref) {
+    return Value::make_boolean(args[0].ref->is_set());
+  }
   if (name == "json_encode" && args.size() == 1) {
     auto encoded = strict_json::encode_value(args[0]);
     if (encoded.value.has_value()) return Value::make_outcome_some(*encoded.value);

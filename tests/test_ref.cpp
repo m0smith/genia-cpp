@@ -21,19 +21,19 @@ TEST_CASE("R25 Ref blocks until a producer sets the exact value") {
     std::this_thread::yield();
   }
   CHECK_FALSE(ref->is_set());
-  ref->set(Value::make_integer(genia::bignum::Integer::from_i64(42)));
+  ref->set(Value::make_integer(genia::bignum::Integer::from_u64(42)));
   consumer.join();
   REQUIRE(observed.kind == genia::value::Kind::Integer);
-  CHECK(observed.integer.to_string() == "42");
+  CHECK(observed.integer.to_decimal_string() == "42");
 }
 
 TEST_CASE("R25 Ref update is serialized and returns every exact replacement") {
-  auto ref = std::make_shared<Ref>(Value::make_integer(genia::bignum::Integer::from_i64(0)));
+  auto ref = std::make_shared<Ref>(Value::make_integer(genia::bignum::Integer::from_u64(0)));
   constexpr int kPerProducer = 200;
   auto increment = [&] {
     for (int i = 0; i < kPerProducer; ++i) {
       ref->update([](const Value& current) {
-        return Value::make_integer(current.integer.add(genia::bignum::Integer::from_i64(1)));
+        return Value::make_integer(current.integer.add(genia::bignum::Integer::from_u64(1)));
       });
     }
   };
@@ -41,7 +41,7 @@ TEST_CASE("R25 Ref update is serialized and returns every exact replacement") {
   std::thread second(increment);
   first.join();
   second.join();
-  CHECK(ref->get().integer.to_string() == "400");
+  CHECK(ref->get().integer.to_decimal_string() == "400");
 }
 
 TEST_CASE("R25 shared Ref basic observation runs through the C++ engine") {
@@ -54,4 +54,10 @@ TEST_CASE("R25 shared Ref basic observation runs through the C++ engine") {
   CHECK(result->stdout_text == "[true, 20, 22, 22]\n");
   CHECK(result->stderr_text.empty());
   CHECK(result->exit_code == 0);
+}
+
+TEST_CASE("R25 Ref equality is entity identity and never dereferences contents") {
+  auto result = try_run("r = ref(1)\n[r == r, r == ref(1)]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, false]\n");
 }

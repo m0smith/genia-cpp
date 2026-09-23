@@ -216,6 +216,7 @@ inline std::optional<std::string> display(const value::Value& value) {
       return std::string("<represented>");
     case value::Kind::Bytes:
     case value::Kind::Closure:
+    case value::Kind::Ref:
     case value::Kind::Opaque:
       return std::nullopt;
   }

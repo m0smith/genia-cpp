@@ -43,7 +43,7 @@ inline constexpr const char* kProtocolVersion = "1";
 // case) and #974 (the roadmap's own guidance to declare
 // open_functions `partial` was itself wrong -- `supported` is the
 // correct declaration; see protocol.hpp's capability_overrides()).
-inline constexpr const char* kContractRevision = "a2229cb9b079a379a5eeae76a618fe69a2bd6daa";
+inline constexpr const char* kContractRevision = "02f4caa15371f3ab6670de446cc4150debfe318e";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -71,6 +71,7 @@ inline const std::vector<std::string>& known_capabilities() {
       "http_outbound_transport",
       "allowlisted_host_interop",
       "refs",
+      "cell_primitives",
       "process_primitives",
       "bytes_json_zip",
       "debugger_stdio",
@@ -86,6 +87,7 @@ inline const std::vector<std::string>& known_capabilities() {
       "reranking_deterministic_fixture",
       "open_functions",
       "multi_file_eval",
+      "execution_process",
   };
   return kNames;
 }
@@ -138,6 +140,7 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
       {"core_ir_eval", "partial"},       {"cli_command_mode", "supported"},
       {"cli_file_mode", "supported"},    {"prelude_autoload", "partial"},
       {"shared_spec_runner", "partial"}, {"open_functions", "supported"},
+      {"refs", "supported"},
   };
   return kOverrides;
 }

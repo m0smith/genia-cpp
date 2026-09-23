@@ -257,6 +257,16 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           equality::is_exact_family_kind(args[0].kind)) {
         return args[0];
       }
+      if (node.name == "ref_update" && args.size() == 2 && args[0].kind == value::Kind::Ref &&
+          args[1].kind == value::Kind::Closure) {
+        std::optional<value::Value> replacement;
+        auto result = args[0].ref->update([&](const value::Value& current) {
+          replacement = invoke_closure(*args[1].closure, {current});
+          return replacement.value_or(current);
+        });
+        if (!replacement.has_value()) return std::nullopt;
+        return result;
+      }
       auto callee = env->lookup(node.name);
       if (callee.has_value() && callee->kind == value::Kind::Closure) {
         return invoke_closure(*callee->closure, args);
