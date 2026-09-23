@@ -90,6 +90,23 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
                                                        const value::Value& stage_value,
                                                        const EnvPtr& env);
 
+inline const char* arithmetic_symbol(core_ir::Op op) {
+  switch (op) {
+    case core_ir::Op::Plus:
+      return "+";
+    case core_ir::Op::Minus:
+      return "-";
+    case core_ir::Op::Star:
+      return "*";
+    case core_ir::Op::Slash:
+      return "/";
+    case core_ir::Op::Percent:
+      return "%";
+    default:
+      return "";
+  }
+}
+
 inline std::optional<value::Value> eval_node(const core_ir::Node& node, const EnvPtr& env) {
   switch (node.kind) {
     case core_ir::Kind::Literal:
@@ -363,18 +380,15 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           };
           auto context = std::make_shared<value::OrderedMap>();
           for (const auto& [key, mapped] : std::vector<std::pair<std::string, std::string>>{
-                   {"source", core_ir::op_token_name(node.op) == std::string("PLUS") ? "+" :
-                                  core_ir::op_token_name(node.op) == std::string("MINUS") ? "-" :
-                                  core_ir::op_token_name(node.op) == std::string("STAR") ? "*" :
-                                  core_ir::op_token_name(node.op) == std::string("SLASH") ? "/" : "%"},
+                   {"source", arithmetic_symbol(node.op)},
                    {"left", kind_name(lhs->kind)},
                    {"right", kind_name(rhs->kind)}}) {
             auto key_value = value::Value::make_string(key);
             context->put(equality::map_key_encoding(key_value), key_value,
                          value::Value::make_string(mapped));
           }
-          return value::Value::make_outcome_none(value::Value::make_string("type-error"),
-                                                  value::Value::make_map(context));
+          return value::Value::make_outcome_none(
+              value::Value::make_string("type-error"), value::Value::make_map(context));
         }
         return float64::arithmetic(node.op, *lhs, *rhs);
       }
