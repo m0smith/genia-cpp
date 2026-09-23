@@ -104,11 +104,3 @@ jobs:
               raise SystemExit(f"conformance failure counts are nonzero: {nonzero}")
           print(json.dumps(evidence["counts"], sort_keys=True))
           PY
-
-      - name: Upload conformance evidence
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: genia-cpp-conformance-evidence
-          path: ${{ runner.temp }}/genia-cpp-evidence.json
-          if-no-files-found: warn
