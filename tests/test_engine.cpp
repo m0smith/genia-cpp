@@ -359,6 +359,30 @@ TEST_CASE("E24-7 rejects every mixed exact and Float64 arithmetic combination") 
   }
 }
 
+TEST_CASE("E24-7 shared mixed-domain evidence returns normalized none outcomes") {
+  auto result = try_run(
+      "[1 + float64(2), float64(2) + 1, 1.5 - float64(2), "
+      "rational(1, 2) * float64(2), float64(2) / rational(1, 2)]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text ==
+        "[none(\"type-error\", {source: \"+\", left: \"int\", right: \"float\"}), "
+        "none(\"type-error\", {source: \"+\", left: \"float\", right: \"int\"}), "
+        "none(\"type-error\", {source: \"-\", left: \"decimal\", right: \"float\"}), "
+        "none(\"type-error\", {source: \"*\", left: \"rational\", right: \"float\"}), "
+        "none(\"type-error\", {source: \"/\", left: \"float\", right: \"rational\"})]\n");
+}
+
+TEST_CASE("E24-7 shared cross-surface quote and numeric-pattern evidence passes") {
+  auto result = try_run(
+      "classify(x) =\n"
+      "  1.0 -> \"matched\" |\n"
+      "  _ -> \"no-match\"\n"
+      "[quote(1.5) == 1.5, quasiquote(1.5) == 1.5, "
+      "eval(quote(1.5), empty_env()) == 1.5, classify(1)]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[true, true, true, \"matched\"]\n");
+}
+
 TEST_CASE("run: an empty program is unsupported") { CHECK_FALSE(try_run("").has_value()); }
 
 TEST_CASE("run: standard precedence -- multiplication binds tighter than addition") {
