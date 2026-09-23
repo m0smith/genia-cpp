@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-7 complete. E24-8 remains.** E24-1
+**R24 is complete through E24-8.** E24-1
 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -266,7 +266,9 @@ finite Float64 emits the existing canonical inner spelling and non-finite values
 are rejected. Fraction/exponent decode is lexical and never materializes through
 binary64. The increment also adds only the narrow success-Option,
 JSON-representation, `unwrap_or`, `representation_match`, `display`, and
-`IrPatErr` support those six shared cases require. Compatibility JSON and final
+`IrPatErr` support those six shared cases require. Compatibility JSON remains
+unsupported.
+
 Increment 10 closes the two remaining required `spec/eval/r22-*.yaml`
 gaps: normalized mixed exact/Float64 `none("type-error", context)` outcomes,
 and the numeric-literal-only quote/quasiquote/metacircular-eval plus Decimal
@@ -277,7 +279,10 @@ Capabilities declared `supported`: `parser`, `ast_lowering`,
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
 varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
-is the honest declaration here). Declared `partial`: `core_ir_eval`
+is the honest declaration here). Declared `partial`: `core_ir_eval`,
+`prelude_autoload` (only the bounded source-level prelude required by the floor),
+and `shared_spec_runner` (matching the Python adapter's partial precedent).
+`core_ir_eval` covers
 (the full R22 section 6-8 exact-family arithmetic/division/
 floor-remainder promotion rules for Integer/Decimal/Rational, section
 10.1's ordered-comparison (`< <= > >=`) bridge alongside `==`/`!=`,
@@ -303,8 +308,10 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 `docs/design/r24-cpp-host-preflight.md` and the four pinned entry
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
-(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime and interchange) is complete after ten bounded increments.**
+(`docs/strategy/roadmap/e24-issue-sequence.md`); E24-7 completed the R21-R23
+numeric runtime/interchange surface after ten bounded increments, and E24-8
+recorded final capability/evidence truth plus a skeptical audit PASS. R25 has
+not begun.
 
 Known commands:
 

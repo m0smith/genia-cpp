@@ -22,14 +22,14 @@
     "multi_file_eval": "unsupported",
     "open_functions": "supported",
     "parser": "supported",
-    "prelude_autoload": "unsupported",
+    "prelude_autoload": "partial",
     "process_primitives": "unsupported",
     "refs": "unsupported",
     "repl": "unsupported",
     "reranking_deterministic_fixture": "unsupported",
     "resource_io": "unsupported",
     "retrieval_deterministic_fixture": "unsupported",
-    "shared_spec_runner": "unsupported",
+    "shared_spec_runner": "partial",
     "shell_stage": "unsupported"
   },
   "capability_operations": [

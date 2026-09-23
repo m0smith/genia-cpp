@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: E24-7 complete after ten bounded increments.
+**Status: R24 complete through E24-8.
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -25,7 +25,7 @@ IR -> evaluator -> normalized adapter result), hardened against a C++
 stack-overflow crash from adversarially deep recursion/nesting (E24-5).
 Every other Genia behavior remains honestly `unsupported`.**
 
-This is the planned production C++ host for [Genia](https://github.com/m0smith/genia-2026).
+This is the bounded production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
 shell so the external-host repository boundary is executable before real
 C++ implementation work began. Nothing in this repository defines
@@ -39,7 +39,8 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-7 are complete; E24-8 remains.
+E24-1 through E24-8 are complete. The skeptical completion audit records PASS
+in `genia-2026/docs/analysis/r24-release-truth-audit.md`.
 
 ## Authority
 
@@ -390,8 +391,12 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   E24-5 adds no new Genia semantics or capabilities.
 - `genia-adapter` (the built binary) declares `parser`, `ast_lowering`,
   `cli_command_mode`, `cli_file_mode`, and `open_functions` `supported`,
-  `core_ir_eval` `partial`, and every other `spec/manifest.json`
-  capability `unsupported`. `open_functions` is declared `supported`
+  and declares `core_ir_eval`, `prelude_autoload`, and `shared_spec_runner`
+  `partial`. Every other `spec/manifest.json` capability is `unsupported`.
+  `prelude_autoload` is partial because this floor installs only the bounded
+  source-level prelude needed by its evidence; `shared_spec_runner` is partial
+  for the same reason the Python reference adapter uses that status. Neither
+  declaration makes additional cases applicable. `open_functions` is `supported`
   rather than `partial` deliberately: `tools/spec_runner/capabilities.py`'s
   requires-gate only attempts a case whose `requires` list names
   `open_functions` when it is declared exactly `supported` (`partial`
@@ -460,6 +465,18 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   patterns (`open f(x, ..rest) = ...`) all remain unimplemented — see
   later slices'/`genia-2026`'s
   [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md).
+
+## Explicitly deferred after R24
+
+- R25: refs, cells, processes, actors, and wider state/concurrency behavior.
+- R26: REPL and broader data bridges.
+- R27: Flow, pipe mode, HTTP serving, and outbound HTTP.
+- Cross-module open-function contribution/selection and wider parser/evaluator
+  behavior outside the R24 floor, including general Option and compatibility JSON.
+- Configuration/secrets, resource I/O, external execution, AI/retrieval providers,
+  host interop, debugger/shell, browser runtime, and help/documentation parity.
+
+These are expected `unsupported` results, not hidden failures or Python-parity claims.
 
 ## Building and running the adapter
 
