@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: E24-7 complete after ten bounded increments.
+**Status: R24 complete through E24-8.
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -25,7 +25,7 @@ IR -> evaluator -> normalized adapter result), hardened against a C++
 stack-overflow crash from adversarially deep recursion/nesting (E24-5).
 Every other Genia behavior remains honestly `unsupported`.**
 
-This is the planned production C++ host for [Genia](https://github.com/m0smith/genia-2026).
+This is the bounded production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
 shell so the external-host repository boundary is executable before real
 C++ implementation work began. Nothing in this repository defines
@@ -39,7 +39,8 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-7 are complete; E24-8 remains.
+E24-1 through E24-8 are complete. The skeptical completion audit records PASS
+in `genia-2026/docs/analysis/r24-release-truth-audit.md`.
 
 ## Authority
 

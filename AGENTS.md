@@ -43,7 +43,7 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**E24-1 through E24-7 complete. E24-8 remains.** E24-1
+**R24 is complete through E24-8.** E24-1
 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -308,8 +308,10 @@ pre-flight gate recorded **GO** on 2026-09-19 — see `genia-2026`'s
 `docs/design/r24-cpp-host-preflight.md` and the four pinned entry
 artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
-(`docs/strategy/roadmap/e24-issue-sequence.md`); **E24-7 (R21-R23 exact
-numeric runtime and interchange) is complete after ten bounded increments.**
+(`docs/strategy/roadmap/e24-issue-sequence.md`); E24-7 completed the R21-R23
+numeric runtime/interchange surface after ten bounded increments, and E24-8
+recorded final capability/evidence truth plus a skeptical audit PASS. R25 has
+not begun.
 
 Known commands:
 
