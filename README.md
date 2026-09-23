@@ -243,11 +243,14 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   holds the one pattern-shape struct
   (Bind/Wildcard/Rest/List/Map/Tuple/Literal) shared by the parser and
   evaluator, matching `docs/architecture/core-ir-portability.md`'s named
-  pattern families. Genia's own reserved keywords/special forms this
-  slice does not implement (`import`, `pattern`, `extend`, `use`,
-  `quote`, `delay`, `quasiquote`, `unquote`, `unquote_splicing`, `some`,
-  `none`, `nil`) are rejected outright rather than silently misparsed as
-  ordinary names or calls -- a real bug this slice's own preparation
+  pattern families. Increment 10 additionally accepts only numeric-literal
+  `quote(...)`/`quasiquote(...)` forms and lowers them through the approved
+  `IrQuote`/`IrQuasiQuote` path required by the pinned R22 evidence. Genia's
+  other reserved keywords/special forms this slice does not implement
+  (`import`, `pattern`, `extend`, `use`, `delay`, `unquote`,
+  `unquote_splicing`, `some`, `none`, `nil`) are rejected outright rather
+  than silently misparsed as ordinary names or calls -- a real bug this
+  slice's own preparation
   caught and fixed by running genia-2026's *full* shared spec corpus
   (not just this slice's pinned evidence) against early builds (`extend`/
   `use` are R20 cross-module contribution/selection, which require
@@ -283,8 +286,9 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   Rational (E24-7 increment 2: `bignum::Integer` numerator/denominator,
   R22 section 3), Boolean, String, Bytes, List, the native in-house
   insertion-ordered
-  `OrderedMap`, Outcome (`err(...)` only -- `some`/`none` remain
-  unimplemented), Closure, and an opaque placeholder for `print`) and
+  `OrderedMap`, Outcome (`err(...)` plus the narrow JSON-success and
+  mixed-domain `none(...)` results required by E24-7; general Option behavior
+  remains unimplemented), Closure, and an opaque placeholder for `print`) and
   the parent-chained lexical environment lambda/function calls evaluate
   their bodies in.
 - `src/rational.hpp` — R22 section 3 exact Rational construction/
