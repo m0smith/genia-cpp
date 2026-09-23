@@ -84,6 +84,10 @@ inline std::optional<json> project(const ast::Node& node) {
       // that source, the same fallback this project already uses for
       // Lambda/MapLiteral/Spread above.
       return json{{"kind", "Unary"}};
+    case ast::Kind::Quote:
+      return json{{"kind", "Quote"}};
+    case ast::Kind::QuasiQuote:
+      return json{{"kind", "QuasiQuote"}};
     case ast::Kind::StringLiteral:
       return json{{"kind", "String"}};
     case ast::Kind::BoolLiteral:

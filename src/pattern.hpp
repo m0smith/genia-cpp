@@ -39,6 +39,9 @@ struct Pattern {
   // ast.hpp's Literal node -- sign is never part of a literal pattern,
   // matching this slice's expression-literal grammar).
   std::string name;
+  bool literal_is_decimal = false;
+  std::string decimal_coefficient_digits;
+  int64_t decimal_exponent = 0;
 
   // List: element patterns, at most one of which may be Kind::Rest (and
   // only as the final item, matching genia-2026's "..rest must be the
@@ -75,6 +78,15 @@ struct Pattern {
     Pattern p;
     p.kind = Kind::Literal;
     p.name = std::move(digits);
+    return p;
+  }
+
+  static Pattern decimal_literal(std::string coefficient_digits, int64_t exponent) {
+    Pattern p;
+    p.kind = Kind::Literal;
+    p.literal_is_decimal = true;
+    p.decimal_coefficient_digits = std::move(coefficient_digits);
+    p.decimal_exponent = exponent;
     return p;
   }
 

@@ -151,6 +151,15 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
       // canonical equality relation rather than a separate comparison,
       // so a kind mismatch (e.g. matching an Integer literal against a
       // Boolean) is correctly never a match.
+      if (pattern.literal_is_decimal) {
+        auto coefficient =
+            bignum::Integer::from_unsigned_decimal(pattern.decimal_coefficient_digits);
+        if (!coefficient.has_value()) return std::nullopt;
+        const auto literal_value =
+            value::Value::make_decimal(*coefficient, pattern.decimal_exponent);
+        if (!equality::structural_equal(literal_value, arg)) return std::nullopt;
+        return Bindings{};
+      }
       auto literal_integer = bignum::Integer::from_unsigned_decimal(pattern.name);
       if (!literal_integer.has_value()) {
         return std::nullopt;

@@ -64,6 +64,8 @@ enum class Kind : std::uint8_t {
   // positive Decimal literal"), so negating a literal is this slice's
   // first real use of this node.
   Unary,
+  Quote,
+  QuasiQuote,
 };
 
 struct Node {
@@ -155,6 +157,13 @@ struct Node {
     n.kind = Kind::Unary;
     n.op = std::move(op_symbol);
     n.left = std::make_shared<Node>(std::move(operand));
+    return n;
+  }
+
+  static Node quote(Node inner, bool quasi) {
+    Node n;
+    n.kind = quasi ? Kind::QuasiQuote : Kind::Quote;
+    n.left = std::make_shared<Node>(std::move(inner));
     return n;
   }
 
