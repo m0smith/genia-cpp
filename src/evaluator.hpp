@@ -387,8 +387,8 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
             context->put(equality::map_key_encoding(key_value), key_value,
                          value::Value::make_string(mapped));
           }
-          return value::Value::make_outcome_none(
-              value::Value::make_string("type-error"), value::Value::make_map(context));
+          return value::Value::make_outcome_none(value::Value::make_string("type-error"),
+                                                 value::Value::make_map(context));
         }
         return float64::arithmetic(node.op, *lhs, *rhs);
       }
