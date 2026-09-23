@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: E24-6 complete, E24-7 in progress (increments 1-9 landed).
+**Status: E24-7 complete after ten bounded increments.
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -39,8 +39,7 @@ pre-flight gate
 in `genia-2026`) recorded **GO** on 2026-09-19, and a dependency-ordered
 implementation ticket sequence exists
 ([`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md)).
-E24-1 through E24-6 are complete; E24-7 is in progress (increments 1-9
-of several); E24-8 remains.
+E24-1 through E24-7 are complete; E24-8 remains.
 
 ## Authority
 
@@ -86,9 +85,9 @@ before implementing:
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`eb171afc434b3b9110007b8be76f6b0eff850311`](https://github.com/m0smith/genia-2026/commit/eb171afc434b3b9110007b8be76f6b0eff850311) |
+| `genia-2026` contract revision | [`a2229cb9b079a379a5eeae76a618fe69a2bd6daa`](https://github.com/m0smith/genia-2026/commit/a2229cb9b079a379a5eeae76a618fe69a2bd6daa) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | `genia-2026` `main` after merging `#974` (the `open_functions` `supported`-not-`partial` guidance correction), found necessary while preparing E24-6. This is the exact revision `src/protocol.hpp`'s `kContractRevision` declares and `genia-adapter`'s `capabilities` response reports. |
+| Represents | `genia-2026` `main` after merging `#975`, which added the authoritative R23 shared evidence required by E24-7. This is the exact revision `src/protocol.hpp`'s `kContractRevision` declares and `genia-adapter`'s `capabilities` response reports. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
@@ -199,7 +198,7 @@ Increment 9 adds the six-case strict R23 numeric JSON boundary: safe Integer
 numbers, exact stable Decimal encode/lexical decode, terminating-and-stable
 Rational encode, canonical finite Float64 encode, normalized rejection, and
 the required narrow success-Option/JSON-representation plumbing. Compatibility
-JSON and final E24-7 hardening/truth-completion remain further increments:
+JSON. Increment 10 completed the remaining required R22 shared evidence and final hardening:
 
 - `src/protocol.hpp` — the E16-1 wire-envelope helpers, plus the
   per-capability status overrides (`parser`/`ast_lowering`/
@@ -399,7 +398,7 @@ JSON and final E24-7 hardening/truth-completion remain further increments:
   `unsupported` per case, or are gated out entirely by every
   cross-module case's separate `multi_file_eval` requirement (see
   `m0smith/genia-2026#973`/`#974`). Running the full shared spec corpus
-  against it: `total=755 passed=139 failed=0 unsupported=616
+  against it: `total=755 passed=141 failed=0 unsupported=614
   protocol_error=0 crash=0 timeout=0 invalid=0` — the 7 pinned E24-4
   cases (`outcome_values`, `lambda_function_call`,
   `pattern_case_dispatch`, `pipeline_composition`,
@@ -424,7 +423,9 @@ JSON and final E24-7 hardening/truth-completion remain further increments:
   `r22-numeric-map-key-cross-kind.yaml`, and the now-reachable
   `r18-map-equal-keys-share-every-operation.yaml`; increment 8 adds the
   R23 numeric field-format cases and older field-spec cases using the
-  same implemented surface; increment 9 adds all six `r23-json-*` cases.
+  same implemented surface; increment 9 adds all six `r23-json-*` cases;
+  increment 10 adds the two remaining required R22 eval cases for normalized
+  mixed-domain rejection and cross-surface numeric quoting/pattern matching.
 - String storage/rendering is byte-transparent (copies UTF-8 bytes
   through unexamined), which correctly handles literal storage,
   equality, and display for any well-formed UTF-8 input, but is not yet
@@ -432,7 +433,8 @@ JSON and final E24-7 hardening/truth-completion remain further increments:
   see `docs/design/r24/native-primitive-inventory.md`'s "UTF-8 decode/
   code-point iteration" primitive; that becomes necessary once a
   string-indexing/length function is in scope.
-- General `some`/`none` Option behavior beyond increment 9's narrow JSON-success path,
+- General `some`/`none` Option behavior beyond increment 9's narrow JSON-success
+  path and increment 10's mixed-domain `none("type-error", context)` result,
   general diagnostic normalization (beyond the one undefined-name
   case), and general postfix call application (calling the result of a
   call or a parenthesized expression, e.g. immediately-invoked lambdas)
@@ -469,7 +471,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=755 passed=139 failed=0 unsupported=616 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=755 passed=141 failed=0 unsupported=614 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):
