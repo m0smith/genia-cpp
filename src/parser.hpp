@@ -794,6 +794,12 @@ class Parser {
     if (peek().kind == TokenKind::Integer) {
       return pattern::Pattern::integer_literal(advance().text);
     }
+    if (peek().kind == TokenKind::Decimal) {
+      auto canonical = canonicalize_decimal_literal(advance().text);
+      if (!canonical.has_value()) return std::nullopt;
+      return pattern::Pattern::decimal_literal(std::move(canonical->coefficient_digits),
+                                               canonical->exponent);
+    }
     if (peek().kind == TokenKind::Ident) {
       const std::string text = peek().text;
       advance();
@@ -1108,6 +1114,10 @@ class Parser {
       items.push_back(std::move(*item));
       if (peek().kind == TokenKind::Comma) {
         advance();
+        if (peek().kind == closing) {
+          advance();
+          return items;
+        }
         continue;
       }
       if (peek().kind == closing) {
@@ -1145,6 +1155,10 @@ class Parser {
       }
       if (peek().kind == TokenKind::Comma) {
         advance();
+        if (peek().kind == TokenKind::RBracket) {
+          advance();
+          return items;
+        }
         continue;
       }
       if (peek().kind == TokenKind::RBracket) {
@@ -1292,6 +1306,20 @@ class Parser {
       if (name == "false") {
         advance();
         return ast::Node::bool_literal(false);
+      }
+      if ((name == "quote" || name == "quasiquote") && peek_at(1).kind == TokenKind::LParen) {
+        advance();
+        advance();
+        auto inner = parse_expr();
+        if (!inner.has_value() || peek().kind != TokenKind::RParen) return std::nullopt;
+        advance();
+        // R24 only needs the R22 self-evaluating numeric-literal surface.
+        // Other quoted forms remain unsupported rather than acquiring
+        // incomplete quote semantics.
+        if (inner->kind != ast::Kind::Literal && inner->kind != ast::Kind::DecimalLiteral) {
+          return std::nullopt;
+        }
+        return ast::Node::quote(std::move(*inner), name == "quasiquote");
       }
       if (is_reserved_keyword(name)) {
         return std::nullopt;

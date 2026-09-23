@@ -169,6 +169,29 @@ inline std::optional<json> project(const core_ir::Node& node) {
       }
       return json{{"node", "IrUnary"}, {"op", core_ir::op_token_name(node.op)}, {"expr", *operand}};
     }
+    case core_ir::Kind::Quote:
+    case core_ir::Kind::QuasiQuote: {
+      json quoted;
+      if (node.left->literal_kind == core_ir::LiteralKind::Integer) {
+        try {
+          quoted = json{{"kind", "Literal"}, {"value", std::stoll(node.left->integer_digits)}};
+        } catch (const std::exception&) {
+          return std::nullopt;
+        }
+      } else if (node.left->literal_kind == core_ir::LiteralKind::Decimal) {
+        try {
+          quoted = json{{"kind", "Literal"},
+                        {"value", std::stod(node.left->decimal_coefficient_digits + "e" +
+                                            std::to_string(node.left->decimal_exponent))}};
+        } catch (const std::exception&) {
+          return std::nullopt;
+        }
+      } else {
+        return std::nullopt;
+      }
+      return json{{"node", node.kind == core_ir::Kind::Quote ? "IrQuote" : "IrQuasiQuote"},
+                  {"expr", quoted}};
+    }
     case core_ir::Kind::Var:
       return json{{"node", "IrVar"}, {"name", node.name}};
     case core_ir::Kind::Binary: {

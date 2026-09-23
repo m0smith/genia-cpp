@@ -109,6 +109,7 @@ struct Value {
   std::shared_ptr<Value> outcome_context;
   std::shared_ptr<Value> outcome_value;
   bool outcome_is_err = true;
+  bool outcome_is_none = false;
 
   std::string represented_facet;
   std::shared_ptr<Value> represented_value;
@@ -206,6 +207,16 @@ struct Value {
     value.kind = Kind::Outcome;
     value.outcome_is_err = false;
     value.outcome_value = std::make_shared<Value>(std::move(inner));
+    return value;
+  }
+
+  static Value make_outcome_none(Value reason, Value context) {
+    Value value;
+    value.kind = Kind::Outcome;
+    value.outcome_is_err = false;
+    value.outcome_is_none = true;
+    value.outcome_reason = std::make_shared<Value>(std::move(reason));
+    value.outcome_context = std::make_shared<Value>(std::move(context));
     return value;
   }
 

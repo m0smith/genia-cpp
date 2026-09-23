@@ -69,6 +69,12 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       }
       return core_ir::Node::unary(*op, std::move(*operand));
     }
+    case ast::Kind::Quote:
+    case ast::Kind::QuasiQuote: {
+      auto inner = lower_node(*node.left);
+      if (!inner.has_value()) return std::nullopt;
+      return core_ir::Node::quote(std::move(*inner), node.kind == ast::Kind::QuasiQuote);
+    }
     case ast::Kind::Binary: {
       if (node.op == "|>") {
         auto flattened = flatten_pipeline(node);

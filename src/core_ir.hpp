@@ -66,6 +66,8 @@ enum class Kind : std::uint8_t {
   OpenFuncDef,
   // E24-7: portable IrUnary (see ir_projection.hpp for the wire shape).
   Unary,
+  Quote,
+  QuasiQuote,
 };
 
 enum class LiteralKind : std::uint8_t { Integer, String, Bool, Decimal };
@@ -203,6 +205,13 @@ struct Node {
     n.kind = Kind::Unary;
     n.op = op;
     n.left = std::make_shared<Node>(std::move(operand));
+    return n;
+  }
+
+  static Node quote(Node inner, bool quasi) {
+    Node n;
+    n.kind = quasi ? Kind::QuasiQuote : Kind::Quote;
+    n.left = std::make_shared<Node>(std::move(inner));
     return n;
   }
 

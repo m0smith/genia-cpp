@@ -39,18 +39,18 @@
     "cli"
   ],
   "contract_revision": {
-    "checkout": "7df2c890783b47af1ba92dc76d6fe429c660fcc1",
-    "classification": "resolvable_ancestor",
-    "declared": "eb171afc434b3b9110007b8be76f6b0eff850311"
+    "checkout": "a2229cb9b079a379a5eeae76a618fe69a2bd6daa",
+    "classification": "current",
+    "declared": "a2229cb9b079a379a5eeae76a618fe69a2bd6daa"
   },
   "counts": {
     "crash": 0,
     "fail": 0,
     "invalid": 0,
-    "pass": 139,
+    "pass": 141,
     "protocol_error": 0,
     "timeout": 0,
-    "unsupported": 616
+    "unsupported": 614
   },
   "protocol_version": "1",
   "total_cases": 755

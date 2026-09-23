@@ -43,7 +43,7 @@ inline constexpr const char* kProtocolVersion = "1";
 // case) and #974 (the roadmap's own guidance to declare
 // open_functions `partial` was itself wrong -- `supported` is the
 // correct declaration; see protocol.hpp's capability_overrides()).
-inline constexpr const char* kContractRevision = "eb171afc434b3b9110007b8be76f6b0eff850311";
+inline constexpr const char* kContractRevision = "a2229cb9b079a379a5eeae76a618fe69a2bd6daa";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -91,7 +91,7 @@ inline const std::vector<std::string>& known_capabilities() {
 }
 
 inline constexpr const char* kUnsupportedReason =
-    "genia-cpp implements only the E24-2..E24-7(increment 9) vertical "
+    "genia-cpp implements only the E24-2..E24-7 vertical "
     "slice (integer/Decimal literals, unary minus, string/boolean/list/map "
     "literals, bare-name references, assignment, `+ - * / == != % "
     "< <= > >=` binary expressions -- including the full R22 exact-family "
