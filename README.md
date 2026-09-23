@@ -386,8 +386,12 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   E24-5 adds no new Genia semantics or capabilities.
 - `genia-adapter` (the built binary) declares `parser`, `ast_lowering`,
   `cli_command_mode`, `cli_file_mode`, and `open_functions` `supported`,
-  `core_ir_eval` `partial`, and every other `spec/manifest.json`
-  capability `unsupported`. `open_functions` is declared `supported`
+  and declares `core_ir_eval`, `prelude_autoload`, and `shared_spec_runner`
+  `partial`. Every other `spec/manifest.json` capability is `unsupported`.
+  `prelude_autoload` is partial because this floor installs only the bounded
+  source-level prelude needed by its evidence; `shared_spec_runner` is partial
+  for the same reason the Python reference adapter uses that status. Neither
+  declaration makes additional cases applicable. `open_functions` is `supported`
   rather than `partial` deliberately: `tools/spec_runner/capabilities.py`'s
   requires-gate only attempts a case whose `requires` list names
   `open_functions` when it is declared exactly `supported` (`partial`
@@ -456,6 +460,18 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   patterns (`open f(x, ..rest) = ...`) all remain unimplemented — see
   later slices'/`genia-2026`'s
   [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md).
+
+## Explicitly deferred after R24
+
+- R25: refs, cells, processes, actors, and wider state/concurrency behavior.
+- R26: REPL and broader data bridges.
+- R27: Flow, pipe mode, HTTP serving, and outbound HTTP.
+- Cross-module open-function contribution/selection and wider parser/evaluator
+  behavior outside the R24 floor, including general Option and compatibility JSON.
+- Configuration/secrets, resource I/O, external execution, AI/retrieval providers,
+  host interop, debugger/shell, browser runtime, and help/documentation parity.
+
+These are expected `unsupported` results, not hidden failures or Python-parity claims.
 
 ## Building and running the adapter
 

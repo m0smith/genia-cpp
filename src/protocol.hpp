@@ -136,7 +136,8 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
   static const std::vector<std::pair<std::string, std::string>> kOverrides = {
       {"parser", "supported"},        {"ast_lowering", "supported"},
       {"core_ir_eval", "partial"},    {"cli_command_mode", "supported"},
-      {"cli_file_mode", "supported"}, {"open_functions", "supported"},
+      {"cli_file_mode", "supported"}, {"prelude_autoload", "partial"},
+      {"shared_spec_runner", "partial"}, {"open_functions", "supported"},
   };
   return kOverrides;
 }
