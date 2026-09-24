@@ -217,6 +217,7 @@ inline std::optional<std::string> display(const value::Value& value) {
     case value::Kind::Bytes:
     case value::Kind::Closure:
     case value::Kind::Ref:
+    case value::Kind::Cell:
     case value::Kind::Opaque:
       return std::nullopt;
   }

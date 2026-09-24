@@ -250,6 +250,7 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         }
         return invoke_closure(*args[0].closure, *args[1].list_items);
       }
+      if (node.name == "__r25_block" && !args.empty()) return args.back();
       if (node.name == "empty_env" && args.empty()) {
         return value::Value::make_opaque();
       }
@@ -266,6 +267,18 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         });
         if (!replacement.has_value()) return std::nullopt;
         return result;
+      }
+      if (node.name == "cell_send" && args.size() == 2 && args[0].kind == value::Kind::Cell &&
+          args[1].kind == value::Kind::Closure) {
+        auto target = args[0].cell;
+        auto closure = args[1].closure;
+        auto accept = [target, closure] {
+          target->send([closure](const value::Value& current) {
+            return invoke_closure(*closure, {current});
+          });
+        };
+        if (!value::stage_cell_send(accept)) accept();
+        return args[0];
       }
       auto callee = env->lookup(node.name);
       if (callee.has_value() && callee->kind == value::Kind::Closure) {

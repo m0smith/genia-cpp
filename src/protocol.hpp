@@ -145,6 +145,7 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
       {"shared_spec_runner", "partial"},
       {"open_functions", "supported"},
       {"refs", "supported"},
+      {"cell_primitives", "supported"},
   };
   return kOverrides;
 }

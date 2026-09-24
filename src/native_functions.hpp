@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "equality.hpp"
+#include "cell.hpp"
 #include "float64.hpp"
 #include "format.hpp"
 #include "json.hpp"
@@ -50,6 +51,45 @@ using value::Value;
 // Callers must treat std::nullopt as "this case is unsupported", never
 // attempt a fallback value.
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
+  if (name == "cell" && args.size() == 1) return Value::make_cell(value::Cell::create(args[0]));
+  if (name == "cell_with_state" && args.size() == 1 && args[0].kind == value::Kind::Ref)
+    return Value::make_cell(value::Cell::create_with_state(args[0].ref));
+  if ((name == "cell_get" || name == "cell_state") && args.size() == 1 &&
+      args[0].kind == value::Kind::Cell)
+    return args[0].cell->get();
+  if (name == "cell_status" && args.size() == 1 && args[0].kind == value::Kind::Cell) {
+    const auto status = args[0].cell->status();
+    return Value::make_string(status == value::Cell::Status::Ready
+                                  ? "ready"
+                                  : status == value::Cell::Status::Stopped ? "stopped" : "failed");
+  }
+  if ((name == "cell_alive?" || name == "cell_failed?") && args.size() == 1 &&
+      args[0].kind == value::Kind::Cell) {
+    const auto status = args[0].cell->status();
+    return Value::make_boolean(name == "cell_alive?" ? status == value::Cell::Status::Ready
+                                                     : status == value::Cell::Status::Failed);
+  }
+  if (name == "cell_error" && args.size() == 1 && args[0].kind == value::Kind::Cell) {
+    auto error = args[0].cell->error();
+    if (error.has_value()) return Value::make_outcome_some(Value::make_string(*error));
+    return Value::make_outcome_none(Value::make_string("no-error"),
+                                    Value::make_map(std::make_shared<value::OrderedMap>()));
+  }
+  if (name == "cell_stop" && args.size() == 1 && args[0].kind == value::Kind::Cell) {
+    args[0].cell->stop();
+    return args[0];
+  }
+  if (name == "restart_cell" && args.size() == 2 && args[0].kind == value::Kind::Cell) {
+    args[0].cell->restart(args[1]);
+    return args[0];
+  }
+  if (name == "_r25_await_idle" && args.empty() && value::g_r25_fixture_enabled) {
+    value::Cell::await_all_idle();
+    return Value::make_boolean(true);
+  }
+  if ((name == "some?" || name == "is_some?") && args.size() == 1)
+    return Value::make_boolean(args[0].kind == value::Kind::Outcome && !args[0].outcome_is_err &&
+                               !args[0].outcome_is_none);
   if (name == "ref" && args.empty()) {
     return Value::make_ref(std::make_shared<value::Ref>());
   }

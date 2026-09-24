@@ -1228,6 +1228,23 @@ class Parser {
       advance();
       if (peek().kind == TokenKind::Arrow) {
         advance();
+        if (peek().kind == TokenKind::LBrace) {
+          advance();
+          std::vector<ast::Node> expressions;
+          while (peek().kind != TokenKind::RBrace) {
+            auto expression = parse_expr();
+            if (!expression.has_value()) {
+              pos_ = save;
+              return std::nullopt;
+            }
+            expressions.push_back(std::move(*expression));
+          }
+          advance();
+          if (!expressions.empty()) {
+            return ast::Node::lambda(std::move(params),
+                                     ast::Node::call("__r25_block", std::move(expressions)));
+          }
+        }
         auto body = parse_expr();
         if (body.has_value()) {
           return ast::Node::lambda(std::move(params), std::move(*body));
