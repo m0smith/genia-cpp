@@ -131,7 +131,8 @@ class Cell : public std::enable_shared_from_this<Cell> {
     Update update;
   };
 
-  explicit Cell(std::shared_ptr<Ref> state) : state_(std::move(state)), worker_([this] { run(); }) {}
+  explicit Cell(std::shared_ptr<Ref> state)
+      : state_(std::move(state)), worker_([this] { run(); }) {}
 
   void run() {
     for (;;) {

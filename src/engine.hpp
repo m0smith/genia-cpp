@@ -61,7 +61,8 @@ inline std::optional<json> try_lower(const std::string& source) {
 // `source` (unsupported grammar, undefined name, non-integer operand,
 // or a division this slice cannot represent exactly) -- the caller must
 // report the whole case as unsupported, never emit a guessed result.
-inline std::optional<RunResult> try_run(const std::string& source, bool enable_r25_fixture = false) {
+inline std::optional<RunResult> try_run(const std::string& source,
+                                        bool enable_r25_fixture = false) {
   struct FixtureGuard {
     bool previous;
     explicit FixtureGuard(bool enabled) : previous(value::g_r25_fixture_enabled) {

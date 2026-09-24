@@ -31,8 +31,8 @@
 #include <optional>
 #include <vector>
 
-#include "equality.hpp"
 #include "cell.hpp"
+#include "equality.hpp"
 #include "float64.hpp"
 #include "format.hpp"
 #include "json.hpp"
@@ -59,9 +59,9 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
     return args[0].cell->get();
   if (name == "cell_status" && args.size() == 1 && args[0].kind == value::Kind::Cell) {
     const auto status = args[0].cell->status();
-    return Value::make_string(status == value::Cell::Status::Ready
-                                  ? "ready"
-                                  : status == value::Cell::Status::Stopped ? "stopped" : "failed");
+    return Value::make_string(status == value::Cell::Status::Ready     ? "ready"
+                              : status == value::Cell::Status::Stopped ? "stopped"
+                                                                       : "failed");
   }
   if ((name == "cell_alive?" || name == "cell_failed?") && args.size() == 1 &&
       args[0].kind == value::Kind::Cell) {
