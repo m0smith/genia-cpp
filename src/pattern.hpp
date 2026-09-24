@@ -40,6 +40,7 @@ struct Pattern {
   // matching this slice's expression-literal grammar).
   std::string name;
   bool literal_is_decimal = false;
+  bool literal_is_string = false;
   std::string decimal_coefficient_digits;
   int64_t decimal_exponent = 0;
 
@@ -87,6 +88,14 @@ struct Pattern {
     p.literal_is_decimal = true;
     p.decimal_coefficient_digits = std::move(coefficient_digits);
     p.decimal_exponent = exponent;
+    return p;
+  }
+
+  static Pattern string_literal(std::string text) {
+    Pattern p;
+    p.kind = Kind::Literal;
+    p.literal_is_string = true;
+    p.name = std::move(text);
     return p;
   }
 

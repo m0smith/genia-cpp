@@ -287,6 +287,20 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         if (!value::stage_cell_send(accept)) accept();
         return args[0];
       }
+      if (node.name == "spawn" && args.size() == 1 && args[0].kind == value::Kind::Closure) {
+        auto closure = args[0].closure;
+        return value::Value::make_process(
+            value::Process::create([closure](const value::Value& message) {
+              return invoke_closure(*closure, {message});
+            }));
+      }
+      if (node.name == "send" && args.size() == 2 && args[0].kind == value::Kind::Process) {
+        auto process = args[0].process;
+        auto message = args[1];
+        auto accept = [process, message] { process->send(message); };
+        if (!value::stage_cell_send(accept)) accept();
+        return value::Value::make_opaque();
+      }
       auto callee = env->lookup(node.name);
       if (callee.has_value() && callee->kind == value::Kind::Closure) {
         return invoke_closure(*callee->closure, args);
