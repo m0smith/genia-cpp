@@ -5,7 +5,7 @@ does not self-merge or pretend the stacked branches are already on `main`.
 
 ## Exact evidence
 
-- Authority revision: `d2de7b799ed303e3d49b9e59ebd1c7584e693c12`
+- Authority revision: `9ab0d3a323c9add045d47db1f476aead96af1e77`
 - Protocol: `1`
 - Shared suite: `762 total / 149 pass / 613 unsupported`
 - Failure taxonomy: `fail=0`, `protocol_error=0`, `crash=0`, `timeout=0`,
@@ -18,7 +18,7 @@ does not self-merge or pretend the stacked branches are already on `main`.
 The audit found one real evidence and implementation defect: shared cases
 proved asynchronous effects but did not observe the return values of
 `cell_send` and `send`; C++ returned noncontractual placeholders. Authority
-commit `d2de7b7` adds the missing shared case, and C++ commit `b0740de` repairs
+commits `d2de7b7`/`9ab0d3a` add the missing deterministic-exit shared case, and C++ commit `b0740de` repairs
 both calls to return exact `none("nil")`. Python and C++ pass the new case.
 
 The re-audit found no timing thresholds, sleeps, Actor/ActorRef surface,

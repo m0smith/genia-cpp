@@ -89,7 +89,7 @@ before implementing:
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`d2de7b799ed303e3d49b9e59ebd1c7584e693c12`](https://github.com/m0smith/genia-2026/commit/d2de7b799ed303e3d49b9e59ebd1c7584e693c12) |
+| `genia-2026` contract revision | [`9ab0d3a323c9add045d47db1f476aead96af1e77`](https://github.com/m0smith/genia-2026/commit/9ab0d3a323c9add045d47db1f476aead96af1e77) |
 | E16-1 adapter-protocol version | `1` |
 | Represents | E25-0 PR #1007 head: portable Ref/Cell/local Process contract and deterministic R16 causal evidence. This is the exact revision `src/protocol.hpp` declares. This C++ branch is stacked and must not merge before #1007. |
 

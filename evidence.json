@@ -41,9 +41,9 @@
     "cli"
   ],
   "contract_revision": {
-    "checkout": "d2de7b799ed303e3d49b9e59ebd1c7584e693c12",
+    "checkout": "9ab0d3a323c9add045d47db1f476aead96af1e77",
     "classification": "current",
-    "declared": "d2de7b799ed303e3d49b9e59ebd1c7584e693c12"
+    "declared": "9ab0d3a323c9add045d47db1f476aead96af1e77"
   },
   "counts": {
     "crash": 0,
