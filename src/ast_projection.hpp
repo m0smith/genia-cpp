@@ -104,6 +104,8 @@ inline std::optional<json> project(const ast::Node& node) {
     }
     case ast::Kind::List:
       return json{{"kind", "List"}};
+    case ast::Kind::Block:
+      return json{{"kind", "Block"}};
     case ast::Kind::Assign: {
       auto value = project(*node.left);
       if (!value.has_value()) {

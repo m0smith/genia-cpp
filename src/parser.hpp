@@ -1241,8 +1241,7 @@ class Parser {
           }
           advance();
           if (!expressions.empty()) {
-            return ast::Node::lambda(std::move(params),
-                                     ast::Node::call("__r25_block", std::move(expressions)));
+            return ast::Node::lambda(std::move(params), ast::Node::block(std::move(expressions)));
           }
         }
         auto body = parse_expr();

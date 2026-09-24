@@ -215,6 +215,14 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       }
       return value::Value::make_list(std::move(items));
     }
+    case core_ir::Kind::Block: {
+      std::optional<value::Value> result;
+      for (const auto& expression : node.items) {
+        result = eval_node(expression, env);
+        if (!result.has_value()) return std::nullopt;
+      }
+      return result;
+    }
     case core_ir::Kind::Map: {
       auto new_map = std::make_shared<value::OrderedMap>();
       for (const auto& [key, value_node] : node.map_entries) {
@@ -250,7 +258,6 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         }
         return invoke_closure(*args[0].closure, *args[1].list_items);
       }
-      if (node.name == "__r25_block" && !args.empty()) return args.back();
       if (node.name == "empty_env" && args.empty()) {
         return value::Value::make_opaque();
       }
