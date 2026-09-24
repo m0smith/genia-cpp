@@ -1,7 +1,7 @@
 # genia-cpp
 
-**Status: R24 complete through E24-8; R25 E25-2 Cell implemented on a
-temporary stack above `genia-cpp` PR #21 and `genia-2026` PR #1007.
+**Status: R24 complete through E24-8; R25 E25-3 local Process implemented on a
+temporary stack above `genia-cpp` PRs #21/#22 and `genia-2026` PR #1007.
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -471,8 +471,8 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
 
 ## Explicitly deferred after R24
 
-- R25 E25-1 Ref and E25-2 Cell are implemented on this branch. Local Process
-  (E25-3) remains unsupported. Actor is excluded from R25 and belongs to R38.
+- R25 E25-1 Ref, E25-2 Cell, and E25-3 local Process are implemented on this
+  branch. Actor is excluded from R25 and belongs to R38.
 - R26: REPL and broader data bridges.
 - R27: Flow, pipe mode, HTTP serving, and outbound HTTP.
 - Cross-module open-function contribution/selection and wider parser/evaluator
