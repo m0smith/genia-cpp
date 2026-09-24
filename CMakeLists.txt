@@ -35,6 +35,7 @@ add_executable(genia-adapter-tests
   tests/test_diagnostic_boundary.cpp
   tests/test_ref.cpp
   tests/test_cell.cpp
+  tests/test_process.cpp
 )
 target_include_directories(genia-adapter-tests PRIVATE
   third_party/nlohmann_json
