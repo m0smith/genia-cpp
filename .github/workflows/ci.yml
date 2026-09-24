@@ -22,6 +22,10 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # Both jobs use explicit checkout paths below. Serialize them because
+      # self-hosted matrix jobs may share a workspace and otherwise replace
+      # each other's pinned contract checkout or adapter binary mid-run.
+      max-parallel: 1
       matrix:
         include:
           - compiler: GCC
@@ -54,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           cmake --version
-          c++ --version
+          "${{ matrix.cxx }}" --version
           python --version
           clang-format --version
           clang-tidy --version
