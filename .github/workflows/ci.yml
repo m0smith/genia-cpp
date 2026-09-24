@@ -17,9 +17,19 @@ concurrency:
 jobs:
   build-test-conformance:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    name: Build, test, and conformance
+    name: Build, test, and conformance (${{ matrix.compiler }})
     runs-on: [self-hosted, linux, x64, genia-cpp]
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: GCC
+            cc: gcc
+            cxx: g++
+          - compiler: Clang
+            cc: clang
+            cxx: clang++
 
     steps:
       - name: Check out genia-cpp
@@ -51,6 +61,9 @@ jobs:
 
       - name: Configure release build
         working-directory: genia-cpp
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Build

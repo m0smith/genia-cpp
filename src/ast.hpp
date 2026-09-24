@@ -68,7 +68,16 @@ enum class Kind : std::uint8_t {
   QuasiQuote,
 };
 
+struct MapEntry;
+
 struct Node {
+  Node();
+  ~Node();
+  Node(const Node&);
+  Node(Node&&) noexcept;
+  Node& operator=(const Node&);
+  Node& operator=(Node&&) noexcept;
+
   Kind kind = Kind::Literal;
 
   // Literal: unsigned decimal digit text (sign is never part of a
@@ -135,7 +144,7 @@ struct Node {
   // `left`). Spread: the spread expression (reuses `left`).
 
   // Map: key -> value-expression entries, in source order.
-  std::vector<std::pair<std::string, Node>> map_entries;
+  std::vector<MapEntry> map_entries;
 
   static Node literal(std::string digits) {
     Node n;
@@ -270,12 +279,7 @@ struct Node {
     return n;
   }
 
-  static Node map_literal(std::vector<std::pair<std::string, Node>> entries) {
-    Node n;
-    n.kind = Kind::Map;
-    n.map_entries = std::move(entries);
-    return n;
-  }
+  static Node map_literal(std::vector<MapEntry> entries);
 
   static Node spread(Node inner) {
     Node n;
@@ -284,6 +288,25 @@ struct Node {
     return n;
   }
 };
+
+struct MapEntry {
+  std::string key;
+  Node value;
+};
+
+inline Node::Node() = default;
+inline Node::~Node() = default;
+inline Node::Node(const Node&) = default;
+inline Node::Node(Node&&) noexcept = default;
+inline Node& Node::operator=(const Node&) = default;
+inline Node& Node::operator=(Node&&) noexcept = default;
+
+inline Node Node::map_literal(std::vector<MapEntry> entries) {
+  Node n;
+  n.kind = Kind::Map;
+  n.map_entries = std::move(entries);
+  return n;
+}
 
 // A program is a sequence of independent top-level expressions -- Genia
 // programs are not newline- or separator-delimited at this level; one

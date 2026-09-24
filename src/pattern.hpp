@@ -30,7 +30,16 @@ namespace genia::pattern {
 
 enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple, Literal, Err };
 
+struct PatternMapEntry;
+
 struct Pattern {
+  Pattern();
+  ~Pattern();
+  Pattern(const Pattern&);
+  Pattern(Pattern&&) noexcept;
+  Pattern& operator=(const Pattern&);
+  Pattern& operator=(Pattern&&) noexcept;
+
   Kind kind = Kind::Wildcard;
 
   // Bind, Rest: the name to bind (Rest's name may be empty, meaning the
@@ -52,7 +61,7 @@ struct Pattern {
   // Map: key -> value-pattern pairs. A bare `{name}` shorthand key
   // lowers to `{name, Bind(name)}` at parse time (see parser.hpp),
   // matching genia-2026's real map-pattern shorthand rule.
-  std::vector<std::pair<std::string, Pattern>> map_items;
+  std::vector<PatternMapEntry> map_items;
 
   static Pattern bind(std::string bound_name) {
     Pattern p;
@@ -104,12 +113,7 @@ struct Pattern {
     return p;
   }
 
-  static Pattern map(std::vector<std::pair<std::string, Pattern>> key_patterns) {
-    Pattern p;
-    p.kind = Kind::Map;
-    p.map_items = std::move(key_patterns);
-    return p;
-  }
+  static Pattern map(std::vector<PatternMapEntry> key_patterns);
 
   static Pattern err(Pattern reason, Pattern context) {
     Pattern p;
@@ -119,5 +123,24 @@ struct Pattern {
     return p;
   }
 };
+
+struct PatternMapEntry {
+  std::string key;
+  Pattern value;
+};
+
+inline Pattern::Pattern() = default;
+inline Pattern::~Pattern() = default;
+inline Pattern::Pattern(const Pattern&) = default;
+inline Pattern::Pattern(Pattern&&) noexcept = default;
+inline Pattern& Pattern::operator=(const Pattern&) = default;
+inline Pattern& Pattern::operator=(Pattern&&) noexcept = default;
+
+inline Pattern Pattern::map(std::vector<PatternMapEntry> key_patterns) {
+  Pattern p;
+  p.kind = Kind::Map;
+  p.map_items = std::move(key_patterns);
+  return p;
+}
 
 }  // namespace genia::pattern

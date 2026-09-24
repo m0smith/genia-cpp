@@ -860,7 +860,7 @@ class Parser {
     }
     if (peek().kind == TokenKind::LBrace) {
       advance();
-      std::vector<std::pair<std::string, pattern::Pattern>> items;
+      std::vector<pattern::PatternMapEntry> items;
       if (peek().kind != TokenKind::RBrace) {
         while (true) {
           if (peek().kind != TokenKind::Ident) {
@@ -1171,7 +1171,7 @@ class Parser {
 
   std::optional<ast::Node> parse_map_literal() {
     advance();  // '{'
-    std::vector<std::pair<std::string, ast::Node>> entries;
+    std::vector<ast::MapEntry> entries;
     if (peek().kind != TokenKind::RBrace) {
       while (true) {
         if (peek().kind != TokenKind::Ident && peek().kind != TokenKind::String) {
