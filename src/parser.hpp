@@ -860,7 +860,7 @@ class Parser {
     }
     if (peek().kind == TokenKind::LBrace) {
       advance();
-      std::vector<std::pair<std::string, pattern::Pattern>> items;
+      std::vector<pattern::PatternMapEntry> items;
       if (peek().kind != TokenKind::RBrace) {
         while (true) {
           if (peek().kind != TokenKind::Ident) {
@@ -876,7 +876,7 @@ class Parser {
             }
             value_pattern = std::move(*inner);
           }
-          items.emplace_back(std::move(key), std::move(value_pattern));
+          items.push_back(pattern::PatternMapEntry{std::move(key), std::move(value_pattern)});
           if (peek().kind == TokenKind::Comma) {
             advance();
             continue;
@@ -1171,7 +1171,7 @@ class Parser {
 
   std::optional<ast::Node> parse_map_literal() {
     advance();  // '{'
-    std::vector<std::pair<std::string, ast::Node>> entries;
+    std::vector<ast::MapEntry> entries;
     if (peek().kind != TokenKind::RBrace) {
       while (true) {
         if (peek().kind != TokenKind::Ident && peek().kind != TokenKind::String) {
@@ -1186,7 +1186,7 @@ class Parser {
         if (!value.has_value()) {
           return std::nullopt;
         }
-        entries.emplace_back(std::move(key), std::move(*value));
+        entries.push_back(ast::MapEntry{std::move(key), std::move(*value)});
         if (peek().kind == TokenKind::Comma) {
           advance();
           continue;

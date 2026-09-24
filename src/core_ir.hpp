@@ -72,6 +72,8 @@ enum class Kind : std::uint8_t {
 
 enum class LiteralKind : std::uint8_t { Integer, String, Bool, Decimal };
 
+struct MapEntry;
+
 // Binary operator token names, matching genia-2026's parser token names
 // (see src/genia/lowering.py: `IrBinary(lower(left), node.op, lower(right))`
 // where `node.op` is the raw lexer token name, not the symbol).
@@ -106,6 +108,13 @@ inline const char* op_token_name(Op op) {
 }
 
 struct Node {
+  Node();
+  ~Node();
+  Node(const Node&);
+  Node(Node&&) noexcept;
+  Node& operator=(const Node&);
+  Node& operator=(Node&&) noexcept;
+
   Kind kind = Kind::Literal;
 
   // Literal
@@ -165,7 +174,7 @@ struct Node {
   // genia-2026's IrMap.items; map-literal keys are always plain
   // strings, whether written as a bare identifier or a string literal
   // -- see src/genia/lowering.py's `_map_literal_key_name`).
-  std::vector<std::pair<std::string, Node>> map_entries;
+  std::vector<MapEntry> map_entries;
 
   static Node integer_literal(std::string digits) {
     Node n;
@@ -304,12 +313,7 @@ struct Node {
     return n;
   }
 
-  static Node map_literal(std::vector<std::pair<std::string, Node>> entries) {
-    Node n;
-    n.kind = Kind::Map;
-    n.map_entries = std::move(entries);
-    return n;
-  }
+  static Node map_literal(std::vector<MapEntry> entries);
 
   static Node pipeline(Node source, std::vector<Node> stages) {
     Node n;
@@ -326,5 +330,24 @@ struct Node {
     return n;
   }
 };
+
+struct MapEntry {
+  std::string key;
+  Node value;
+};
+
+inline Node::Node() = default;
+inline Node::~Node() = default;
+inline Node::Node(const Node&) = default;
+inline Node::Node(Node&&) noexcept = default;
+inline Node& Node::operator=(const Node&) = default;
+inline Node& Node::operator=(Node&&) noexcept = default;
+
+inline Node Node::map_literal(std::vector<MapEntry> entries) {
+  Node n;
+  n.kind = Kind::Map;
+  n.map_entries = std::move(entries);
+  return n;
+}
 
 }  // namespace genia::core_ir

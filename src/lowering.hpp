@@ -185,14 +185,14 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       return core_ir::Node::open_func_def(node.name, node.case_patterns, std::move(results));
     }
     case ast::Kind::Map: {
-      std::vector<std::pair<std::string, core_ir::Node>> entries;
+      std::vector<core_ir::MapEntry> entries;
       entries.reserve(node.map_entries.size());
       for (const auto& [key, value_node] : node.map_entries) {
         auto lowered_value = lower_node(value_node);
         if (!lowered_value.has_value()) {
           return std::nullopt;
         }
-        entries.emplace_back(key, std::move(*lowered_value));
+        entries.push_back(core_ir::MapEntry{key, std::move(*lowered_value)});
       }
       return core_ir::Node::map_literal(std::move(entries));
     }
