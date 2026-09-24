@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: R24 complete through E24-8; R25 E25-3 local Process implemented on a
+**Status: R24 complete through E24-8; R25 E25-4 hardening complete on a
 temporary stack above `genia-cpp` PRs #21/#22 and `genia-2026` PR #1007.
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
