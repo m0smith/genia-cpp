@@ -64,8 +64,14 @@ TEST_CASE("R25 nested Cell sends commit only with the enclosing update") {
       "target = cell(10)\n"
       "committed = cell(0)\n"
       "discarded = cell(0)\n"
-      "cell_send(committed, (x) -> { cell_send(target, (n) -> n + 5) x + 1 })\n"
-      "cell_send(discarded, (x) -> { cell_send(target, (n) -> n + 100) 1 / 0 })\n"
+      "cell_send(committed, (x) -> {\n"
+      "  cell_send(target, (n) -> n + 5)\n"
+      "  x + 1\n"
+      "})\n"
+      "cell_send(discarded, (x) -> {\n"
+      "  cell_send(target, (n) -> n + 100)\n"
+      "  1 / 0\n"
+      "})\n"
       "_r25_await_idle()\n"
       "[cell_get(committed), cell_get(target), cell_failed?(discarded)]",
       true);
