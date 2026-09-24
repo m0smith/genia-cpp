@@ -73,8 +73,7 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
   if (name == "cell_error" && args.size() == 1 && args[0].kind == value::Kind::Cell) {
     auto error = args[0].cell->error();
     if (error.has_value()) return Value::make_outcome_some(Value::make_string(*error));
-    return Value::make_outcome_none(Value::make_string("no-error"),
-                                    Value::make_map(std::make_shared<value::OrderedMap>()));
+    return Value::make_outcome_none(Value::make_string("nil"));
   }
   if (name == "cell_stop" && args.size() == 1 && args[0].kind == value::Kind::Cell) {
     args[0].cell->stop();
@@ -98,8 +97,7 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
   if (name == "process_error" && args.size() == 1 && args[0].kind == value::Kind::Process) {
     auto error = args[0].process->error();
     if (error.has_value()) return Value::make_outcome_some(Value::make_string(*error));
-    return Value::make_outcome_none(Value::make_string("no-error"),
-                                    Value::make_map(std::make_shared<value::OrderedMap>()));
+    return Value::make_outcome_none(Value::make_string("nil"));
   }
   if (name == "append" && args.size() == 2 && args[0].kind == value::Kind::List &&
       args[1].kind == value::Kind::List) {

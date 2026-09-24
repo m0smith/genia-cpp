@@ -229,6 +229,15 @@ struct Value {
     return value;
   }
 
+  static Value make_outcome_none(Value reason) {
+    Value value;
+    value.kind = Kind::Outcome;
+    value.outcome_is_err = false;
+    value.outcome_is_none = true;
+    value.outcome_reason = std::make_shared<Value>(std::move(reason));
+    return value;
+  }
+
   static Value make_represented(std::string facet, Value inner) {
     Value value;
     value.kind = Kind::Represented;

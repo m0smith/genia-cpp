@@ -188,8 +188,10 @@ inline std::optional<std::string> display(const value::Value& value) {
     case value::Kind::Outcome: {
       if (value.outcome_is_none) {
         auto reason = display(*value.outcome_reason);
+        if (!reason.has_value()) return std::nullopt;
+        if (value.outcome_context == nullptr) return "none(" + *reason + ")";
         auto context = display(*value.outcome_context);
-        if (!reason.has_value() || !context.has_value()) return std::nullopt;
+        if (!context.has_value()) return std::nullopt;
         return "none(" + *reason + ", " + *context + ")";
       }
       if (!value.outcome_is_err) {
