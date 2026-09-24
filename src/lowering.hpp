@@ -192,7 +192,7 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
         if (!lowered_value.has_value()) {
           return std::nullopt;
         }
-        entries.emplace_back(key, std::move(*lowered_value));
+        entries.push_back(core_ir::MapEntry{key, std::move(*lowered_value)});
       }
       return core_ir::Node::map_literal(std::move(entries));
     }

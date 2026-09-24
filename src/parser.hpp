@@ -876,7 +876,7 @@ class Parser {
             }
             value_pattern = std::move(*inner);
           }
-          items.emplace_back(std::move(key), std::move(value_pattern));
+          items.push_back(pattern::PatternMapEntry{std::move(key), std::move(value_pattern)});
           if (peek().kind == TokenKind::Comma) {
             advance();
             continue;
@@ -1186,7 +1186,7 @@ class Parser {
         if (!value.has_value()) {
           return std::nullopt;
         }
-        entries.emplace_back(std::move(key), std::move(*value));
+        entries.push_back(ast::MapEntry{std::move(key), std::move(*value)});
         if (peek().kind == TokenKind::Comma) {
           advance();
           continue;
