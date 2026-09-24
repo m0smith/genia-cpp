@@ -1,6 +1,6 @@
 # genia-cpp
 
-**Status: R24 complete through E24-8; R25 E25-4 hardening complete on a
+**Status: R24 complete through E24-8; R25 E25-5 release candidate verified on a
 temporary stack above `genia-cpp` PRs #21/#22 and `genia-2026` PR #1007.
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
@@ -89,7 +89,7 @@ before implementing:
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`02f4caa15371f3ab6670de446cc4150debfe318e`](https://github.com/m0smith/genia-2026/commit/02f4caa15371f3ab6670de446cc4150debfe318e) |
+| `genia-2026` contract revision | [`c6d7e7d87e402f20b310b84fff5021ed3eebc3cc`](https://github.com/m0smith/genia-2026/commit/c6d7e7d87e402f20b310b84fff5021ed3eebc3cc) |
 | E16-1 adapter-protocol version | `1` |
 | Represents | E25-0 PR #1007 head: portable Ref/Cell/local Process contract and deterministic R16 causal evidence. This is the exact revision `src/protocol.hpp` declares. This C++ branch is stacked and must not merge before #1007. |
 

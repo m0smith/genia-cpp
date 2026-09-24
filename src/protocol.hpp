@@ -43,7 +43,7 @@ inline constexpr const char* kProtocolVersion = "1";
 // case) and #974 (the roadmap's own guidance to declare
 // open_functions `partial` was itself wrong -- `supported` is the
 // correct declaration; see protocol.hpp's capability_overrides()).
-inline constexpr const char* kContractRevision = "02f4caa15371f3ab6670de446cc4150debfe318e";
+inline constexpr const char* kContractRevision = "c6d7e7d87e402f20b310b84fff5021ed3eebc3cc";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
