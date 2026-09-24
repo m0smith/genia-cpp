@@ -1,9 +1,10 @@
 {
-  "applicable_cases": 755,
+  "applicable_cases": 762,
   "capabilities": {
     "allowlisted_host_interop": "unsupported",
     "ast_lowering": "supported",
     "bytes_json_zip": "unsupported",
+    "cell_primitives": "supported",
     "cli_command_mode": "supported",
     "cli_file_mode": "supported",
     "cli_pipe_mode": "unsupported",
@@ -13,6 +14,7 @@
     "debugger_stdio": "unsupported",
     "doc_help": "unsupported",
     "embedding_deterministic_fixture": "unsupported",
+    "execution_process": "unsupported",
     "flow_phase_1": "unsupported",
     "http_outbound_transport": "unsupported",
     "http_server": "unsupported",
@@ -23,8 +25,8 @@
     "open_functions": "supported",
     "parser": "supported",
     "prelude_autoload": "partial",
-    "process_primitives": "unsupported",
-    "refs": "unsupported",
+    "process_primitives": "supported",
+    "refs": "supported",
     "repl": "unsupported",
     "reranking_deterministic_fixture": "unsupported",
     "resource_io": "unsupported",
@@ -39,19 +41,19 @@
     "cli"
   ],
   "contract_revision": {
-    "checkout": "a2229cb9b079a379a5eeae76a618fe69a2bd6daa",
+    "checkout": "d2de7b799ed303e3d49b9e59ebd1c7584e693c12",
     "classification": "current",
-    "declared": "a2229cb9b079a379a5eeae76a618fe69a2bd6daa"
+    "declared": "d2de7b799ed303e3d49b9e59ebd1c7584e693c12"
   },
   "counts": {
     "crash": 0,
     "fail": 0,
     "invalid": 0,
-    "pass": 141,
+    "pass": 149,
     "protocol_error": 0,
     "timeout": 0,
-    "unsupported": 614
+    "unsupported": 613
   },
   "protocol_version": "1",
-  "total_cases": 755
+  "total_cases": 762
 }
