@@ -35,9 +35,8 @@ TEST_CASE("R25 repeated Cell and Process create/destroy joins every worker") {
     auto cell = Cell::create(hardening_integer(i));
     REQUIRE(cell->send([](const Value& state) { return std::optional<Value>(state); }));
     cell->await_idle();
-    auto process = Process::create([](const Value& message) {
-      return std::optional<Value>(message);
-    });
+    auto process =
+        Process::create([](const Value& message) { return std::optional<Value>(message); });
     REQUIRE(process->send(hardening_integer(i)));
     process->await_idle();
   }
