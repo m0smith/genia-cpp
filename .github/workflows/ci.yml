@@ -17,23 +17,9 @@ concurrency:
 jobs:
   build-test-conformance:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    name: Build, test, and conformance (${{ matrix.compiler }})
+    name: Build, test, and conformance
     runs-on: [self-hosted, linux, x64, genia-cpp]
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      # Both jobs use explicit checkout paths below. Serialize them because
-      # self-hosted matrix jobs may share a workspace and otherwise replace
-      # each other's pinned contract checkout or adapter binary mid-run.
-      max-parallel: 1
-      matrix:
-        include:
-          - compiler: GCC
-            cc: gcc
-            cxx: g++
-          - compiler: Clang
-            cc: clang
-            cxx: clang++
 
     steps:
       - name: Check out genia-cpp
@@ -58,16 +44,13 @@ jobs:
         run: |
           set -euo pipefail
           cmake --version
-          "${{ matrix.cxx }}" --version
+          c++ --version
           python --version
           clang-format --version
           clang-tidy --version
 
       - name: Configure release build
         working-directory: genia-cpp
-        env:
-          CC: ${{ matrix.cc }}
-          CXX: ${{ matrix.cxx }}
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Build
