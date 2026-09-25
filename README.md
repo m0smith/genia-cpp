@@ -1,7 +1,6 @@
 # genia-cpp
 
-**Status: R24 complete through E24-8; R25 E25-5 release candidate verified on a
-temporary stack above `genia-cpp` PRs #21/#22 and `genia-2026` PR #1007.
+**Status: R25 complete through E25-5, with the ordered release-candidate PR stack merged into both repositories.
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -25,7 +24,8 @@ and `-c`/file-mode CLI -- end to end (source -> parser -> portable Core
 IR -> evaluator -> normalized adapter result), hardened against a C++
 stack-overflow crash from adversarially deep recursion/nesting (E24-5).
 The `refs` capability now implements creation, blocking get, set, set-state
-inspection, atomic update, and identity equality. Cell, Process, and every
+inspection, atomic update, and identity equality. The `cell_primitives` and
+local `process_primitives` capabilities are also supported. Actor and every
 other later Genia behavior remain honestly `unsupported`.**
 
 This is the bounded production C++ host for [Genia](https://github.com/m0smith/genia-2026).
@@ -91,7 +91,7 @@ before implementing:
 |---|---|
 | `genia-2026` contract revision | [`9ab0d3a323c9add045d47db1f476aead96af1e77`](https://github.com/m0smith/genia-2026/commit/9ab0d3a323c9add045d47db1f476aead96af1e77) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | E25-0 PR #1007 head: portable Ref/Cell/local Process contract and deterministic R16 causal evidence. This is the exact revision `src/protocol.hpp` declares. This C++ branch is stacked and must not merge before #1007. |
+| Represents | Merged R25 contract/evidence revision for portable Ref, Cell, and local Process. This is the exact revision `src/protocol.hpp` declares. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
@@ -393,7 +393,8 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   `unsupported` with no change to any normal-sized program's behavior.
   E24-5 adds no new Genia semantics or capabilities.
 - `genia-adapter` (the built binary) declares `parser`, `ast_lowering`,
-  `cli_command_mode`, `cli_file_mode`, `open_functions`, and `refs` `supported`,
+  `cli_command_mode`, `cli_file_mode`, `open_functions`, `refs`,
+  `cell_primitives`, and `process_primitives` `supported`,
   and declares `core_ir_eval`, `prelude_autoload`, and `shared_spec_runner`
   `partial`. Every other `spec/manifest.json` capability is `unsupported`.
   `prelude_autoload` is partial because this floor installs only the bounded
@@ -469,10 +470,10 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   later slices'/`genia-2026`'s
   [`docs/strategy/roadmap/e24-issue-sequence.md`](https://github.com/m0smith/genia-2026/blob/main/docs/strategy/roadmap/e24-issue-sequence.md).
 
-## Explicitly deferred after R24
+## Explicitly deferred after R25
 
-- R25 E25-1 Ref, E25-2 Cell, and E25-3 local Process are implemented on this
-  branch. Actor is excluded from R25 and belongs to R38.
+- Actor and ActorRef, supervision, distribution, placement, and scheduler/timing
+  guarantees belong to R38; R25 supports only portable Ref, Cell, and local Process.
 - R26: REPL and broader data bridges.
 - R27: Flow, pipe mode, HTTP serving, and outbound HTTP.
 - Cross-module open-function contribution/selection and wider parser/evaluator
@@ -496,7 +497,7 @@ git clone https://github.com/m0smith/genia-cpp
 cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
 cd genia-2026
 python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=755 passed=141 failed=0 unsupported=614 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=762 passed=149 failed=0 unsupported=613 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

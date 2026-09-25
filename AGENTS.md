@@ -1,6 +1,6 @@
 # genia-cpp AGENTS
 
-This repository is the planned production C++ host for Genia. It
+This repository is the bounded R25 production C++ host for Genia. It
 **implements** Genia; it does **not define** Genia.
 
 ## Authority order
@@ -43,9 +43,10 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**R24 is complete through E24-8. R25 E25-5 is a verified release candidate on
-branch `issue-1006-r25-completion`, temporarily stacked on genia-cpp PRs #21/#22/#23/#24
-and genia-2026 PR #1007; Actor remains unsupported and outside R25.** E24-1
+**R25 is complete through E25-5. The ordered release-candidate PR stack is
+merged in both repositories. This host supports the bounded R24 floor plus
+`refs`, `cell_primitives`, and local `process_primitives`; Actor remains
+unsupported and belongs to R38.** E24-1
 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -313,8 +314,10 @@ artifacts under `docs/design/r24/` there. E24-1 through E24-6 are the
 first six implementation slices of the E24 sequence
 (`docs/strategy/roadmap/e24-issue-sequence.md`); E24-7 completed the R21-R23
 numeric runtime/interchange surface after ten bounded increments, and E24-8
-recorded final capability/evidence truth plus a skeptical audit PASS. R25 has
-not begun.
+recorded final R24 capability/evidence truth plus a skeptical audit PASS.
+R25 E25-5 adds pinned evidence of `762 total / 149 pass / 613 unsupported`
+with all failure classes zero. Actor and ActorRef, supervision, distribution,
+placement, and scheduler/timing guarantees remain assigned to R38.
 
 Known commands:
 
@@ -325,8 +328,8 @@ Known commands:
 - lint: `clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp && clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp`
 - conformance evidence: from a `genia-2026` checkout at the pinned
   revision, `python -m tools.spec_runner --host '<path>/genia-cpp/build/genia-adapter' --evidence evidence.json`
-  (expected result at E24-3: `total=744 passed=21 failed=0
-  unsupported=723 protocol_error=0 crash=0 timeout=0 invalid=0`)
+  (R25 E25-5 evidence: `total=762 passed=149 failed=0
+  unsupported=613 protocol_error=0 crash=0 timeout=0 invalid=0`)
 
 ## Dependency/toolchain policy (pinned by the R24 pre-flight)
 
