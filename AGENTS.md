@@ -43,8 +43,8 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**R24 is complete through E24-8. R25 E25-3 local Process is implemented on
-branch `issue-1004-r25-process`, temporarily stacked on genia-cpp PRs #21/#22
+**R24 is complete through E24-8. R25 E25-4 hardening is complete on
+branch `issue-1005-r25-hardening`, temporarily stacked on genia-cpp PRs #21/#22/#23
 and genia-2026 PR #1007; Actor remains unsupported and outside R25.** E24-1
 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton

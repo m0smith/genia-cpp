@@ -51,6 +51,10 @@ struct UndefinedNameError {
   std::string name;
 };
 
+struct StatefulRuntimeError {
+  std::string message;
+};
+
 // E24-5 (m0smith/genia-2026#959) diagnostic-normalization hardening:
 // each Genia-level function/lambda call recurses through several C++
 // stack frames (invoke_closure -> eval_node -> ... -> invoke_closure).
@@ -297,7 +301,9 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       if (node.name == "send" && args.size() == 2 && args[0].kind == value::Kind::Process) {
         auto process = args[0].process;
         auto message = args[1];
-        auto accept = [process, message] { process->send(message); };
+        auto accept = [process, message] {
+          if (!process->send(message)) throw StatefulRuntimeError{"send: process is failed"};
+        };
         if (!value::stage_cell_send(accept)) accept();
         return value::Value::make_opaque();
       }
