@@ -51,10 +51,12 @@ enum class Kind : std::uint8_t {
   Outcome,
   Represented,
   Closure,
+  Ref,
   Opaque
 };
 
 class OrderedMap;
+class Ref;
 struct Value;
 
 // One clause of a local case/pattern-dispatch function body (E24-4's
@@ -115,6 +117,7 @@ struct Value {
   std::shared_ptr<Value> represented_value;
 
   std::shared_ptr<Closure> closure;  // valid when kind == Closure
+  std::shared_ptr<Ref> ref;          // valid when kind == Ref
 
   static Value make_integer(bignum::Integer v) {
     Value value;
@@ -232,6 +235,13 @@ struct Value {
     Value value;
     value.kind = Kind::Closure;
     value.closure = std::move(c);
+    return value;
+  }
+
+  static Value make_ref(std::shared_ptr<Ref> r) {
+    Value value;
+    value.kind = Kind::Ref;
+    value.ref = std::move(r);
     return value;
   }
 

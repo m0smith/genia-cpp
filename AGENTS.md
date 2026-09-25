@@ -43,7 +43,9 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
-**R24 is complete through E24-8.** E24-1
+**R24 is complete through E24-8. R25 E25-1 Ref is implemented on branch
+`issue-1002-r25-ref`, temporarily stacked on genia-2026 PR #1007; Cell,
+Process, and Actor remain unsupported, and Actor is outside R25.** E24-1
 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -279,7 +281,7 @@ Capabilities declared `supported`: `parser`, `ast_lowering`,
 cross-module `extend`/`use`, the R20 diagnostic family, and bare
 varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
-is the honest declaration here). Declared `partial`: `core_ir_eval`,
+is the honest declaration here), plus R25 E25-1 `refs`. Declared `partial`: `core_ir_eval`,
 `prelude_autoload` (only the bounded source-level prelude required by the floor),
 and `shared_spec_runner` (matching the Python adapter's partial precedent).
 `core_ir_eval` covers
