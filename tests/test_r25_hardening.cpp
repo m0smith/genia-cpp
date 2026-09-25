@@ -58,3 +58,13 @@ TEST_CASE("R25 post-failure Process send is a normalized runtime error") {
   CHECK(result->stderr_text == "Error: send: process is failed\n");
   CHECK(result->exit_code == 1);
 }
+
+TEST_CASE("R25 asynchronous sends return the contracted nil Option") {
+  auto cell_result = genia::engine::try_run("c = cell(0)\ncell_send(c, (x) -> x + 1)");
+  REQUIRE(cell_result.has_value());
+  CHECK(cell_result->stdout_text == "none(\"nil\")\n");
+
+  auto process_result = genia::engine::try_run("p = spawn((x) -> x)\nsend(p, 1)");
+  REQUIRE(process_result.has_value());
+  CHECK(process_result->stdout_text == "none(\"nil\")\n");
+}

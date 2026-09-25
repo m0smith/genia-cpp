@@ -289,7 +289,7 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           });
         };
         if (!value::stage_cell_send(accept)) accept();
-        return args[0];
+        return value::Value::make_outcome_none(value::Value::make_string("nil"));
       }
       if (node.name == "spawn" && args.size() == 1 && args[0].kind == value::Kind::Closure) {
         auto closure = args[0].closure;
@@ -305,7 +305,7 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           if (!process->send(message)) throw StatefulRuntimeError{"send: process is failed"};
         };
         if (!value::stage_cell_send(accept)) accept();
-        return value::Value::make_opaque();
+        return value::Value::make_outcome_none(value::Value::make_string("nil"));
       }
       auto callee = env->lookup(node.name);
       if (callee.has_value() && callee->kind == value::Kind::Closure) {
