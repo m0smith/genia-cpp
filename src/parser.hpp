@@ -791,6 +791,9 @@ class Parser {
     if (nesting_depth_ > kMaxNestingDepth) {
       return std::nullopt;
     }
+    if (peek().kind == TokenKind::String) {
+      return pattern::Pattern::string_literal(advance().text);
+    }
     if (peek().kind == TokenKind::Integer) {
       return pattern::Pattern::integer_literal(advance().text);
     }

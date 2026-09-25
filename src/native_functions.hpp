@@ -36,6 +36,7 @@
 #include "float64.hpp"
 #include "format.hpp"
 #include "json.hpp"
+#include "process.hpp"
 #include "rational.hpp"
 #include "ref.hpp"
 #include "value.hpp"
@@ -84,8 +85,27 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
     return args[0];
   }
   if (name == "_r25_await_idle" && args.empty() && value::g_r25_fixture_enabled) {
-    value::Cell::await_all_idle();
+    for (int pass = 0; pass < 2; ++pass) {
+      value::Cell::await_all_idle();
+      value::Process::await_all_idle();
+    }
     return Value::make_boolean(true);
+  }
+  if ((name == "process_alive?" || name == "process_failed?") && args.size() == 1 &&
+      args[0].kind == value::Kind::Process)
+    return Value::make_boolean(name == "process_alive?" ? args[0].process->alive()
+                                                        : args[0].process->failed());
+  if (name == "process_error" && args.size() == 1 && args[0].kind == value::Kind::Process) {
+    auto error = args[0].process->error();
+    if (error.has_value()) return Value::make_outcome_some(Value::make_string(*error));
+    return Value::make_outcome_none(Value::make_string("no-error"),
+                                    Value::make_map(std::make_shared<value::OrderedMap>()));
+  }
+  if (name == "append" && args.size() == 2 && args[0].kind == value::Kind::List &&
+      args[1].kind == value::Kind::List) {
+    std::vector<Value> items = *args[0].list_items;
+    items.insert(items.end(), args[1].list_items->begin(), args[1].list_items->end());
+    return Value::make_list(std::move(items));
   }
   if ((name == "some?" || name == "is_some?") && args.size() == 1)
     return Value::make_boolean(args[0].kind == value::Kind::Outcome && !args[0].outcome_is_err &&

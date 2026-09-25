@@ -146,6 +146,7 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
       {"open_functions", "supported"},
       {"refs", "supported"},
       {"cell_primitives", "supported"},
+      {"process_primitives", "supported"},
   };
   return kOverrides;
 }
