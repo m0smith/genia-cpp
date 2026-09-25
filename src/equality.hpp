@@ -246,6 +246,8 @@ inline bool structural_equal(const value::Value& a, const value::Value& b) {
       return false;
     case value::Kind::Ref:
       return a.ref == b.ref;
+    case value::Kind::Cell:
+      return a.cell == b.cell;
     case value::Kind::Opaque:
       // Never observed by any pinned evidence; no defined equality.
       return false;

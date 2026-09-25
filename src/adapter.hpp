@@ -69,7 +69,15 @@ inline std::optional<json> handle_eval(const std::string& case_id, const json& i
   if (!input.contains("source") || !input["source"].is_string()) {
     return std::nullopt;
   }
-  auto result = engine::try_run(input["source"].get<std::string>());
+  bool r25_fixture = false;
+  if (input.contains("fixtures") && input["fixtures"].is_array()) {
+    for (const auto& fixture : input["fixtures"]) {
+      if (fixture.is_string() && fixture.get<std::string>() == "r25_concurrency") {
+        r25_fixture = true;
+      }
+    }
+  }
+  auto result = engine::try_run(input["source"].get<std::string>(), r25_fixture);
   if (!result.has_value()) {
     return std::nullopt;
   }

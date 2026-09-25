@@ -223,6 +223,15 @@ inline std::optional<json> project(const core_ir::Node& node) {
       }
       return json{{"node", "IrList"}, {"items", items}};
     }
+    case core_ir::Kind::Block: {
+      json expressions = json::array();
+      for (const auto& expression : node.items) {
+        auto projected = project(expression);
+        if (!projected.has_value()) return std::nullopt;
+        expressions.push_back(*projected);
+      }
+      return json{{"node", "IrBlock"}, {"exprs", expressions}};
+    }
     case core_ir::Kind::Map: {
       json items = json::array();
       for (const auto& [key, value_node] : node.map_entries) {

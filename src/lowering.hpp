@@ -119,6 +119,16 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       }
       return core_ir::Node::list(std::move(items));
     }
+    case ast::Kind::Block: {
+      std::vector<core_ir::Node> expressions;
+      expressions.reserve(node.items.size());
+      for (const auto& expression : node.items) {
+        auto lowered = lower_node(expression);
+        if (!lowered.has_value()) return std::nullopt;
+        expressions.push_back(std::move(*lowered));
+      }
+      return core_ir::Node::block(std::move(expressions));
+    }
     case ast::Kind::Assign: {
       auto value = lower_node(*node.left);
       if (!value.has_value()) {

@@ -29,6 +29,7 @@ enum class Kind : std::uint8_t {
   Var,
   Binary,
   List,
+  Block,
   Assign,
   Call,
   // E24-4 additions. A pipeline (`|>`) is a Binary node with op "|>",
@@ -210,6 +211,13 @@ struct Node {
     Node n;
     n.kind = Kind::List;
     n.items = std::move(elements);
+    return n;
+  }
+
+  static Node block(std::vector<Node> expressions) {
+    Node n;
+    n.kind = Kind::Block;
+    n.items = std::move(expressions);
     return n;
   }
 
