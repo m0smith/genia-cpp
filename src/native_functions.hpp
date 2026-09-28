@@ -39,6 +39,7 @@
 #include "process.hpp"
 #include "rational.hpp"
 #include "ref.hpp"
+#include "utf8.hpp"
 #include "value.hpp"
 
 namespace genia::native_functions {
@@ -301,6 +302,25 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
     // beyond plain text -- see parser.hpp), so encoding is exactly
     // that stored byte content reinterpreted as Bytes.
     return Value::make_bytes(args[0].text);
+  }
+  if (name == "utf8_decode" && args.size() == 1) {
+    // R26-2 bytes_utf8 contract (genia-2026 issue #1024,
+    // docs/design/r26-cpp-data-bridge-contract.md section 2): well-formed
+    // input only. A non-Bytes argument, or genuinely malformed UTF-8
+    // bytes, is honestly `unsupported` here -- this slice does not yet
+    // normalize either into a diagnostic-worthy error (matching
+    // `utf8_encode`'s own existing non-String-argument convention just
+    // above), and no shared evidence pins the malformed-input error path
+    // (contract section 6: Genia source cannot construct arbitrary
+    // invalid UTF-8 bytes today, so the error path cannot be honestly
+    // evidenced yet either).
+    if (args[0].kind != value::Kind::Bytes) {
+      return std::nullopt;
+    }
+    if (!utf8::is_well_formed(args[0].text)) {
+      return std::nullopt;
+    }
+    return Value::make_string(args[0].text);
   }
   return std::nullopt;
 }

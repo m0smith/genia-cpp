@@ -1,9 +1,9 @@
 {
-  "applicable_cases": 762,
+  "applicable_cases": 772,
   "capabilities": {
     "allowlisted_host_interop": "unsupported",
     "ast_lowering": "supported",
-    "bytes_json_zip": "unsupported",
+    "bytes_utf8": "supported",
     "cell_primitives": "supported",
     "cli_command_mode": "supported",
     "cli_file_mode": "supported",
@@ -19,6 +19,8 @@
     "http_outbound_transport": "unsupported",
     "http_server": "unsupported",
     "indexing_deterministic_fixture": "unsupported",
+    "json_compat": "unsupported",
+    "json_strict": "unsupported",
     "model_deterministic_fixture": "unsupported",
     "model_gemini_rest": "unsupported",
     "multi_file_eval": "unsupported",
@@ -41,19 +43,19 @@
     "cli"
   ],
   "contract_revision": {
-    "checkout": "9ab0d3a323c9add045d47db1f476aead96af1e77",
+    "checkout": "5c9903d1bcbbc83a074b8674ede27b025db6f4af",
     "classification": "current",
-    "declared": "9ab0d3a323c9add045d47db1f476aead96af1e77"
+    "declared": "5c9903d1bcbbc83a074b8674ede27b025db6f4af"
   },
   "counts": {
     "crash": 0,
     "fail": 0,
     "invalid": 0,
-    "pass": 149,
+    "pass": 143,
     "protocol_error": 0,
     "timeout": 0,
-    "unsupported": 613
+    "unsupported": 629
   },
   "protocol_version": "1",
-  "total_cases": 762
+  "total_cases": 772
 }

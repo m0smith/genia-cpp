@@ -46,7 +46,8 @@ truth — read them from `genia-2026` directly.
 **R25 is complete through E25-5. The ordered release-candidate PR stack is
 merged in both repositories. This host supports the bounded R24 floor plus
 `refs`, `cell_primitives`, and local `process_primitives`; Actor remains
-unsupported and belongs to R38.** E24-1
+unsupported and belongs to R38. R26-2 adds `bytes_utf8` only; `json_strict`
+and `json_compat` remain unimplemented.** E24-1
 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -283,7 +284,8 @@ cross-module `extend`/`use`, the R20 diagnostic family, and bare
 varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
 is the honest declaration here), plus R25 E25-1 `refs` and E25-2
-`cell_primitives` and E25-3 `process_primitives`. Declared `partial`: `core_ir_eval`,
+`cell_primitives` and E25-3 `process_primitives`, and R26-2 `bytes_utf8`.
+Declared `partial`: `core_ir_eval`,
 `prelude_autoload` (only the bounded source-level prelude required by the floor),
 and `shared_spec_runner` (matching the Python adapter's partial precedent).
 `core_ir_eval` covers
@@ -319,6 +321,28 @@ R25 E25-5 adds pinned evidence of `762 total / 149 pass / 613 unsupported`
 with all failure classes zero. Actor and ActorRef, supervision, distribution,
 placement, and scheduler/timing guarantees remain assigned to R38.
 
+**R26-2 `bytes_utf8`** (`m0smith/genia-2026#1024`,
+`docs/design/r26-cpp-data-bridge-contract.md`) adds `utf8_decode` for
+well-formed UTF-8 input (`src/utf8.hpp`'s in-house RFC 3629 validator --
+no ICU, per the R24 dependency/toolchain policy -- rejects overlong
+encodings, encoded surrogate halves, and codepoints above U+10FFFF;
+malformed input or a non-Bytes argument is honestly `unsupported`, never
+guessed at) and `<bytes N>` display rendering (`src/render.hpp`, `N` the
+exact byte count, matching the reference host's `GeniaBytes.__repr__`
+verbatim). This closes the sole `requires: [bytes_utf8]` shared case,
+`spec/eval/r19-unicode-utf8-encode-decode-roundtrip.yaml`. Bytes-value
+structural equality (a separate, already-required R18 baseline, not
+gated by `bytes_utf8`) and Bytes-as-map-key rejection remain exactly as
+before: the former was already implemented (`equality.hpp`'s
+`structural_equal`), and the latter stays honestly `unsupported` (no
+shared evidence yet pins a diagnostic-worthy error path for it in this
+host, matching this codebase's standing rule against fabricating
+diagnostics without pinned evidence). `bytes_utf8` is declared
+`supported`; `json_strict` and `json_compat` -- the other two capabilities
+`spec/manifest.json` split out of the retired `bytes_json_zip` in the
+same genia-2026 revision -- remain genuinely unimplemented and
+`unsupported`; this increment is `bytes_utf8` only.
+
 Known commands:
 
 - setup: none (no package manager; `nlohmann/json` and `Catch2` are
@@ -328,8 +352,8 @@ Known commands:
 - lint: `clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp && clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp`
 - conformance evidence: from a `genia-2026` checkout at the pinned
   revision, `python -m tools.spec_runner --host '<path>/genia-cpp/build/genia-adapter' --evidence evidence.json`
-  (R25 E25-5 evidence: `total=762 passed=149 failed=0
-  unsupported=613 protocol_error=0 crash=0 timeout=0 invalid=0`)
+  (R26-2 evidence: `total=772 passed=143 failed=0
+  unsupported=629 protocol_error=0 crash=0 timeout=0 invalid=0`)
 
 ## Dependency/toolchain policy (pinned by the R24 pre-flight)
 

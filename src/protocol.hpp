@@ -43,7 +43,15 @@ inline constexpr const char* kProtocolVersion = "1";
 // case) and #974 (the roadmap's own guidance to declare
 // open_functions `partial` was itself wrong -- `supported` is the
 // correct declaration; see protocol.hpp's capability_overrides()).
-inline constexpr const char* kContractRevision = "9ab0d3a323c9add045d47db1f476aead96af1e77";
+//
+// Re-pinned for R26-2 `bytes_utf8` (genia-2026 issue #1024,
+// docs/design/r26-cpp-data-bridge-contract.md): this revision retires
+// `bytes_json_zip` in favor of `bytes_utf8`/`json_strict`/`json_compat`
+// in spec/manifest.json, and adds the sole `requires: [bytes_utf8]`
+// shared case (spec/eval/r19-unicode-utf8-encode-decode-roundtrip.yaml)
+// this adapter now passes. `json_strict`/`json_compat` remain
+// unimplemented and `unsupported` -- this change is `bytes_utf8` only.
+inline constexpr const char* kContractRevision = "5c9903d1bcbbc83a074b8674ede27b025db6f4af";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -73,7 +81,9 @@ inline const std::vector<std::string>& known_capabilities() {
       "refs",
       "cell_primitives",
       "process_primitives",
-      "bytes_json_zip",
+      "bytes_utf8",
+      "json_strict",
+      "json_compat",
       "debugger_stdio",
       "shell_stage",
       "resource_io",
@@ -106,7 +116,8 @@ inline constexpr const char* kUnsupportedReason =
     "cross-kind numeric map-key identity, R23 numeric field-format specs and strict "
     "numeric JSON shared cases, the one "
     "deterministic undefined-name "
-    "runtime error, calls to this slice's native map_*/utf8_encode/err/sum "
+    "runtime error, calls to this slice's native map_*/utf8_encode/"
+    "utf8_decode/err/sum "
     "functions, and `-c`/file-mode CLI); this request is outside that "
     "scope -- see https://github.com/m0smith/genia-cpp AGENTS.md";
 
@@ -131,7 +142,14 @@ inline constexpr const char* kUnsupportedReason =
 // cross-module case's separate `multi_file_eval` requirement), exactly
 // like `parser`/`ast_lowering` being `supported` has never meant every
 // possible parse-category case passes. Every other capability remains
-// `unsupported`. This map is the single source of truth for both the
+// `unsupported`. R26-2 (genia-2026 issue #1024) declares `bytes_utf8`
+// `supported`: `utf8_decode` is implemented for well-formed UTF-8 input
+// (native_functions.hpp), Bytes values render as `<bytes N>`
+// (render.hpp), and the sole `requires: [bytes_utf8]` shared case,
+// spec/eval/r19-unicode-utf8-encode-decode-roundtrip.yaml, passes.
+// `json_strict`/`json_compat` are deliberately left absent (unsupported):
+// no strict-JSON or JSONL-compat behavior is implemented by this slice.
+// This map is the single source of truth for both the
 // `capabilities` response and this project's own honesty: a name
 // absent here defaults to `unsupported`.
 inline const std::vector<std::pair<std::string, std::string>>& capability_overrides() {
@@ -147,6 +165,7 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
       {"refs", "supported"},
       {"cell_primitives", "supported"},
       {"process_primitives", "supported"},
+      {"bytes_utf8", "supported"},
   };
   return kOverrides;
 }

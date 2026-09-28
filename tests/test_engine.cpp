@@ -425,6 +425,69 @@ TEST_CASE("run: r18-structural-equality-bytes-and-lists.yaml") {
   CHECK(result->stdout_text == "[true, false, true, true, false, true]\n");
 }
 
+TEST_CASE("run: r19-unicode-utf8-encode-decode-roundtrip.yaml (bytes_utf8)") {
+  // Pinned shared evidence: this is the exact source
+  // spec/eval/r19-unicode-utf8-encode-decode-roundtrip.yaml exercises,
+  // the sole requires: [bytes_utf8] case (genia-2026 issue #1024).
+  auto result = try_run("utf8_decode(utf8_encode(\"hello 漢字 😀\"))");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "\"hello 漢字 😀\"\n");
+}
+
+TEST_CASE("run: utf8_decode round-trips ascii, multi-byte, and empty strings (bytes_utf8)") {
+  // This slice's string-literal grammar supports no escape sequences at
+  // all (see parser.hpp) -- a backslash makes the whole program
+  // unsupported -- so multi-byte scalars are embedded here as literal
+  // UTF-8 source bytes, exactly like the file's already-pinned
+  // "hello 漢字 😀" case above.
+  for (const std::string source : {
+           "utf8_decode(utf8_encode(\"\"))", "utf8_decode(utf8_encode(\"ascii only\"))",
+           "utf8_decode(utf8_encode(\"é\"))",     // 2-byte
+           "utf8_decode(utf8_encode(\"漢字\"))",  // 3-byte
+       }) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->exit_code == 0);
+  }
+}
+
+TEST_CASE("run: bytes display renders <bytes N> with the exact byte count (bytes_utf8)") {
+  auto ascii = try_run("utf8_encode(\"hi\")");
+  REQUIRE(ascii.has_value());
+  CHECK(ascii->stdout_text == "<bytes 2>\n");
+
+  // "é" is one Unicode scalar but two UTF-8 bytes -- the count must be
+  // bytes, not codepoints or characters.
+  auto multibyte = try_run("utf8_encode(\"é\")");
+  REQUIRE(multibyte.has_value());
+  CHECK(multibyte->stdout_text == "<bytes 2>\n");
+
+  auto empty = try_run("utf8_encode(\"\")");
+  REQUIRE(empty.has_value());
+  CHECK(empty->stdout_text == "<bytes 0>\n");
+}
+
+TEST_CASE("run: utf8_decode on a non-Bytes argument is honestly unsupported (bytes_utf8)") {
+  // Matches utf8_encode's own existing non-String-argument convention:
+  // no fabricated diagnostic without pinned evidence for the error path.
+  auto result = try_run("utf8_decode(\"not bytes\")");
+  CHECK_FALSE(result.has_value());
+}
+
+TEST_CASE("run: utf8_decode on malformed UTF-8 bytes is honestly unsupported (bytes_utf8)") {
+  // genia-2026 contract section 6 (docs/design/r26-cpp-data-bridge-
+  // contract.md): the malformed-input error path has no shared evidence
+  // yet, since Genia source cannot construct arbitrary invalid UTF-8
+  // bytes today. Exercised here directly against native_functions::call
+  // with a hand-built invalid Bytes value, since no Genia-source-level
+  // expression can produce one.
+  using genia::native_functions::call;
+  using genia::value::Value;
+  std::vector<Value> args = {Value::make_bytes(std::string("\xff\xfe"))};
+  auto result = call("utf8_decode", args);
+  CHECK_FALSE(result.has_value());
+}
+
 TEST_CASE("run: r18-legal-key-kind-separation-integer-string.yaml") {
   auto result = try_run(
       "bools = map_put(map_put(map_new(), true, \"bool\"), 1, \"int\")\n"

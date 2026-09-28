@@ -89,9 +89,9 @@ before implementing:
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`9ab0d3a323c9add045d47db1f476aead96af1e77`](https://github.com/m0smith/genia-2026/commit/9ab0d3a323c9add045d47db1f476aead96af1e77) |
+| `genia-2026` contract revision | [`5c9903d1bcbbc83a074b8674ede27b025db6f4af`](https://github.com/m0smith/genia-2026/commit/5c9903d1bcbbc83a074b8674ede27b025db6f4af) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | Merged R25 contract/evidence revision for portable Ref, Cell, and local Process. This is the exact revision `src/protocol.hpp` declares. |
+| Represents | R26-2 `bytes_utf8` (genia-2026 issue #1024, PR #1027): `spec/manifest.json` retires `bytes_json_zip` in favor of `bytes_utf8`/`json_strict`/`json_compat`, and this adapter implements `bytes_utf8` only (`json_strict`/`json_compat` remain unimplemented). This is the exact revision `src/protocol.hpp` declares -- at the time of this commit it is the HEAD of `genia-2026`'s open PR #1027, not yet merged to `main`; re-pin here again once #1027 merges if its merge changes this SHA. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
