@@ -51,7 +51,11 @@ inline constexpr const char* kProtocolVersion = "1";
 // shared case (spec/eval/r19-unicode-utf8-encode-decode-roundtrip.yaml)
 // this adapter now passes. `json_strict`/`json_compat` remain
 // unimplemented and `unsupported` -- this change is `bytes_utf8` only.
-inline constexpr const char* kContractRevision = "5c9903d1bcbbc83a074b8674ede27b025db6f4af";
+// Re-pinned again to the same E26-1..E26-3 gating's merge commit on
+// genia-2026 `main` (PR #1027) -- the prior pin above was this PR's
+// still-open branch head; this identical-content commit is the one
+// that is now actually current-main pinned conformance per E16-4.
+inline constexpr const char* kContractRevision = "89d543ec072960108dee86c6bba8fbdb01ff800d";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
