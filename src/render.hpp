@@ -217,6 +217,11 @@ inline std::optional<std::string> display(const value::Value& value) {
     case value::Kind::Represented:
       return std::string("<represented>");
     case value::Kind::Bytes:
+      // R26-2 bytes_utf8 contract (genia-2026 issue #1024,
+      // docs/design/r26-cpp-data-bridge-contract.md section 2): `<bytes N>`
+      // where N is the exact byte count, matching the reference host's
+      // GeniaBytes.__repr__ (src/genia/values.py) verbatim.
+      return "<bytes " + std::to_string(value.text.size()) + ">";
     case value::Kind::Closure:
     case value::Kind::Ref:
     case value::Kind::Cell:
