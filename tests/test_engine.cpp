@@ -441,7 +441,8 @@ TEST_CASE("run: utf8_decode round-trips ascii, multi-byte, and empty strings (by
   // UTF-8 source bytes, exactly like the file's already-pinned
   // "hello 漢字 😀" case above.
   for (const std::string source : {
-           "utf8_decode(utf8_encode(\"\"))", "utf8_decode(utf8_encode(\"ascii only\"))",
+           "utf8_decode(utf8_encode(\"\"))",
+           "utf8_decode(utf8_encode(\"ascii only\"))",
            "utf8_decode(utf8_encode(\"é\"))",     // 2-byte
            "utf8_decode(utf8_encode(\"漢字\"))",  // 3-byte
        }) {
