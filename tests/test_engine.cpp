@@ -434,22 +434,32 @@ TEST_CASE("run: r19-unicode-utf8-encode-decode-roundtrip.yaml (bytes_utf8)") {
   CHECK(result->stdout_text == "\"hello 漢字 😀\"\n");
 }
 
-TEST_CASE("run: utf8_decode round-trips ascii, multi-byte, and empty strings (bytes_utf8)") {
-  // This slice's string-literal grammar supports no escape sequences at
-  // all (see parser.hpp) -- a backslash makes the whole program
-  // unsupported -- so multi-byte scalars are embedded here as literal
-  // UTF-8 source bytes, exactly like the file's already-pinned
-  // "hello 漢字 😀" case above.
-  for (const std::string source : {
-           "utf8_decode(utf8_encode(\"\"))",
-           "utf8_decode(utf8_encode(\"ascii only\"))",
-           "utf8_decode(utf8_encode(\"é\"))",     // 2-byte
-           "utf8_decode(utf8_encode(\"漢字\"))",  // 3-byte
-       }) {
-    auto result = try_run(source);
-    REQUIRE(result.has_value());
-    CHECK(result->exit_code == 0);
-  }
+// This slice's string-literal grammar supports no escape sequences at all
+// (see parser.hpp) -- a backslash makes the whole program unsupported --
+// so multi-byte scalars are embedded here as literal UTF-8 source bytes,
+// exactly like the file's already-pinned "hello 漢字 😀" case above.
+TEST_CASE("run: utf8_decode round-trips an empty string (bytes_utf8)") {
+  auto result = try_run("utf8_decode(utf8_encode(\"\"))");
+  REQUIRE(result.has_value());
+  CHECK(result->exit_code == 0);
+}
+
+TEST_CASE("run: utf8_decode round-trips an ascii-only string (bytes_utf8)") {
+  auto result = try_run("utf8_decode(utf8_encode(\"ascii only\"))");
+  REQUIRE(result.has_value());
+  CHECK(result->exit_code == 0);
+}
+
+TEST_CASE("run: utf8_decode round-trips a 2-byte scalar (bytes_utf8)") {
+  auto result = try_run("utf8_decode(utf8_encode(\"é\"))");
+  REQUIRE(result.has_value());
+  CHECK(result->exit_code == 0);
+}
+
+TEST_CASE("run: utf8_decode round-trips a 3-byte scalar (bytes_utf8)") {
+  auto result = try_run("utf8_decode(utf8_encode(\"漢字\"))");
+  REQUIRE(result.has_value());
+  CHECK(result->exit_code == 0);
 }
 
 TEST_CASE("run: bytes display renders <bytes N> with the exact byte count (bytes_utf8)") {
