@@ -64,7 +64,9 @@ inline json run_result_to_json(const engine::RunResult& result) {
 }
 
 // Handles `eval`: input {"source": "<string>", "stdin": ..., "argv": ...}.
-// This slice ignores stdin/argv: no pinned case exercises either.
+// `stdin` feeds `stdin |> lines` (R27 E27-1 Flow phase 1); `argv` is
+// ignored: no pinned case exercises it. Eval runs as command-source
+// execution, so pipeline-stage spans name the file `<command>`.
 inline std::optional<json> handle_eval(const std::string& case_id, const json& input) {
   if (!input.contains("source") || !input["source"].is_string()) {
     return std::nullopt;
@@ -77,7 +79,12 @@ inline std::optional<json> handle_eval(const std::string& case_id, const json& i
       }
     }
   }
-  auto result = engine::try_run(input["source"].get<std::string>(), r25_fixture);
+  std::optional<std::string> stdin_text;
+  if (input.contains("stdin") && input["stdin"].is_string()) {
+    stdin_text = input["stdin"].get<std::string>();
+  }
+  auto result =
+      engine::try_run(input["source"].get<std::string>(), r25_fixture, stdin_text, "<command>");
   if (!result.has_value()) {
     return std::nullopt;
   }

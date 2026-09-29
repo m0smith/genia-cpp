@@ -54,6 +54,14 @@ enum class Kind : std::uint8_t {
   Ref,
   Cell,
   Process,
+  // R27 E27-1 Flow phase 1: a lazy, pull-based, single-use Flow, and the
+  // process-stdin source `lines` adapts into one.
+  Flow,
+  StdinSource,
+  // The reference host's `None`: what `run(...)` returns. Command mode
+  // displays nothing for it (unlike the `none("nil")` Outcome, which does
+  // display).
+  Nil,
   Opaque
 };
 
@@ -61,6 +69,7 @@ class OrderedMap;
 class Ref;
 class Cell;
 class Process;
+class Flow;
 struct Value;
 
 // One clause of a local case/pattern-dispatch function body (E24-4's
@@ -85,6 +94,10 @@ struct Closure {
   std::shared_ptr<core_ir::Node> body;   // populated only when case_clauses is empty
   std::shared_ptr<evaluator::Environment> captured_env;
   std::string name;  // the bound name for a named function; empty for an anonymous lambda
+  // Non-empty for a first-class reference to a native callable (for example
+  // `map(upper)` passing `upper` by name): invocation dispatches to the
+  // native function of this name instead of evaluating `body`.
+  std::string native_name;
 };
 
 struct Value {
@@ -124,6 +137,7 @@ struct Value {
   std::shared_ptr<Ref> ref;          // valid when kind == Ref
   std::shared_ptr<Cell> cell;        // valid when kind == Cell
   std::shared_ptr<Process> process;  // valid when kind == Process
+  std::shared_ptr<Flow> flow;        // valid when kind == Flow
 
   static Value make_integer(bignum::Integer v) {
     Value value;
@@ -275,6 +289,31 @@ struct Value {
     value.kind = Kind::Process;
     value.process = std::move(p);
     return value;
+  }
+
+  static Value make_flow(std::shared_ptr<Flow> f) {
+    Value value;
+    value.kind = Kind::Flow;
+    value.flow = std::move(f);
+    return value;
+  }
+
+  static Value make_nil() {
+    Value value;
+    value.kind = Kind::Nil;
+    return value;
+  }
+
+  static Value make_stdin_source() {
+    Value value;
+    value.kind = Kind::StdinSource;
+    return value;
+  }
+
+  static Value make_native_ref(std::string name) {
+    auto closure = std::make_shared<Closure>();
+    closure->native_name = std::move(name);
+    return make_closure(std::move(closure));
   }
 
   static Value make_opaque() {

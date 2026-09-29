@@ -15,7 +15,7 @@
         "doc_help": "unsupported",
         "embedding_deterministic_fixture": "unsupported",
         "execution_process": "unsupported",
-        "flow_phase_1": "unsupported",
+        "flow_phase_1": "supported",
         "http_outbound_transport": "unsupported",
         "http_server": "unsupported",
         "indexing_deterministic_fixture": "unsupported",
@@ -43,18 +43,18 @@
         "cli"
     ],
     "contract_revision": {
-        "checkout": "89d543ec072960108dee86c6bba8fbdb01ff800d",
+        "checkout": "c3362628c383752545b1ee64b6443f50f8ccf372",
         "classification": "current",
-        "declared": "89d543ec072960108dee86c6bba8fbdb01ff800d"
+        "declared": "c3362628c383752545b1ee64b6443f50f8ccf372"
     },
     "counts": {
         "crash": 0,
         "fail": 0,
         "invalid": 0,
-        "pass": 178,
+        "pass": 209,
         "protocol_error": 0,
         "timeout": 0,
-        "unsupported": 594
+        "unsupported": 563
     },
     "protocol_version": "1",
     "total_cases": 772

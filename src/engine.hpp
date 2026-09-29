@@ -19,6 +19,7 @@
 #include "lowering.hpp"
 #include "parser.hpp"
 #include "render.hpp"
+#include "runtime_io.hpp"
 
 namespace genia::engine {
 
@@ -62,8 +63,9 @@ inline std::optional<json> try_lower(const std::string& source) {
 // `source` (unsupported grammar, undefined name, non-integer operand,
 // or a division this slice cannot represent exactly) -- the caller must
 // report the whole case as unsupported, never emit a guessed result.
-inline std::optional<RunResult> try_run(const std::string& source,
-                                        bool enable_r25_fixture = false) {
+inline std::optional<RunResult> try_run(const std::string& source, bool enable_r25_fixture = false,
+                                        const std::optional<std::string>& stdin_text = std::nullopt,
+                                        const std::string& source_name = "") {
   struct FixtureGuard {
     bool previous;
     explicit FixtureGuard(bool enabled) : previous(value::g_r25_fixture_enabled) {
@@ -71,6 +73,18 @@ inline std::optional<RunResult> try_run(const std::string& source,
     }
     ~FixtureGuard() { value::g_r25_fixture_enabled = previous; }
   } fixture_guard(enable_r25_fixture);
+  // R27 E27-1: `print` output is captured here and `stdin |> lines` reads
+  // from `stdin_text`. Carriage returns in stdin are not evidenced, so such
+  // input is unsupported rather than guessed.
+  std::shared_ptr<runtime_io::StdinState> stdin_state;
+  if (stdin_text.has_value()) {
+    auto parsed_stdin = runtime_io::make_stdin(*stdin_text);
+    if (!parsed_stdin.has_value()) {
+      return std::nullopt;
+    }
+    stdin_state = *parsed_stdin;
+  }
+  runtime_io::RunGuard run_guard(std::move(stdin_state), source_name);
   auto program = parser::parse_program(source);
   if (!program.has_value()) {
     return std::nullopt;
@@ -79,6 +93,14 @@ inline std::optional<RunResult> try_run(const std::string& source,
   if (!ir_program.has_value()) {
     return std::nullopt;
   }
+  // Any error after some `print` output still carries that output on stdout.
+  auto error_result = [](const std::string& message) {
+    RunResult run_result;
+    run_result.stdout_text = runtime_io::g_stdout_text;
+    run_result.stderr_text = "Error: " + message + "\n";
+    run_result.exit_code = 1;
+    return run_result;
+  };
   std::optional<value::Value> result;
   try {
     result = evaluator::eval_program(*ir_program);
@@ -91,48 +113,37 @@ inline std::optional<RunResult> try_run(const std::string& source,
     // source (src/genia/environment.py + src/genia/interpreter.py).
     // This is a genuine "ok" adapter result (the program ran and
     // produced a real, deterministic error), never "unsupported".
-    RunResult run_result;
-    run_result.stdout_text = "";
-    run_result.stderr_text = "Error: Undefined name: " + error.name + "\n";
-    run_result.exit_code = 1;
-    return run_result;
+    return error_result("Undefined name: " + error.name);
   } catch (const evaluator::StatefulRuntimeError& error) {
-    RunResult run_result;
-    run_result.stderr_text = "Error: " + error.message + "\n";
-    run_result.exit_code = 1;
-    return run_result;
+    return error_result(error.message);
+  } catch (const value::FlowError& error) {
+    return error_result(error.message);
+  } catch (const value::UnsupportedError&) {
+    return std::nullopt;
   } catch (const float64::MagnitudeOverflowError&) {
-    RunResult run_result;
-    run_result.stderr_text =
-        "Error: float64: exact magnitude exceeds the largest finite binary64 value\n";
-    run_result.exit_code = 1;
-    return run_result;
+    return error_result("float64: exact magnitude exceeds the largest finite binary64 value");
   } catch (const float64::DivisionByZeroError&) {
-    RunResult run_result;
-    run_result.stderr_text = "Error: float64 division by zero\n";
-    run_result.exit_code = 1;
-    return run_result;
+    return error_result("float64 division by zero");
   } catch (const float64::RemainderByZeroError&) {
-    RunResult run_result;
-    run_result.stderr_text = "Error: float64 remainder by zero\n";
-    run_result.exit_code = 1;
-    return run_result;
+    return error_result("float64 remainder by zero");
   } catch (const format::FormatError& error) {
-    RunResult run_result;
-    run_result.stderr_text = "Error: " + error.message + "\n";
-    run_result.exit_code = 1;
-    return run_result;
+    return error_result(error.message);
   }
   if (!result.has_value()) {
     return std::nullopt;
+  }
+  RunResult run_result;
+  run_result.stdout_text = runtime_io::g_stdout_text;
+  run_result.exit_code = 0;
+  if (result->kind == value::Kind::Nil) {
+    // The reference host's `None` (for example from `run`) displays nothing.
+    return run_result;
   }
   auto rendered = render::display(*result);
   if (!rendered.has_value()) {
     return std::nullopt;
   }
-  RunResult run_result;
-  run_result.stdout_text = *rendered + "\n";
-  run_result.exit_code = 0;
+  run_result.stdout_text += *rendered + "\n";
   return run_result;
 }
 
@@ -162,6 +173,10 @@ inline std::optional<RunResult> try_repl(const std::string& input) {
       output.stderr_text += "Error: Undefined name: " + error.name + "\n";
     } catch (const evaluator::StatefulRuntimeError& error) {
       output.stderr_text += "Error: " + error.message + "\n";
+    } catch (const value::FlowError&) {
+      return std::nullopt;
+    } catch (const value::UnsupportedError&) {
+      return std::nullopt;
     } catch (const float64::MagnitudeOverflowError&) {
       output.stderr_text +=
           "Error: float64: exact magnitude exceeds the largest finite binary64 value\n";

@@ -106,6 +106,9 @@ struct Node {
   // the callee name (this slice only supports calling a name directly,
   // never a general callable expression).
   std::string name;
+  // Host-local 1-based source line of a Var/Call's identifier token (0 when
+  // unknown). Never projected; used only for the Flow stage diagnostic span.
+  int line = 0;
 
   // Binary: symbolic operator ("+", "-", "*", "/", "==", matching the
   // parse AST projection's op_symbol_map spelling) plus operands.

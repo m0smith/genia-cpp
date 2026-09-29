@@ -37,12 +37,15 @@
 #include "core_ir.hpp"
 #include "environment.hpp"
 #include "equality.hpp"
+#include "flow.hpp"
 #include "genia2026_known_globals.hpp"
 #include "global_env.hpp"
 #include "lowering.hpp"
 #include "native_functions.hpp"
 #include "parser.hpp"
 #include "pattern_match.hpp"
+#include "render.hpp"
+#include "runtime_io.hpp"
 #include "value.hpp"
 
 namespace genia::evaluator {
@@ -93,6 +96,123 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
 inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stage,
                                                        const value::Value& stage_value,
                                                        const EnvPtr& env);
+
+// R27 E27-1: routes a named call to the Flow kernel (flow.hpp) when the
+// call selects a Flow operation. Returns false to leave the call to ordinary
+// closure/native dispatch.
+inline bool dispatch_flow(const std::string& name, const std::vector<value::Value>& args,
+                          value::Value& out) {
+  const flow::Invoke invoke = [](const value::Value& fn, const std::vector<value::Value>& a) {
+    return invoke_closure(*fn.closure, a);
+  };
+  return flow::dispatch(name, args, invoke, out);
+}
+
+// Calls a first-class native reference (for example `upper` passed to
+// `map`) by name.
+inline std::optional<value::Value> call_native_reference(const std::string& name,
+                                                         const std::vector<value::Value>& args) {
+  value::Value flow_result;
+  if (dispatch_flow(name, args, flow_result)) return flow_result;
+  return native_functions::call(name, args);
+}
+
+// A Genia closure bound to `name` wins over the Flow kernel's own names,
+// except for `map`/`filter`/`take`/`drop`, whose Flow forms the reference
+// host selects by the last argument being a Flow regardless of the binding
+// (src/genia/callable.py `invoke_callable`).
+inline bool flow_dispatch_applies(const std::string& name, bool bound_genia_closure) {
+  return !bound_genia_closure || name == "map" || name == "filter" || name == "take" ||
+         name == "drop";
+}
+
+// Runtime type names as they appear in the reference host's pipeline-stage
+// diagnostics (src/genia/values.py `_runtime_type_name`), for the kinds a
+// Flow diagnostic can be raised over.
+inline std::string stage_input_type_name(const value::Value& stage_input) {
+  switch (stage_input.kind) {
+    case value::Kind::Flow:
+      return "flow";
+    case value::Kind::StdinSource:
+      return "stdin";
+    case value::Kind::Integer:
+      return "int";
+    case value::Kind::String:
+      return "string";
+    case value::Kind::List:
+      return "list";
+    case value::Kind::Map:
+      return "map";
+    case value::Kind::Boolean:
+      return "bool";
+    default:
+      throw value::UnsupportedError{};
+  }
+}
+
+// Mirrors `_render_pipeline_stage` for the stage shapes the Flow cases can
+// reach: a bare name, or a call whose arguments are names, integer/string
+// literals, or lambdas. Anything else is left unsupported.
+inline std::string render_stage_text(const core_ir::Node& node) {
+  switch (node.kind) {
+    case core_ir::Kind::Var:
+      return node.name;
+    case core_ir::Kind::Literal:
+      if (node.literal_kind == core_ir::LiteralKind::Integer) return node.integer_digits;
+      if (node.literal_kind == core_ir::LiteralKind::String) {
+        auto quoted = render::display(value::Value::make_string(node.string_value));
+        if (quoted.has_value()) return *quoted;
+      }
+      throw value::UnsupportedError{};
+    case core_ir::Kind::Lambda: {
+      std::string params;
+      for (const auto& param : node.params) {
+        if (param.kind != pattern::Kind::Bind) throw value::UnsupportedError{};
+        params += params.empty() ? param.name : ", " + param.name;
+      }
+      return "(" + params + ") -> ...";
+    }
+    case core_ir::Kind::Call: {
+      std::string rendered = node.name + "(";
+      for (size_t i = 0; i < node.items.size(); ++i) {
+        rendered += (i == 0 ? "" : ", ") + render_stage_text(node.items[i]);
+      }
+      return rendered + ")";
+    }
+    default:
+      throw value::UnsupportedError{};
+  }
+}
+
+// Mirrors `_wrap_pipeline_stage_error`: a runtime error raised while a
+// pipeline stage runs is re-raised with the stage number, mode, rendered
+// stage and source span, unless it already carries a stage prefix.
+inline value::FlowError wrap_pipeline_stage_error(const value::FlowError& error, size_t index,
+                                                  const core_ir::Node& stage,
+                                                  const value::Value& stage_input) {
+  const std::string& message = error.message;
+  if (message.rfind("pipeline stage ", 0) == 0 &&
+      message.find(" failed in ") != std::string::npos) {
+    return error;
+  }
+  const std::string stage_name =
+      (stage.kind == core_ir::Kind::Var || stage.kind == core_ir::Kind::Call) ? stage.name : "";
+  const bool input_is_flow = stage_input.kind == value::Kind::Flow;
+  std::string mode = "Value mode";
+  if (stage_name == "lines" || (stage_name == "collect" && input_is_flow)) {
+    mode = "Explicit bridge mode";
+  } else if (input_is_flow) {
+    mode = "Flow mode";
+  }
+  // The span's file name is only known for command-source execution.
+  if (runtime_io::g_source_name.empty() || stage.line <= 0) throw value::UnsupportedError{};
+  std::string rendered = "pipeline stage " + std::to_string(index + 1) + " failed in " + mode +
+                         " at " + render_stage_text(stage) + " [" + runtime_io::g_source_name +
+                         ":" + std::to_string(stage.line) + "]";
+  rendered += ": stage received " + stage_input_type_name(stage_input);
+  if (!message.empty()) rendered += "; " + message;
+  return value::FlowError{rendered};
+}
 
 // Mirrors src/genia/builtins.py's `_runtime_type_name` closely enough
 // for the exact set of kinds `json_decode`'s misuse diagnostic can
@@ -195,6 +315,9 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       auto found = env->lookup(node.name);
       if (found.has_value()) {
         return found;
+      }
+      if (native_functions::is_first_class(node.name)) {
+        return value::Value::make_native_ref(node.name);
       }
       if (genia2026_known_globals::is_known(node.name)) {
         // A real genia-2026 global this slice has not implemented (e.g.
@@ -360,6 +483,13 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
                                    json_runtime_type_name(args[0].kind)};
       }
       auto callee = env->lookup(node.name);
+      const bool bound_closure = callee.has_value() && callee->kind == value::Kind::Closure &&
+                                 callee->closure->native_name.empty();
+      value::Value flow_result;
+      if (flow_dispatch_applies(node.name, bound_closure) &&
+          dispatch_flow(node.name, args, flow_result)) {
+        return flow_result;
+      }
       if (callee.has_value() && callee->kind == value::Kind::Closure) {
         return invoke_closure(*callee->closure, args);
       }
@@ -411,6 +541,7 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       if (!stage_value.has_value()) {
         return std::nullopt;
       }
+      size_t stage_index = 0;
       for (const auto& stage : node.items) {
         if (stage_value->kind == value::Kind::Outcome && stage_value->outcome_is_err) {
           // `err(...)` short-circuits the remaining stages unchanged,
@@ -419,11 +550,17 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           // has no `none` yet, so only Outcome::Err triggers this).
           return stage_value;
         }
-        auto next = eval_pipeline_stage(stage, *stage_value, env);
+        std::optional<value::Value> next;
+        try {
+          next = eval_pipeline_stage(stage, *stage_value, env);
+        } catch (const value::FlowError& error) {
+          throw wrap_pipeline_stage_error(error, stage_index, stage, *stage_value);
+        }
         if (!next.has_value()) {
           return std::nullopt;
         }
         stage_value = next;
+        ++stage_index;
       }
       return stage_value;
     }
@@ -607,6 +744,9 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
   if (g_call_depth > kMaxCallDepth) {
     return std::nullopt;
   }
+  if (!closure.native_name.empty()) {
+    return call_native_reference(closure.native_name, args);
+  }
   if (!closure.case_clauses.empty()) {
     for (const auto& clause : closure.case_clauses) {
       auto bindings = pattern_match::match(clause.pattern, args);
@@ -658,6 +798,13 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
     }
     args.push_back(stage_value);
     auto callee = env->lookup(stage.name);
+    const bool bound_closure = callee.has_value() && callee->kind == value::Kind::Closure &&
+                               callee->closure->native_name.empty();
+    value::Value flow_result;
+    if (flow_dispatch_applies(stage.name, bound_closure) &&
+        dispatch_flow(stage.name, args, flow_result)) {
+      return flow_result;
+    }
     if (callee.has_value() && callee->kind == value::Kind::Closure) {
       return invoke_closure(*callee->closure, args);
     }
@@ -679,7 +826,8 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
 // statement cannot be evaluated.
 inline EnvPtr new_session_environment() {
   auto env = std::make_shared<Environment>();
-  env->define("print", value::Value::make_opaque());
+  env->define("print", value::Value::make_native_ref("print"));
+  env->define("stdin", value::Value::make_stdin_source());
   // Install the small prelude-sourced closures (`sum`, `map`,
   // `map_acc`) through the real parse -> lower -> eval pipeline, never
   // a native reimplementation -- see global_env.hpp's header comment.

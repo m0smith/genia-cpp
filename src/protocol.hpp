@@ -55,7 +55,7 @@ inline constexpr const char* kProtocolVersion = "1";
 // genia-2026 `main` (PR #1027) -- the prior pin above was this PR's
 // still-open branch head; this identical-content commit is the one
 // that is now actually current-main pinned conformance per E16-4.
-inline constexpr const char* kContractRevision = "89d543ec072960108dee86c6bba8fbdb01ff800d";
+inline constexpr const char* kContractRevision = "c3362628c383752545b1ee64b6443f50f8ccf372";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -120,8 +120,10 @@ inline constexpr const char* kUnsupportedReason =
     "cross-kind numeric map-key identity, R23 numeric field-format specs and strict "
     "numeric JSON shared cases, the one "
     "deterministic undefined-name "
-    "runtime error, calls to this slice's native map_*/utf8_encode/"
-    "utf8_decode/err/sum "
+    "runtime error, the R27 first-wave Flow kernel (stdin/list `lines`, "
+    "`evolve`, `map`/`filter`/`take`/`drop`/`scan`/`keep_some`/`each`/"
+    "`collect`/`run`/`reduce`), calls to this slice's native "
+    "map_*/utf8_encode/utf8_decode/err/sum/print/upper/trim/contains/parse_int "
     "functions, and `-c`/file-mode CLI); this request is outside that "
     "scope -- see https://github.com/m0smith/genia-cpp AGENTS.md";
 
@@ -152,8 +154,15 @@ inline constexpr const char* kUnsupportedReason =
 // (render.hpp), and the sole `requires: [bytes_utf8]` shared case,
 // spec/eval/r19-unicode-utf8-encode-decode-roundtrip.yaml, passes.
 // R26-1 scripted REPL now passes the three requires: [repl] CLI cases;
-// `json_strict`/`json_compat` are deliberately left absent (unsupported):
-// no strict-JSON or JSONL-compat behavior is implemented by this slice.
+// `json_compat` is deliberately left absent (unsupported): no JSONL-compat
+// behavior is implemented by this slice.
+// R27 E27-1 (genia-2026 issue #1035) declares `flow_phase_1` `supported`
+// -- deliberately, not `partial` (the requires-gate grants no credit for
+// `partial`): exactly the 17 `requires: [flow_phase_1]` first-wave shared
+// cases in spec/flow/ pass. That is the whole claim. It does not imply the
+// rest of spec/flow/ (tee/merge/zip, rules/refine, Template and model Flow
+// compositions, ...), pipe mode (`cli_pipe_mode`), Flow value display, or
+// Unicode string handling; see docs/r27-e27-1-flow-phase-1.md.
 // This map is the single source of truth for both the
 // `capabilities` response and this project's own honesty: a name
 // absent here defaults to `unsupported`.
@@ -173,6 +182,7 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
       {"bytes_utf8", "supported"},
       {"repl", "supported"},
       {"json_strict", "supported"},
+      {"flow_phase_1", "supported"},
   };
   return kOverrides;
 }

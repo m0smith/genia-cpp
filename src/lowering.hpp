@@ -56,8 +56,11 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       return core_ir::Node::string_literal(node.string_value);
     case ast::Kind::BoolLiteral:
       return core_ir::Node::bool_literal(node.bool_value);
-    case ast::Kind::Var:
-      return core_ir::Node::var(node.name);
+    case ast::Kind::Var: {
+      auto var_node = core_ir::Node::var(node.name);
+      var_node.line = node.line;
+      return var_node;
+    }
     case ast::Kind::Unary: {
       auto op = lower_op(node.op);
       if (!op.has_value()) {
@@ -148,7 +151,9 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
         }
         args.push_back(std::move(*lowered));
       }
-      return core_ir::Node::call(node.name, std::move(args));
+      auto call_node = core_ir::Node::call(node.name, std::move(args));
+      call_node.line = node.line;
+      return call_node;
     }
     case ast::Kind::Lambda: {
       if (node.is_case_body) {

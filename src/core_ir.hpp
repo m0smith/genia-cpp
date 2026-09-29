@@ -132,6 +132,9 @@ struct Node {
   // Var: the referenced name. Assign: the target name. Call: the
   // callee name (this slice only supports calling a name directly).
   std::string name;
+  // Host-local source line propagated from ast::Node (0 when unknown); never
+  // projected into portable Core IR output.
+  int line = 0;
 
   // Binary. Unary: the same `op` field plus the single operand (reuses
   // `left`; `right` is unused).
