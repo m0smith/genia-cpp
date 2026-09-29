@@ -89,9 +89,9 @@ before implementing:
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`b8fbcc81d2598b76577d0dcf2fb7281814bd95a3`](https://github.com/m0smith/genia-2026/commit/b8fbcc81d2598b76577d0dcf2fb7281814bd95a3) |
+| `genia-2026` contract revision | [`89d543ec072960108dee86c6bba8fbdb01ff800d`](https://github.com/m0smith/genia-2026/commit/89d543ec072960108dee86c6bba8fbdb01ff800d) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | R26-2 `json_strict` (genia-2026 issue #1024, following the approved `docs/design/r26-cpp-data-bridge-contract.md` contract and the E26-1..E26-3 capability-vocabulary/shared-spec gating): this adapter widens the existing E24-7 scalar-numeric JSON codec to the full grammar (objects, arrays, strings/Unicode, booleans, null, nesting/duplicate-key limits, deterministic sorted-key/indented encode layout) and declares `json_strict` **supported**. `json_compat` remains unimplemented (permanent, by contract). This is the exact revision `src/protocol.hpp` declares -- `genia-2026`'s current `main` at the time of this change, a `current` pinned-conformance revision per E16-4. |
+| Represents | R26-2 `json_strict` (genia-2026 issue #1024, following the approved `docs/design/r26-cpp-data-bridge-contract.md` contract and the E26-1..E26-3 capability-vocabulary/shared-spec gating): this adapter widens the existing E24-7 scalar-numeric JSON codec to the full grammar (objects, arrays, strings/Unicode, booleans, null, nesting/duplicate-key limits, deterministic sorted-key/indented encode layout) and declares `json_strict` **supported**. `json_compat` remains unimplemented (permanent, by contract). This is the exact revision `src/protocol.hpp` declares and this repository's own CI pins (`.github/workflows/ci.yml`), a `current` pinned-conformance revision per E16-4. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
