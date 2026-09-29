@@ -186,6 +186,24 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
       if (!merge_bindings(*reason, std::move(*context))) return std::nullopt;
       return reason;
     }
+    case pattern::Kind::Some: {
+      if (arg.kind != value::Kind::Outcome || arg.outcome_is_err || arg.outcome_is_none ||
+          arg.outcome_value == nullptr) {
+        return std::nullopt;
+      }
+      auto value_binding = match_atom(pattern.items[0], *arg.outcome_value);
+      if (!value_binding.has_value()) return std::nullopt;
+      // A 1-argument `some(value)` has no context; match its wildcard-
+      // shaped second slot against `nil` (genia's own absent-context
+      // sentinel; `_`/a bind pattern both accept it unconditionally, the
+      // only shapes any pinned case uses here).
+      const value::Value context_value =
+          arg.outcome_context != nullptr ? *arg.outcome_context : value::Value::make_boolean(false);
+      auto context_binding = match_atom(pattern.items[1], context_value);
+      if (!context_binding.has_value()) return std::nullopt;
+      if (!merge_bindings(*value_binding, std::move(*context_binding))) return std::nullopt;
+      return value_binding;
+    }
   }
   return std::nullopt;
 }

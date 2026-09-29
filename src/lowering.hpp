@@ -105,7 +105,9 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       if (!left.has_value() || !right.has_value()) {
         return std::nullopt;
       }
-      return core_ir::Node::binary(*op, std::move(*left), std::move(*right));
+      auto lowered = core_ir::Node::binary(*op, std::move(*left), std::move(*right));
+      lowered.named_access = node.named_access;
+      return lowered;
     }
     case ast::Kind::List: {
       std::vector<core_ir::Node> items;

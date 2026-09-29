@@ -172,6 +172,7 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
       {"process_primitives", "supported"},
       {"bytes_utf8", "supported"},
       {"repl", "supported"},
+      {"json_strict", "supported"},
   };
   return kOverrides;
 }

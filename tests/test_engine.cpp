@@ -544,8 +544,14 @@ TEST_CASE("run: map_put/map_get round trip through a native ordered map") {
   CHECK(result->stdout_text == "7\n");
 }
 
-TEST_CASE("run: string escapes are unsupported, never guessed at") {
-  CHECK_FALSE(try_run("\"a\\\"b\"").has_value());
+TEST_CASE("run: string escapes are supported (R26-2 JSON string-escape support)") {
+  // Genia source: "a\"b" -- a string literal containing an escaped
+  // quote. R26-2's strict JSON string grammar needs the lexer to
+  // support standard escapes (see parser.hpp's string-literal escape
+  // handling), so this is no longer honestly unsupported.
+  auto result = try_run("\"a\\\"b\"");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "\"a\\\"b\"\n");
 }
 
 // --- E24-4: Outcomes, lambdas, pattern/case dispatch, pipelines -------
@@ -1183,9 +1189,10 @@ TEST_CASE("unit: R23 strict JSON enforces the safe Integer interval", "[e24-7-js
   CHECK(genia::strict_json::encode_value(Value::make_integer(*boundary)).value.has_value());
   CHECK(
       genia::strict_json::encode_value(Value::make_integer(boundary->negate())).value.has_value());
-  CHECK(genia::strict_json::encode_value(Value::make_integer(*outside)).error ==
+  CHECK(genia::strict_json::encode_value(Value::make_integer(*outside)).failure.error ==
         Error::NumberOutOfRange);
-  CHECK(genia::strict_json::decode_number("-9007199254740992").error == Error::NumberOutOfRange);
+  CHECK(genia::strict_json::decode_number("-9007199254740992").failure.error ==
+        Error::NumberOutOfRange);
 }
 
 TEST_CASE("unit: R23 strict JSON decodes fraction tokens lexically as exact Decimal",
@@ -1196,7 +1203,7 @@ TEST_CASE("unit: R23 strict JSON decodes fraction tokens lexically as exact Deci
   CHECK(decoded.value->kind == genia::value::Kind::Decimal);
   CHECK(decoded.value->decimal_coefficient.to_decimal_string() == "1");
   CHECK(decoded.value->decimal_exponent == -1);
-  CHECK(genia::strict_json::decode_number("0.1000000000000000000001").error ==
+  CHECK(genia::strict_json::decode_number("0.1000000000000000000001").failure.error ==
         Error::NumberOutOfRange);
 }
 
@@ -1206,7 +1213,87 @@ TEST_CASE("unit: R23 strict JSON rejects non-finite Float64 values", "[e24-7-jso
   for (double number :
        {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
         -std::numeric_limits<double>::infinity()}) {
-    CHECK(genia::strict_json::encode_value(Value::make_float64(number)).error ==
+    CHECK(genia::strict_json::encode_value(Value::make_float64(number)).failure.error ==
           Error::NumberOutOfRange);
   }
+}
+
+// --- R26-2: full json_strict decode/encode (objects, arrays, strings,
+// Unicode, limits, layout) -------------------------------------------
+
+TEST_CASE("unit: R26-2 json_strict decodes objects/arrays/booleans/null", "[r26-2-json]") {
+  auto decoded = genia::strict_json::decode_document(R"({"a":1,"b":[true,false,null]})");
+  REQUIRE(decoded.value.has_value());
+  REQUIRE(decoded.value->kind == genia::value::Kind::Map);
+  const auto* a = decoded.value->map->get(
+      genia::equality::map_key_encoding(genia::value::Value::make_string("a")));
+  REQUIRE(a != nullptr);
+  CHECK(a->kind == genia::value::Kind::Integer);
+  const auto* b = decoded.value->map->get(
+      genia::equality::map_key_encoding(genia::value::Value::make_string("b")));
+  REQUIRE(b != nullptr);
+  REQUIRE(b->kind == genia::value::Kind::List);
+  CHECK(b->list_items->size() == 3);
+  CHECK((*b->list_items)[0].boolean == true);
+  CHECK((*b->list_items)[1].boolean == false);
+  CHECK((*b->list_items)[2].kind == genia::value::Kind::Outcome);
+  CHECK((*b->list_items)[2].outcome_is_none);
+}
+
+TEST_CASE("unit: R26-2 json_strict rejects a leading BOM", "[r26-2-json]") {
+  using genia::strict_json::Error;
+  auto decoded = genia::strict_json::decode_document("\xEF\xBB\xBF{}");
+  CHECK(decoded.failure.error == Error::InvalidJson);
+}
+
+TEST_CASE("unit: R26-2 json_strict rejects duplicate object keys with the key in context",
+          "[r26-2-json]") {
+  using genia::strict_json::Error;
+  auto decoded = genia::strict_json::decode_document(R"({"a":1,"a":2})");
+  CHECK(decoded.failure.error == Error::DuplicateKey);
+  CHECK(decoded.failure.key == "a");
+}
+
+TEST_CASE("unit: R26-2 json_strict rejects a lone surrogate scalar in a string", "[r26-2-json]") {
+  using genia::strict_json::Error;
+  auto decoded = genia::strict_json::decode_document(R"("\ud800")");
+  CHECK(decoded.failure.error == Error::InvalidUnicode);
+  auto paired = genia::strict_json::decode_document(R"("😀")");
+  REQUIRE(paired.value.has_value());
+  CHECK(paired.value->text == "\xF0\x9F\x98\x80");
+}
+
+TEST_CASE("unit: R26-2 json_strict decode/encode nesting is bounded at 128 containers",
+          "[r26-2-json]") {
+  using genia::strict_json::Error;
+  std::string n128(128, '[');
+  n128 += "1";
+  n128.append(128, ']');
+  auto ok128 = genia::strict_json::decode_document(n128);
+  CHECK(ok128.value.has_value());
+  const std::string n129 = "[" + n128 + "]";
+  auto fail129 = genia::strict_json::decode_document(n129);
+  CHECK(fail129.failure.error == Error::NestingTooDeep);
+}
+
+TEST_CASE("unit: R26-2 json_strict encode sorts keys by code point and indents 2 spaces",
+          "[r26-2-json]") {
+  auto map = std::make_shared<genia::value::OrderedMap>();
+  for (const auto& key : {"b", "a", "Z", "z", "A"}) {
+    auto key_value = genia::value::Value::make_string(key);
+    map->put(genia::equality::map_key_encoding(key_value), key_value,
+             genia::value::Value::make_integer(genia::bignum::Integer::from_u64(1)));
+  }
+  auto encoded = genia::strict_json::encode_value(genia::value::Value::make_map(map));
+  REQUIRE(encoded.value.has_value());
+  CHECK(encoded.value->text ==
+        "{\n  \"A\": 1,\n  \"Z\": 1,\n  \"a\": 1,\n  \"b\": 1,\n  \"z\": 1\n}");
+}
+
+TEST_CASE("unit: R26-2 json_strict encode escapes control characters but not '/'", "[r26-2-json]") {
+  auto encoded =
+      genia::strict_json::encode_value(genia::value::Value::make_string(std::string("a\tb\nc\001"
+                                                                                    "d/e")));
+  REQUIRE(encoded.value.has_value());
+  CHECK(encoded.value->text == "\"a\\tb\\nc\\u0001d/e\"");
 }

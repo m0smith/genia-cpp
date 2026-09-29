@@ -115,6 +115,13 @@ struct Node {
   std::shared_ptr<Node> left;
   std::shared_ptr<Node> right;
 
+  // Binary only: set for genia-2026's "named access" sugar (`x.y`
+  // desugars to `Binary(x, "/", y, named_access=True)` -- parser.py's
+  // `parse_dotted_identifier_expr`). `right` stays an ordinary `Var`
+  // node even though it is never looked up as a binding -- the
+  // evaluator reads its `name` directly instead (see evaluator.hpp).
+  bool named_access = false;
+
   // List: element expressions (an element may itself be Kind::Spread).
   // Call: argument expressions. Assign: the single value expression
   // (reuses `left`).
