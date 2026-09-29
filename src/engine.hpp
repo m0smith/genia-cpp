@@ -6,6 +6,7 @@
 // shortcut that skips straight from source text to a printed value.
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -63,9 +64,16 @@ inline std::optional<json> try_lower(const std::string& source) {
 // `source` (unsupported grammar, undefined name, non-integer operand,
 // or a division this slice cannot represent exactly) -- the caller must
 // report the whole case as unsupported, never emit a guessed result.
-inline std::optional<RunResult> try_run(const std::string& source, bool enable_r25_fixture = false,
-                                        const std::optional<std::string>& stdin_text = std::nullopt,
-                                        const std::string& source_name = "") {
+// Maps a runtime error message to the text a mode reports (pipe mode's
+// guidance rewriting). Returning std::nullopt means the reference host's
+// rewriting for that message is not implemented, so the run is unsupported.
+using ErrorMapper = std::function<std::optional<std::string>(const std::string&)>;
+
+inline std::optional<RunResult> try_run(
+    const std::string& source, bool enable_r25_fixture = false,
+    const std::optional<std::string>& stdin_text = std::nullopt,
+    const std::string& source_name = "", const ErrorMapper& map_error = nullptr,
+    std::optional<std::vector<std::string>> argv = std::nullopt) {
   struct FixtureGuard {
     bool previous;
     explicit FixtureGuard(bool enabled) : previous(value::g_r25_fixture_enabled) {
@@ -84,7 +92,7 @@ inline std::optional<RunResult> try_run(const std::string& source, bool enable_r
     }
     stdin_state = *parsed_stdin;
   }
-  runtime_io::RunGuard run_guard(std::move(stdin_state), source_name);
+  runtime_io::RunGuard run_guard(std::move(stdin_state), source_name, std::move(argv));
   auto program = parser::parse_program(source);
   if (!program.has_value()) {
     return std::nullopt;
@@ -94,10 +102,16 @@ inline std::optional<RunResult> try_run(const std::string& source, bool enable_r
     return std::nullopt;
   }
   // Any error after some `print` output still carries that output on stdout.
-  auto error_result = [](const std::string& message) {
+  auto error_result = [&map_error](const std::string& message) -> std::optional<RunResult> {
+    std::string reported = message;
+    if (map_error) {
+      auto mapped = map_error(message);
+      if (!mapped.has_value()) return std::nullopt;
+      reported = std::move(*mapped);
+    }
     RunResult run_result;
     run_result.stdout_text = runtime_io::g_stdout_text;
-    run_result.stderr_text = "Error: " + message + "\n";
+    run_result.stderr_text = "Error: " + reported + "\n";
     run_result.exit_code = 1;
     return run_result;
   };

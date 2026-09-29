@@ -7,7 +7,7 @@
         "cell_primitives": "supported",
         "cli_command_mode": "supported",
         "cli_file_mode": "supported",
-        "cli_pipe_mode": "unsupported",
+        "cli_pipe_mode": "supported",
         "configuration_dotenv_snapshot": "unsupported",
         "configuration_environment_snapshot": "unsupported",
         "core_ir_eval": "partial",
@@ -43,18 +43,18 @@
         "cli"
     ],
     "contract_revision": {
-        "checkout": "c3362628c383752545b1ee64b6443f50f8ccf372",
+        "checkout": "17ead363905702269e60f67840f24c57d59532de",
         "classification": "current",
-        "declared": "c3362628c383752545b1ee64b6443f50f8ccf372"
+        "declared": "17ead363905702269e60f67840f24c57d59532de"
     },
     "counts": {
         "crash": 0,
         "fail": 0,
         "invalid": 0,
-        "pass": 209,
+        "pass": 220,
         "protocol_error": 0,
         "timeout": 0,
-        "unsupported": 563
+        "unsupported": 552
     },
     "protocol_version": "1",
     "total_cases": 772

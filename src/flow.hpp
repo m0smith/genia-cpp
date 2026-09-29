@@ -79,6 +79,30 @@ using value::Value;
 using Pull = value::Flow::Pull;
 using Invoke = std::function<std::optional<Value>(const Value&, const std::vector<Value>&)>;
 
+// Runtime type names as they appear in the reference host's diagnostics
+// (src/genia/values.py `_runtime_type_name`), for the kinds a Flow or pipe-mode
+// diagnostic can be raised over. Other kinds are left unsupported.
+inline std::string runtime_type_name(const Value& v) {
+  switch (v.kind) {
+    case value::Kind::Flow:
+      return "flow";
+    case value::Kind::StdinSource:
+      return "stdin";
+    case value::Kind::Integer:
+      return "int";
+    case value::Kind::String:
+      return "string";
+    case value::Kind::List:
+      return "list";
+    case value::Kind::Map:
+      return "map";
+    case value::Kind::Boolean:
+      return "bool";
+    default:
+      throw value::UnsupportedError{};
+  }
+}
+
 inline Value make_flow(value::Flow::Factory factory) {
   return Value::make_flow(std::make_shared<value::Flow>(std::move(factory)));
 }
@@ -405,6 +429,14 @@ inline bool dispatch(const std::string& name, const std::vector<Value>& args, co
     return true;
   }
   if (name == "run" && n == 1) {
+    out = run(args[0]);
+    return true;
+  }
+  if (name == "_pipe_run" && n == 1) {
+    // Pipe mode's implicit final stage: only a Flow may be run.
+    if (!last_is_flow) {
+      throw value::FlowError{"run expected a flow, received " + runtime_type_name(args[0])};
+    }
     out = run(args[0]);
     return true;
   }

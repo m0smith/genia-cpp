@@ -55,7 +55,7 @@ inline constexpr const char* kProtocolVersion = "1";
 // genia-2026 `main` (PR #1027) -- the prior pin above was this PR's
 // still-open branch head; this identical-content commit is the one
 // that is now actually current-main pinned conformance per E16-4.
-inline constexpr const char* kContractRevision = "c3362628c383752545b1ee64b6443f50f8ccf372";
+inline constexpr const char* kContractRevision = "17ead363905702269e60f67840f24c57d59532de";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -122,7 +122,7 @@ inline constexpr const char* kUnsupportedReason =
     "deterministic undefined-name "
     "runtime error, the R27 first-wave Flow kernel (stdin/list `lines`, "
     "`evolve`, `map`/`filter`/`take`/`drop`/`scan`/`keep_some`/`each`/"
-    "`collect`/`run`/`reduce`), calls to this slice's native "
+    "`collect`/`run`/`reduce`), `-p` pipe mode over piped stdin, calls to this slice's native "
     "map_*/utf8_encode/utf8_decode/err/sum/print/upper/trim/contains/parse_int "
     "functions, and `-c`/file-mode CLI); this request is outside that "
     "scope -- see https://github.com/m0smith/genia-cpp AGENTS.md";
@@ -163,6 +163,12 @@ inline constexpr const char* kUnsupportedReason =
 // rest of spec/flow/ (tee/merge/zip, rules/refine, Template and model Flow
 // compositions, ...), pipe mode (`cli_pipe_mode`), Flow value display, or
 // Unicode string handling; see docs/r27-e27-1-flow-phase-1.md.
+// R27 E27-2 (genia-2026 issue #1038) declares `cli_pipe_mode` `supported`:
+// exactly the 9 `requires: [cli_pipe_mode]` shared cases pass (`-p <expr>`
+// with piped stdin). Trailing script arguments, the collect_validated
+// aggregate boundary (json_compat, Python-host-only) and the reference
+// host's Option-receiver guidance stay unsupported; see
+// docs/r27-e27-2-pipe-mode.md.
 // This map is the single source of truth for both the
 // `capabilities` response and this project's own honesty: a name
 // absent here defaults to `unsupported`.
@@ -183,6 +189,7 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
       {"repl", "supported"},
       {"json_strict", "supported"},
       {"flow_phase_1", "supported"},
+      {"cli_pipe_mode", "supported"},
   };
   return kOverrides;
 }

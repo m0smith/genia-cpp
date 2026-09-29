@@ -38,6 +38,7 @@ add_executable(genia-adapter-tests
   tests/test_process.cpp
   tests/test_r25_hardening.cpp
   tests/test_flow.cpp
+  tests/test_pipe_mode.cpp
 )
 target_include_directories(genia-adapter-tests PRIVATE
   third_party/nlohmann_json

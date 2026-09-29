@@ -13,6 +13,7 @@
 
 #include "../third_party/nlohmann_json/json.hpp"
 #include "engine.hpp"
+#include "pipe_mode.hpp"
 #include "protocol.hpp"
 
 namespace genia::adapter {
@@ -110,7 +111,7 @@ inline std::optional<std::string> read_file_contents(const std::string& path) {
 }
 
 // Handles `cli`: input {"argv": [...], "stdin": ...}. Two shapes are
-// implemented at this slice: `-c <source>` command mode, and bare
+// implemented: `-p <expr>` pipe mode (R27 E27-2), `-c <source>` command mode, and bare
 // `<file>` file mode (matching tools/spec_runner/host_executor.py's
 // `_cli_argv`: file mode sends exactly `[file, *trailing_args]`, no
 // flag). Pipe/test modes are out of R24's floor entirely.
@@ -130,6 +131,16 @@ inline std::optional<json> handle_cli(const std::string& case_id, const json& in
     auto result = engine::try_repl(input["stdin"].get<std::string>());
     if (!result.has_value()) return std::nullopt;
     return build_ok_response(case_id, "cli", run_result_to_json(*result));
+  }
+  if (argv[0] == "-p") {
+    // R27 E27-2 pipe mode: exactly `-p <stage expression>` with piped stdin.
+    // Trailing script arguments are not evidenced and stay unsupported.
+    if (argv.size() != 2 || !input.contains("stdin") || !input["stdin"].is_string()) {
+      return std::nullopt;
+    }
+    auto piped = pipe_mode::try_run_pipe(argv[1], input["stdin"].get<std::string>());
+    if (!piped.has_value()) return std::nullopt;
+    return build_ok_response(case_id, "cli", run_result_to_json(*piped));
   }
   std::optional<std::string> source;
   if (argv[0] == "-c") {

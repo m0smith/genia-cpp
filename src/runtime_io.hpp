@@ -27,6 +27,10 @@ struct StdinState {
 inline thread_local std::string g_stdout_text;
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline thread_local std::shared_ptr<StdinState> g_stdin;
+// Script arguments visible to `argv()`. Unset (std::nullopt) outside modes whose
+// argv shape is evidenced (pipe mode), where `argv()` stays unsupported.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+inline thread_local std::optional<std::vector<std::string>> g_argv;
 // File name used in pipeline-stage error spans (`<command>` for command-source
 // execution); empty when the reference host's file naming is not evidenced.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -61,10 +65,14 @@ struct RunGuard {
   std::string previous_stdout;
   std::shared_ptr<StdinState> previous_stdin;
   std::string previous_source_name;
-  RunGuard(std::shared_ptr<StdinState> stdin_state, std::string source_name)
+  std::optional<std::vector<std::string>> previous_argv;
+  RunGuard(std::shared_ptr<StdinState> stdin_state, std::string source_name,
+           std::optional<std::vector<std::string>> argv = std::nullopt)
       : previous_stdout(std::move(g_stdout_text)),
         previous_stdin(std::move(g_stdin)),
-        previous_source_name(std::move(g_source_name)) {
+        previous_source_name(std::move(g_source_name)),
+        previous_argv(std::move(g_argv)) {
+    g_argv = std::move(argv);
     g_stdout_text.clear();
     g_stdin = std::move(stdin_state);
     g_source_name = std::move(source_name);
@@ -73,6 +81,7 @@ struct RunGuard {
     g_stdout_text = std::move(previous_stdout);
     g_stdin = std::move(previous_stdin);
     g_source_name = std::move(previous_source_name);
+    g_argv = std::move(previous_argv);
   }
   RunGuard(const RunGuard&) = delete;
   RunGuard& operator=(const RunGuard&) = delete;
