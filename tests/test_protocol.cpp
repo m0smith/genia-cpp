@@ -217,6 +217,33 @@ TEST_CASE("an unknown future operation is still deterministically unsupported") 
   CHECK((*response)["operation"] == "some_future_operation");
 }
 
+TEST_CASE("scripted REPL keeps bindings and recovers after a failed submission") {
+  json request = {{"protocol_version", "1"},
+                  {"case_id", "repl-session"},
+                  {"operation", "cli"},
+                  {"input", {{"argv", json::array()},
+                             {"stdin", "x = 1\nundefined_name\nx + 1\n"}}}};
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  CHECK((*response)["status"] == "ok");
+  CHECK((*response)["result"]["stdout"] == "1\n2\n");
+  CHECK((*response)["result"]["stderr"] == "Error: Undefined name: undefined_name\n");
+  CHECK((*response)["result"]["exit_code"] == 0);
+}
+
+TEST_CASE("scripted REPL renders none and drops an incomplete final submission") {
+  json request = {{"protocol_version", "1"},
+                  {"case_id", "repl-none"},
+                  {"operation", "cli"},
+                  {"input", {{"argv", json::array()},
+                             {"stdin", "none(\"nil\")\nx = (\n"}}}};
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  CHECK((*response)["status"] == "ok");
+  CHECK((*response)["result"]["stdout"] == "none(\"nil\")\n");
+  CHECK((*response)["result"]["exit_code"] == 0);
+}
+
 TEST_CASE("malformed JSON on stdin yields no response (never a fabricated envelope)") {
   auto response = genia::adapter::handle_request("this is not json");
   CHECK_FALSE(response.has_value());
