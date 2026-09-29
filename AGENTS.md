@@ -46,9 +46,11 @@ truth — read them from `genia-2026` directly.
 **R25 is complete through E25-5. The ordered release-candidate PR stack is
 merged in both repositories. This host supports the bounded R24 floor plus
 `refs`, `cell_primitives`, and local `process_primitives`; Actor remains
-unsupported and belongs to R38. R26-2 adds `bytes_utf8`; R26-1 adds the
-scripted REPL session. `json_strict`
-and `json_compat` remain unimplemented.** E24-1
+unsupported and belongs to R38. R26-1 adds the scripted REPL session;
+R26-2 adds `bytes_utf8` and now `json_strict` (the full strict JSON
+codec: objects, arrays, strings/Unicode, booleans, null, nesting/
+duplicate-key limits, deterministic sorted-key/indented encode layout).
+`json_compat` remains permanently unimplemented by contract.** E24-1
 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
 implementing zero Genia semantics. E24-2 (`m0smith/genia-2026#956`)
@@ -285,8 +287,8 @@ cross-module `extend`/`use`, the R20 diagnostic family, and bare
 varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
 is the honest declaration here), plus R25 E25-1 `refs` and E25-2
-`cell_primitives` and E25-3 `process_primitives`, R26-2 `bytes_utf8`,
-and R26-1 `repl` (scripted sessions).
+`cell_primitives` and E25-3 `process_primitives`, R26-1 `repl` (scripted
+sessions), and R26-2 `bytes_utf8` and `json_strict`.
 Declared `partial`: `core_ir_eval`,
 `prelude_autoload` (only the bounded source-level prelude required by the floor),
 and `shared_spec_runner` (matching the Python adapter's partial precedent).
@@ -340,10 +342,55 @@ before: the former was already implemented (`equality.hpp`'s
 shared evidence yet pins a diagnostic-worthy error path for it in this
 host, matching this codebase's standing rule against fabricating
 diagnostics without pinned evidence). `bytes_utf8` is declared
-`supported`; `json_strict` and `json_compat` -- the other two capabilities
-`spec/manifest.json` split out of the retired `bytes_json_zip` in the
-same genia-2026 revision -- remain genuinely unimplemented and
-`unsupported`; this increment is `bytes_utf8` only.
+`supported`; that PR was `bytes_utf8` only, leaving `json_strict` and
+`json_compat` unimplemented.
+
+**R26-2 `json_strict`** (`m0smith/genia-2026#1024`,
+`docs/design/r26-cpp-data-bridge-contract.md`) widens `src/json.hpp`'s
+existing E24-7 scalar-numeric-only codec (kept, reused verbatim — no
+second numeric parser) to the full strict JSON grammar: objects, arrays,
+strings (JSON escape processing including `\uXXXX` surrogate-pair
+combination and Unicode-scalar validation — a lone surrogate, whether
+from an unpaired `\uXXXX` escape or a raw embedded WTF-8-style byte
+sequence, is `invalid_json_unicode`, never silently accepted), booleans,
+`null` (decodes to `none("nil")`), nesting bounded at exactly 128
+containers for both decode and encode, duplicate object-member rejection
+(`duplicate_json_key`, with the exact key name in context), a leading
+BOM correctly *not* accepted as insignificant whitespace
+(`invalid_json`), and deterministic encode layout (2-space indentation,
+`": "` key separator, object keys sorted by Unicode code point,
+`{}`/`[]` for empty containers, the exact contract-pinned escape set).
+`json_encode`/`json_decode` accept exactly one outer `json`-represented
+layer (`represent`/`representation_match`); a non-String/Bytes
+`json_decode` argument is the programmer-misuse `TypeError` the contract
+requires, not a recoverable Outcome. Getting the pinned
+`json-representation-decode.yaml`/`json-representation-encode.yaml`
+evidence to run at all also needed a few small, genuinely-missing pieces
+of general runtime surface this slice had no prior reason to add:
+genia-2026's `x.y` "named access" sugar over a Map (`root.items`,
+desugared at parse time into the same `Binary(op=SLASH,
+named_access=true)` shape the reference host's `parser.py` produces, per
+the now-passing `spec/parse/parse-dot-named-access.yaml`/
+`spec/ir/dot-named-access.yaml`), the native `nth`/`none?`/`get`/
+`represent` functions, a `some(value_pattern, context_pattern)` case
+pattern alongside the existing `err(...)` one, JSON-style string-literal
+escapes (`\n \r \t \b \f \" \\ \uXXXX`) in this host's own Genia string
+literals (needed to construct exotic JSON test input at all), and
+String-`+`-String concatenation. Two pre-existing latent gaps this
+work's own full-corpus run caught before merging: `representation_match`
+previously had no non-matching-value arm at all (honestly `unsupported`
+instead of the real `none("representation-mismatch")`), and
+`render.hpp`'s debug-string escaping had never actually implemented R19's
+own `_escape_for_debug` control-character rule (unreachable until this
+change's new `\uXXXX` string-literal escape could construct such
+content) -- both repaired directly, not routed around. `json_strict` is
+now declared `supported`; `json_compat` remains permanently unimplemented
+by contract (section 5's "not portable" decision). The one
+`requires: [json_strict]` case genuinely out of this host's bounded
+floor, `spec/flow/json-representation-template-flow.yaml` (Template
+`pattern`/`refinement_match`/`open_shape_match` and general Flow
+`validate_each`/`collect`), remains honestly `unsupported` — every other
+`requires: [json_strict]` case passes.
 
 Known commands:
 
@@ -359,8 +406,8 @@ history, and terminal handling remain host-local.
 - lint: `clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp && clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp`
 - conformance evidence: from a `genia-2026` checkout at the pinned
   revision, `python -m tools.spec_runner --host '<path>/genia-cpp/build/genia-adapter' --evidence evidence.json`
-  (R26-2 evidence: `total=772 passed=143 failed=0
-  unsupported=629 protocol_error=0 crash=0 timeout=0 invalid=0`)
+  (R26-2 `json_strict` evidence: `total=772 passed=178 failed=0
+  unsupported=594 protocol_error=0 crash=0 timeout=0 invalid=0`)
 
 ## Dependency/toolchain policy (pinned by the R24 pre-flight)
 

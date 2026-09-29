@@ -139,6 +139,10 @@ struct Node {
   std::shared_ptr<Node> left;
   std::shared_ptr<Node> right;
 
+  // Binary only: mirrors ast::Node's `named_access` (genia-2026's `x.y`
+  // sugar); propagated verbatim by lowering.hpp.
+  bool named_access = false;
+
   // ExprStmt/Assign: the wrapped/assigned expression (reuses `left`).
   // Lambda/FuncDef (ordinary, non-case body): the body expression
   // (reuses `left`). Spread: the spread expression (reuses `left`).

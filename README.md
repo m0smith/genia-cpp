@@ -89,9 +89,9 @@ before implementing:
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`89d543ec072960108dee86c6bba8fbdb01ff800d`](https://github.com/m0smith/genia-2026/commit/89d543ec072960108dee86c6bba8fbdb01ff800d) |
+| `genia-2026` contract revision | [`b8fbcc81d2598b76577d0dcf2fb7281814bd95a3`](https://github.com/m0smith/genia-2026/commit/b8fbcc81d2598b76577d0dcf2fb7281814bd95a3) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | R26-2 `bytes_utf8` (genia-2026 issue #1024, PR #1027, merged): `spec/manifest.json` retires `bytes_json_zip` in favor of `bytes_utf8`/`json_strict`/`json_compat`, and this adapter implements `bytes_utf8` only (`json_strict`/`json_compat` remain unimplemented). This is the exact revision `src/protocol.hpp` declares -- the merge commit of `genia-2026` PR #1027 on `main`, a `current` pinned-conformance revision per E16-4 (superseding an earlier pin to that same PR's still-open branch head). |
+| Represents | R26-2 `json_strict` (genia-2026 issue #1024, following the approved `docs/design/r26-cpp-data-bridge-contract.md` contract and the E26-1..E26-3 capability-vocabulary/shared-spec gating): this adapter widens the existing E24-7 scalar-numeric JSON codec to the full grammar (objects, arrays, strings/Unicode, booleans, null, nesting/duplicate-key limits, deterministic sorted-key/indented encode layout) and declares `json_strict` **supported**. `json_compat` remains unimplemented (permanent, by contract). This is the exact revision `src/protocol.hpp` declares -- `genia-2026`'s current `main` at the time of this change, a `current` pinned-conformance revision per E16-4. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
@@ -474,11 +474,14 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
 
 - Actor and ActorRef, supervision, distribution, placement, and scheduler/timing
   guarantees belong to R38; R25 supports only portable Ref, Cell, and local Process.
-- R26: scripted REPL is supported through the shared `repl` CLI cases; the
-  strict JSON bridge remains open under genia-2026#1024.
+- R26: scripted REPL and the strict JSON data bridge (`bytes_utf8`,
+  `json_strict`) are both supported; compatibility JSON (`json_compat`)
+  remains permanently Python-host-only by contract.
 - R27: Flow, pipe mode, HTTP serving, and outbound HTTP.
 - Cross-module open-function contribution/selection and wider parser/evaluator
-  behavior outside the R24 floor, including general Option and compatibility JSON.
+  behavior outside the R24 floor, including general Option, Template/pattern
+  matching (`pattern`, `refinement_match`, `open_shape_match`), and
+  compatibility JSON.
 - Configuration/secrets, resource I/O, external execution, AI/retrieval providers,
   host interop, debugger/shell, browser runtime, and help/documentation parity.
 

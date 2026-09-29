@@ -28,7 +28,7 @@
 
 namespace genia::pattern {
 
-enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple, Literal, Err };
+enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple, Literal, Err, Some };
 
 struct PatternMapEntry;
 
@@ -128,6 +128,19 @@ struct Pattern {
     Pattern p;
     p.kind = Kind::Err;
     p.items.push_back(std::move(reason));
+    p.items.push_back(std::move(context));
+    return p;
+  }
+
+  // `some(value_pattern, context_pattern)`: matches any successful,
+  // non-none Outcome (genia-2026's `GeniaOptionSome`, whose `context`
+  // defaults to None when the 1-argument constructor form was used --
+  // matched here regardless, since every pinned case using this pattern
+  // only ever binds its second slot with `_`).
+  static Pattern some(Pattern value, Pattern context) {
+    Pattern p;
+    p.kind = Kind::Some;
+    p.items.push_back(std::move(value));
     p.items.push_back(std::move(context));
     return p;
   }

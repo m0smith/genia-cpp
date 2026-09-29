@@ -127,27 +127,104 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
   }
   if (name == "json_encode" && args.size() == 1) {
     auto encoded = strict_json::encode_value(args[0]);
-    if (encoded.value.has_value()) return Value::make_outcome_some(*encoded.value);
-    auto context = std::make_shared<value::OrderedMap>();
-    return Value::make_outcome_err(Value::make_string(strict_json::reason(encoded.error)),
-                                   Value::make_map(context));
-  }
-  if (name == "json_decode" && args.size() == 1 && args[0].kind == value::Kind::String) {
-    auto decoded = strict_json::decode_number(args[0].text);
-    if (decoded.value.has_value()) {
-      return Value::make_outcome_some(Value::make_represented("json", *decoded.value));
+    if (encoded.value.has_value()) {
+      return Value::make_outcome_some(*encoded.value,
+                                      strict_json::success_context("encode", "encoded"));
     }
+    return Value::make_outcome_err(Value::make_string(strict_json::reason(encoded.failure)),
+                                   strict_json::build_context("encode", "error", encoded.failure));
+  }
+  // Argument-kind validation (String or Bytes) happens in evaluator.hpp
+  // before this native is ever reached -- a non-String/Bytes argument is
+  // a `StatefulRuntimeError` (contract: programmer misuse, not a
+  // recoverable Outcome), matching `error-json-decode-input-type.yaml`.
+  if (name == "json_decode" && args.size() == 1 &&
+      (args[0].kind == value::Kind::String || args[0].kind == value::Kind::Bytes)) {
+    std::string text;
+    if (args[0].kind == value::Kind::Bytes) {
+      if (!utf8::is_well_formed(args[0].text)) {
+        strict_json::Failure failure{strict_json::Error::InvalidJson};
+        // No dedicated `invalid_json_utf8` Error enumerator is needed
+        // yet -- no pinned evidence constructs malformed UTF-8 bytes for
+        // this path (contract section 6), so this is an honest,
+        // conservative fallback rather than a fabricated distinct code
+        // path.
+        return Value::make_outcome_err(Value::make_string("invalid_json_utf8"),
+                                       strict_json::build_context("decode", "error", failure));
+      }
+      text = args[0].text;
+    } else {
+      text = args[0].text;
+    }
+    auto decoded = strict_json::decode_document(text);
+    if (decoded.value.has_value()) {
+      return Value::make_outcome_some(Value::make_represented("json", *decoded.value),
+                                      strict_json::success_context("decode", "decoded"));
+    }
+    return Value::make_outcome_err(Value::make_string(strict_json::reason(decoded.failure)),
+                                   strict_json::build_context("decode", "error", decoded.failure));
+  }
+  if (name == "represent" && args.size() == 2 && args[0].kind == value::Kind::String) {
+    return Value::make_represented(args[0].text, args[1]);
+  }
+  if (name == "nth" && args.size() == 2 && args[0].kind == value::Kind::Integer &&
+      args[1].kind == value::Kind::List) {
+    // src/genia/std/prelude/list.genia's `nth(n, xs)`: `some(value)` for
+    // an in-range zero-based index, else
+    // `none("index-out-of-bounds", {index, length})`.
+    static const bignum::Integer zero = bignum::Integer::from_u64(0);
+    const auto& items = *args[1].list_items;
+    const bool negative = bignum::Integer::compare(args[0].integer, zero) < 0;
+    bool in_range = false;
+    size_t index = 0;
+    if (!negative) {
+      auto index_u64 = args[0].integer.to_u64();
+      if (index_u64.has_value() && *index_u64 < items.size()) {
+        in_range = true;
+        index = static_cast<size_t>(*index_u64);
+      }
+    }
+    if (in_range) return Value::make_outcome_some(items[index]);
     auto context = std::make_shared<value::OrderedMap>();
-    return Value::make_outcome_err(Value::make_string(strict_json::reason(decoded.error)),
-                                   Value::make_map(context));
+    auto put = [&](const std::string& key, Value val) {
+      auto key_value = Value::make_string(key);
+      context->put(equality::map_key_encoding(key_value), key_value, std::move(val));
+    };
+    put("index", args[0]);
+    put("length", Value::make_integer(bignum::Integer::from_u64(items.size())));
+    return Value::make_outcome_none(Value::make_string("index-out-of-bounds"),
+                                    Value::make_map(context));
+  }
+  if (name == "none?" && args.size() == 1) {
+    return Value::make_boolean(args[0].kind == value::Kind::Outcome && !args[0].outcome_is_err &&
+                               args[0].outcome_is_none);
+  }
+  if (name == "get" && args.size() == 2 && args[1].kind == value::Kind::Map) {
+    // src/genia/std/prelude/option.genia's `get(key, target)`: `some(value)`
+    // for a present legal key, else `none("missing-key", {key})`.
+    auto key_encoding = equality::map_key_encoding_checked(args[0]);
+    if (!key_encoding.has_value()) return std::nullopt;
+    const Value* found = args[1].map->get(*key_encoding);
+    if (found != nullptr) return Value::make_outcome_some(*found);
+    auto context = std::make_shared<value::OrderedMap>();
+    auto key_value = Value::make_string("key");
+    context->put(equality::map_key_encoding(key_value), key_value, args[0]);
+    return Value::make_outcome_none(Value::make_string("missing-key"), Value::make_map(context));
   }
   if (name == "unwrap_or" && args.size() == 2 && args[1].kind == value::Kind::Outcome &&
       !args[1].outcome_is_err && args[1].outcome_value != nullptr) {
     return *args[1].outcome_value;
   }
-  if (name == "representation_match" && args.size() == 2 && args[0].kind == value::Kind::String &&
-      args[1].kind == value::Kind::Represented && args[0].text == args[1].represented_facet) {
-    return Value::make_outcome_some(*args[1].represented_value);
+  if (name == "representation_match" && args.size() == 2 && args[0].kind == value::Kind::String) {
+    if (args[1].kind == value::Kind::Represented && args[0].text == args[1].represented_facet) {
+      return Value::make_outcome_some(*args[1].represented_value);
+    }
+    // genia-2026's real `representation_match` returns
+    // `none("representation-mismatch")` for any non-matching value
+    // (unrepresented, or represented under a different facet) --
+    // src/genia/builtins.py's `representation_match_fn` -- rather than
+    // being honestly unsupported outside the exact-match case.
+    return Value::make_outcome_none(Value::make_string("representation-mismatch"));
   }
   if (name == "display" && args.size() == 1) {
     if (args[0].kind == value::Kind::String) return args[0];

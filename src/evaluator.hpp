@@ -94,6 +94,31 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
                                                        const value::Value& stage_value,
                                                        const EnvPtr& env);
 
+// Mirrors src/genia/builtins.py's `_runtime_type_name` closely enough
+// for the exact set of kinds `json_decode`'s misuse diagnostic can
+// actually receive in this slice's pinned evidence (only `int` today);
+// not a general-purpose type-name registry.
+inline std::string json_runtime_type_name(value::Kind kind) {
+  switch (kind) {
+    case value::Kind::Integer:
+      return "int";
+    case value::Kind::Decimal:
+      return "decimal";
+    case value::Kind::Rational:
+      return "rational";
+    case value::Kind::Float64:
+      return "float";
+    case value::Kind::Boolean:
+      return "bool";
+    case value::Kind::List:
+      return "list";
+    case value::Kind::Map:
+      return "map";
+    default:
+      return "value";
+  }
+}
+
 inline const char* arithmetic_symbol(core_ir::Op op) {
   switch (op) {
     case core_ir::Op::Plus:
@@ -307,6 +332,33 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         if (!value::stage_cell_send(accept)) accept();
         return value::Value::make_outcome_none(value::Value::make_string("nil"));
       }
+      if (node.name == "representation_match" && args.size() == 2 &&
+          args[0].kind == value::Kind::String && args[0].text == "secret") {
+        throw StatefulRuntimeError{
+            "representation_match cannot use reserved protected facet \"secret\""};
+      }
+      if (node.name == "represent" && args.size() == 2 && args[0].kind == value::Kind::String) {
+        // genia-2026's real `represent(facet, value)` raises these two
+        // programmer-misuse `TypeError`/`ValueError` diagnostics before
+        // constructing anything (src/genia/builtins.py's `represent_fn`).
+        if (args[0].text.empty()) {
+          throw StatefulRuntimeError{"represent expected a non-empty facet string"};
+        }
+        if (args[0].text == "secret") {
+          throw StatefulRuntimeError{"represent cannot use reserved protected facet \"secret\""};
+        }
+      }
+      if (node.name == "json_decode" && args.size() == 1 && args[0].kind != value::Kind::String &&
+          args[0].kind != value::Kind::Bytes) {
+        // R26-2 contract, `error-json-decode-input-type.yaml`:
+        // genia-2026's real `json_decode_fn` raises this exact
+        // programmer-misuse `TypeError` (never a recoverable Outcome)
+        // for a non-string/Bytes argument. `_runtime_type_name` mirrors
+        // src/genia/builtins.py's own helper closely enough for the one
+        // pinned kind (`int`) this evidence exercises.
+        throw StatefulRuntimeError{"json_decode expected string or bytes, received " +
+                                   json_runtime_type_name(args[0].kind)};
+      }
       auto callee = env->lookup(node.name);
       if (callee.has_value() && callee->kind == value::Kind::Closure) {
         return invoke_closure(*callee->closure, args);
@@ -382,8 +434,27 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       return std::nullopt;
     case core_ir::Kind::Binary: {
       auto lhs = eval_node(*node.left, env);
+      if (!lhs.has_value()) {
+        return std::nullopt;
+      }
+      if (node.op == core_ir::Op::Slash && node.named_access) {
+        // genia-2026's `x.y` named-access sugar (evaluator.py's
+        // `eval_binary` SLASH/named_access case): the right side is
+        // never evaluated as a binding reference -- its raw `name` is
+        // used as a direct (non-Option) Map key lookup. Module export
+        // access has no equivalent in this slice (no module system).
+        if (lhs->kind != value::Kind::Map || node.right->kind != core_ir::Kind::Var) {
+          return std::nullopt;
+        }
+        auto key_value = value::Value::make_string(node.right->name);
+        auto key_encoding = equality::map_key_encoding_checked(key_value);
+        if (!key_encoding.has_value()) return std::nullopt;
+        const value::Value* found = lhs->map->get(*key_encoding);
+        if (found == nullptr) return std::nullopt;
+        return *found;
+      }
       auto rhs = eval_node(*node.right, env);
-      if (!lhs.has_value() || !rhs.has_value()) {
+      if (!rhs.has_value()) {
         return std::nullopt;
       }
       if (node.op == core_ir::Op::EqEq) {
@@ -394,6 +465,13 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         // logical negation of == (verified directly against the
         // reference host, not guessed).
         return value::Value::make_boolean(!equality::structural_equal(*lhs, *rhs));
+      }
+      if (node.op == core_ir::Op::Plus && lhs->kind == value::Kind::String &&
+          rhs->kind == value::Kind::String) {
+        // genia-2026's `+` on two strings is concatenation (the same
+        // Python `+` operator `eval_binary` falls through to below,
+        // before any exact-family numeric gating applies).
+        return value::Value::make_string(lhs->text + rhs->text);
       }
       if ((node.op == core_ir::Op::Lt || node.op == core_ir::Op::Le || node.op == core_ir::Op::Gt ||
            node.op == core_ir::Op::Ge) &&

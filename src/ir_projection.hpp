@@ -201,10 +201,17 @@ inline std::optional<json> project(const core_ir::Node& node) {
       if (!left.has_value() || !right.has_value()) {
         return std::nullopt;
       }
-      return json{{"node", "IrBinary"},
-                  {"left", *left},
-                  {"op", core_ir::op_token_name(node.op)},
-                  {"right", *right}};
+      json projected = json{{"node", "IrBinary"},
+                            {"left", *left},
+                            {"op", core_ir::op_token_name(node.op)},
+                            {"right", *right}};
+      // Only ever present (and true) for named-access sugar -- every
+      // other Binary case keeps the existing shape with no such key, so
+      // already-pinned IrBinary evidence stays byte-for-byte unchanged.
+      if (node.named_access) {
+        projected["named_access"] = true;
+      }
+      return projected;
     }
     case core_ir::Kind::ExprStmt: {
       auto expr = project(*node.left);

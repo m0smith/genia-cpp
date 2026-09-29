@@ -211,11 +211,14 @@ struct Value {
     return value;
   }
 
-  static Value make_outcome_some(Value inner) {
+  static Value make_outcome_some(Value inner, std::optional<Value> context = std::nullopt) {
     Value value;
     value.kind = Kind::Outcome;
     value.outcome_is_err = false;
     value.outcome_value = std::make_shared<Value>(std::move(inner));
+    if (context.has_value()) {
+      value.outcome_context = std::make_shared<Value>(std::move(*context));
+    }
     return value;
   }
 

@@ -17,6 +17,7 @@
 #include <string>
 
 #include "bignum.hpp"
+#include "utf8.hpp"
 #include "value.hpp"
 
 namespace genia::render {
@@ -125,12 +126,56 @@ inline std::optional<std::string> display(const value::Value& value) {
     case value::Kind::Boolean:
       return value.boolean ? "true" : "false";
     case value::Kind::String: {
+      // R19 U3 deterministic debug escaping (verified directly against
+      // src/genia/utf8.py's `_escape_for_debug`): the five short
+      // escapes, every other C0 control, DEL, and every C1 control
+      // render as `\uXXXX` (four lowercase hex digits); every other
+      // scalar renders literally. Reachable now that R26-2's `\uXXXX`
+      // string-literal escape (parser.hpp) can construct such content.
       std::string quoted = "\"";
-      for (const char c : value.text) {
-        if (c == '"' || c == '\\') {
-          quoted.push_back('\\');
+      const auto* data = reinterpret_cast<const unsigned char*>(value.text.data());
+      const size_t n = value.text.size();
+      size_t i = 0;
+      while (i < n) {
+        auto decoded = utf8::decode_one_permissive(data, i, n);
+        if (!decoded.has_value()) {
+          // Structurally malformed byte (should not occur for a
+          // well-formed Genia string): pass through verbatim rather
+          // than guessing at a replacement.
+          quoted.push_back(value.text[i]);
+          ++i;
+          continue;
         }
-        quoted.push_back(c);
+        const std::uint32_t cp = decoded->codepoint;
+        switch (cp) {
+          case '\\':
+            quoted += "\\\\";
+            break;
+          case '"':
+            quoted += "\\\"";
+            break;
+          case '\n':
+            quoted += "\\n";
+            break;
+          case '\r':
+            quoted += "\\r";
+            break;
+          case '\t':
+            quoted += "\\t";
+            break;
+          default:
+            if (cp <= 0x1F || cp == 0x7F || (cp >= 0x80 && cp <= 0x9F)) {
+              constexpr char hex[] = "0123456789abcdef";
+              quoted += "\\u";
+              quoted.push_back(hex[(cp >> 12) & 0xF]);
+              quoted.push_back(hex[(cp >> 8) & 0xF]);
+              quoted.push_back(hex[(cp >> 4) & 0xF]);
+              quoted.push_back(hex[cp & 0xF]);
+            } else {
+              quoted.append(value.text, i, decoded->length);
+            }
+        }
+        i += decoded->length;
       }
       quoted.push_back('"');
       return quoted;

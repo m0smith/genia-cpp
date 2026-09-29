@@ -47,6 +47,7 @@
 #include "ast.hpp"
 #include "bignum.hpp"
 #include "pattern.hpp"
+#include "utf8.hpp"
 
 namespace genia::parser {
 
@@ -160,6 +161,24 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
       if (i < n && source[i] == '?') {
         ++i;
       }
+      // A single embedded '.' immediately followed by another
+      // identifier continues the same token (genia-2026's lexer.py:
+      // '.' is in ALLOWED_SYMBOL_PUNCTUATION, so `root.items` lexes as
+      // one IDENT "root.items", later split by
+      // parse_dotted_identifier_expr into named-map/module access --
+      // see this file's primary-expression Ident handling). Two dots
+      // in a row is the unrelated ".." rest-spread token and must not
+      // be absorbed here.
+      while (i < n && source[i] == '.' && i + 1 < n && source[i + 1] != '.' &&
+             (std::isalpha(static_cast<unsigned char>(source[i + 1])) || source[i + 1] == '_')) {
+        ++i;  // '.'
+        while (i < n && (std::isalnum(static_cast<unsigned char>(source[i])) || source[i] == '_')) {
+          ++i;
+        }
+        if (i < n && source[i] == '?') {
+          ++i;
+        }
+      }
       tokens.push_back({TokenKind::Ident, source.substr(start, i - start)});
       continue;
     }
@@ -185,10 +204,95 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
           break;
         }
         if (sc == '\\') {
-          // No escape sequences are in this slice's grammar (no pinned
-          // evidence needs any); a backslash makes the source
-          // unsupported rather than guessing at escape semantics.
-          return std::nullopt;
+          // Mirrors genia-2026's src/genia/lexer.py `parse_string_literal`
+          // exactly for the escapes it supports: \n \r \t \\ \" \' and
+          // \uXXXX (a bare `chr(int(hex, 16))` -- no surrogate-pair
+          // combination on the Python side, since Python str is a
+          // sequence of code points, not UTF-16 units). This host stores
+          // strings as UTF-8 bytes, so a `\uXXXX` naming a high surrogate
+          // immediately followed by a low-surrogate `\uXXXX` is combined
+          // into one proper 4-byte scalar encoding (the common,
+          // well-formed case); an unpaired surrogate is still encoded
+          // (WTF-8-style, via utf8::encode_codepoint) so the resulting
+          // string is bit-for-bit constructible at all -- json_decode's
+          // own `invalid_json_unicode` scalar validation (json.hpp) is
+          // what rejects it as JSON content, not the lexer.
+          ++i;
+          if (i >= n) {
+            return std::nullopt;
+          }
+          const char esc = source[i];
+          switch (esc) {
+            case 'n':
+              decoded.push_back('\n');
+              ++i;
+              break;
+            case 'r':
+              decoded.push_back('\r');
+              ++i;
+              break;
+            case 't':
+              decoded.push_back('\t');
+              ++i;
+              break;
+            case '\\':
+              decoded.push_back('\\');
+              ++i;
+              break;
+            case '"':
+              decoded.push_back('"');
+              ++i;
+              break;
+            case '\'':
+              decoded.push_back('\'');
+              ++i;
+              break;
+            case 'u': {
+              ++i;
+              if (i + 4 > n) {
+                return std::nullopt;
+              }
+              auto parse_hex4 = [&](size_t pos) -> std::optional<std::uint32_t> {
+                std::uint32_t value = 0;
+                for (size_t k = 0; k < 4; ++k) {
+                  const char hc = source[pos + k];
+                  value <<= 4;
+                  if (hc >= '0' && hc <= '9') {
+                    value |= static_cast<std::uint32_t>(hc - '0');
+                  } else if (hc >= 'a' && hc <= 'f') {
+                    value |= static_cast<std::uint32_t>(hc - 'a' + 10);
+                  } else if (hc >= 'A' && hc <= 'F') {
+                    value |= static_cast<std::uint32_t>(hc - 'A' + 10);
+                  } else {
+                    return std::nullopt;
+                  }
+                }
+                return value;
+              };
+              auto first = parse_hex4(i);
+              if (!first.has_value()) {
+                return std::nullopt;
+              }
+              i += 4;
+              std::uint32_t codepoint = *first;
+              if (codepoint >= 0xD800 && codepoint <= 0xDBFF && i + 6 <= n && source[i] == '\\' &&
+                  source[i + 1] == 'u') {
+                auto second = parse_hex4(i + 2);
+                if (second.has_value() && *second >= 0xDC00 && *second <= 0xDFFF) {
+                  codepoint = 0x10000 + ((codepoint - 0xD800) << 10) + (*second - 0xDC00);
+                  i += 6;
+                }
+              }
+              utf8::encode_codepoint(codepoint, decoded);
+              break;
+            }
+            default:
+              // No other escape sequence is in this slice's grammar; an
+              // unrecognized escape makes the source unsupported rather
+              // than guessing at semantics.
+              return std::nullopt;
+          }
+          continue;
         }
         decoded.push_back(source[i]);
         ++i;
@@ -819,6 +923,16 @@ class Parser {
         advance();
         return pattern::Pattern::err(std::move(*reason), std::move(*context));
       }
+      if (text == "some" && peek().kind == TokenKind::LParen) {
+        advance();
+        auto value_pattern = parse_pattern_atom();
+        if (!value_pattern.has_value() || peek().kind != TokenKind::Comma) return std::nullopt;
+        advance();
+        auto context = parse_pattern_atom();
+        if (!context.has_value() || peek().kind != TokenKind::RParen) return std::nullopt;
+        advance();
+        return pattern::Pattern::some(std::move(*value_pattern), std::move(*context));
+      }
       return pattern::Pattern::bind(text);
     }
     if (peek().kind == TokenKind::LBracket) {
@@ -1351,6 +1465,27 @@ class Parser {
           return std::nullopt;
         }
         return ast::Node::call(name, std::move(*args));
+      }
+      // A dotted identifier (`root.items`) is genia-2026's real
+      // "named access" sugar (parser.py's `parse_dotted_identifier_expr`:
+      // `x.y` desugars to a `SLASH`-with-`named_access` binary node
+      // resolved at eval time against a Map's own key or a module
+      // export). This slice has no module system, so only the Map-field
+      // case applies; it is lowered here directly to a call of the
+      // native `_named_access(map, key)` helper (native_functions.hpp)
+      // rather than adding a new AST/Core IR node, since it is observably
+      // equivalent and this project's grammar has no general binary
+      // "named access" operator otherwise.
+      if (const auto dot = name.find('.'); dot != std::string::npos) {
+        const std::string left = name.substr(0, dot);
+        const std::string right = name.substr(dot + 1);
+        if (left.empty() || right.empty() || right.find('.') != std::string::npos) {
+          return std::nullopt;
+        }
+        advance();
+        auto node = ast::Node::binary("/", ast::Node::var(left), ast::Node::var(right));
+        node.named_access = true;
+        return node;
       }
       // Any other bare identifier is an ordinary Var reference; whether
       // it is actually bound is a runtime concern (see evaluator.hpp's
