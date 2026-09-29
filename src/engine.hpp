@@ -162,6 +162,15 @@ inline std::optional<RunResult> try_repl(const std::string& input) {
       output.stderr_text += "Error: Undefined name: " + error.name + "\n";
     } catch (const evaluator::StatefulRuntimeError& error) {
       output.stderr_text += "Error: " + error.message + "\n";
+    } catch (const float64::MagnitudeOverflowError&) {
+      output.stderr_text +=
+          "Error: float64: exact magnitude exceeds the largest finite binary64 value\n";
+    } catch (const float64::DivisionByZeroError&) {
+      output.stderr_text += "Error: float64 division by zero\n";
+    } catch (const float64::RemainderByZeroError&) {
+      output.stderr_text += "Error: float64 remainder by zero\n";
+    } catch (const format::FormatError& error) {
+      output.stderr_text += "Error: " + error.message + "\n";
     }
   }
   return output;

@@ -244,6 +244,18 @@ TEST_CASE("scripted REPL renders none and drops an incomplete final submission")
   CHECK((*response)["result"]["exit_code"] == 0);
 }
 
+TEST_CASE("scripted REPL evaluates multiline source after completion") {
+  json request = {{"protocol_version", "1"},
+                  {"case_id", "repl-multiline"},
+                  {"operation", "cli"},
+                  {"input", {{"argv", json::array()},
+                             {"stdin", "x = (\n1 + 2\n)\nx + 4\n"}}}};
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  CHECK((*response)["status"] == "ok");
+  CHECK((*response)["result"]["stdout"] == "3\n7\n");
+}
+
 TEST_CASE("malformed JSON on stdin yields no response (never a fabricated envelope)") {
   auto response = genia::adapter::handle_request("this is not json");
   CHECK_FALSE(response.has_value());
