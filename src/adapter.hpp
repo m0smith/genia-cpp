@@ -119,7 +119,10 @@ inline std::optional<json> handle_cli(const std::string& case_id, const json& in
     argv.push_back(item.get<std::string>());
   }
   if (argv.empty()) {
-    return std::nullopt;
+    if (!input.contains("stdin") || !input["stdin"].is_string()) return std::nullopt;
+    auto result = engine::try_repl(input["stdin"].get<std::string>());
+    if (!result.has_value()) return std::nullopt;
+    return build_ok_response(case_id, "cli", run_result_to_json(*result));
   }
   std::optional<std::string> source;
   if (argv[0] == "-c") {

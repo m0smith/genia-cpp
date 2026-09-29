@@ -599,10 +599,7 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
 // definitions introduce bindings visible to later statements in the
 // same program. Returns std::nullopt if the program is empty or if any
 // statement cannot be evaluated.
-inline std::optional<value::Value> eval_program(const std::vector<core_ir::Node>& program) {
-  if (program.empty()) {
-    return std::nullopt;
-  }
+inline EnvPtr new_session_environment() {
   auto env = std::make_shared<Environment>();
   env->define("print", value::Value::make_opaque());
   // Install the small prelude-sourced closures (`sum`, `map`,
@@ -621,6 +618,12 @@ inline std::optional<value::Value> eval_program(const std::vector<core_ir::Node>
       }
     }
   }
+  return env;
+}
+
+inline std::optional<value::Value> eval_in_environment(const std::vector<core_ir::Node>& program,
+                                                       const EnvPtr& env) {
+  if (program.empty()) return std::nullopt;
   std::optional<value::Value> result;
   for (const auto& node : program) {
     result = eval_node(node, env);
@@ -629,6 +632,10 @@ inline std::optional<value::Value> eval_program(const std::vector<core_ir::Node>
     }
   }
   return result;
+}
+
+inline std::optional<value::Value> eval_program(const std::vector<core_ir::Node>& program) {
+  return eval_in_environment(program, new_session_environment());
 }
 
 }  // namespace genia::evaluator

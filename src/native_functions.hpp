@@ -53,6 +53,7 @@ using value::Value;
 // Callers must treat std::nullopt as "this case is unsupported", never
 // attempt a fallback value.
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
+  if (name == "none" && args.size() == 1) return Value::make_outcome_none(args[0]);
   if (name == "cell" && args.size() == 1) return Value::make_cell(value::Cell::create(args[0]));
   if (name == "cell_with_state" && args.size() == 1 && args[0].kind == value::Kind::Ref)
     return Value::make_cell(value::Cell::create_with_state(args[0].ref));

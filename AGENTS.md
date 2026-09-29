@@ -46,7 +46,8 @@ truth — read them from `genia-2026` directly.
 **R25 is complete through E25-5. The ordered release-candidate PR stack is
 merged in both repositories. This host supports the bounded R24 floor plus
 `refs`, `cell_primitives`, and local `process_primitives`; Actor remains
-unsupported and belongs to R38. R26-2 adds `bytes_utf8` only; `json_strict`
+unsupported and belongs to R38. R26-2 adds `bytes_utf8`; R26-1 adds the
+scripted REPL session. `json_strict`
 and `json_compat` remain unimplemented.** E24-1
 (`m0smith/genia-2026#955`) built
 the toolchain bootstrap and an honest E16-1 adapter skeleton
@@ -284,7 +285,8 @@ cross-module `extend`/`use`, the R20 diagnostic family, and bare
 varargs patterns remain genuinely `unsupported` per case, never
 fabricated; see `#973`/`#974` for why `supported` rather than `partial`
 is the honest declaration here), plus R25 E25-1 `refs` and E25-2
-`cell_primitives` and E25-3 `process_primitives`, and R26-2 `bytes_utf8`.
+`cell_primitives` and E25-3 `process_primitives`, R26-2 `bytes_utf8`,
+and R26-1 `repl` (scripted sessions).
 Declared `partial`: `core_ir_eval`,
 `prelude_autoload` (only the bounded source-level prelude required by the floor),
 and `shared_spec_runner` (matching the Python adapter's partial precedent).
@@ -344,6 +346,11 @@ same genia-2026 revision -- remain genuinely unimplemented and
 `unsupported`; this increment is `bytes_utf8` only.
 
 Known commands:
+
+R26-1 scripted REPL evidence at pinned `89d543ec`: `total=772 passed=149
+failed=0 unsupported=623 protocol_error=0 crash=0 timeout=0 invalid=0`.
+The three `requires: [repl]` shared CLI cases pass. Interactive prompts,
+history, and terminal handling remain host-local.
 
 - setup: none (no package manager; `nlohmann/json` and `Catch2` are
   vendored single headers under `third_party/`)
