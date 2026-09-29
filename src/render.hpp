@@ -271,6 +271,9 @@ inline std::optional<std::string> display(const value::Value& value) {
     case value::Kind::Ref:
     case value::Kind::Cell:
     case value::Kind::Process:
+    case value::Kind::Flow:
+    case value::Kind::StdinSource:
+    case value::Kind::Nil:
     case value::Kind::Opaque:
       return std::nullopt;
   }

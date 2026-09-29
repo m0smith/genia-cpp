@@ -43,6 +43,15 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
+**R27 E27-1 (`m0smith/genia-2026#1035`) adds the Flow phase 1 kernel
+(`src/flow.hpp`): lazy, pull-based, single-use Flow with `stdin`/list
+`lines`, `evolve`, `map`/`filter`/`take`/`drop`/`scan`/`keep_some`/`each`,
+and `collect`/`run`/`reduce`, plus the `name(params) -> expr` function form
+and ASCII `upper`/`trim`/`contains`/`parse_int`/`print`. `flow_phase_1` is
+declared `supported` for exactly the 17 `requires: [flow_phase_1]` shared
+cases; everything else in `spec/flow/*`, `cli_pipe_mode` (E27-2), and HTTP
+remain `unsupported`. Boundary: `docs/r27-e27-1-flow-phase-1.md`.**
+
 **R25 is complete through E25-5. The ordered release-candidate PR stack is
 merged in both repositories. This host supports the bounded R24 floor plus
 `refs`, `cell_primitives`, and local `process_primitives`; Actor remains
@@ -394,10 +403,16 @@ floor, `spec/flow/json-representation-template-flow.yaml` (Template
 
 Known commands:
 
-R26-1 scripted REPL evidence at pinned `89d543ec`: `total=772 passed=149
-failed=0 unsupported=623 protocol_error=0 crash=0 timeout=0 invalid=0`.
-The three `requires: [repl]` shared CLI cases pass. Interactive prompts,
-history, and terminal handling remain host-local.
+R27 E27-1 Flow phase 1 evidence at pinned `c3362628`: `total=772
+passed=209 failed=0 unsupported=563 protocol_error=0 crash=0 timeout=0
+invalid=0`. `flow_phase_1` is `supported` for exactly the 17
+`requires: [flow_phase_1]` first-wave shared cases; the rest of `spec/flow/*`,
+`cli_pipe_mode`, HTTP, and non-ASCII string handling remain `unsupported`. See
+`docs/r27-e27-1-flow-phase-1.md`.
+
+R26-1 scripted REPL evidence (earlier pin `89d543ec`): the three
+`requires: [repl]` shared CLI cases pass. Interactive prompts, history, and
+terminal handling remain host-local.
 
 - setup: none (no package manager; `nlohmann/json` and `Catch2` are
   vendored single headers under `third_party/`)
@@ -406,8 +421,8 @@ history, and terminal handling remain host-local.
 - lint: `clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp && clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp`
 - conformance evidence: from a `genia-2026` checkout at the pinned
   revision, `python -m tools.spec_runner --host '<path>/genia-cpp/build/genia-adapter' --evidence evidence.json`
-  (R26-2 `json_strict` evidence: `total=772 passed=178 failed=0
-  unsupported=594 protocol_error=0 crash=0 timeout=0 invalid=0`)
+  (R27 E27-1 `flow_phase_1` evidence: `total=772 passed=209 failed=0
+  unsupported=563 protocol_error=0 crash=0 timeout=0 invalid=0`)
 
 ## Dependency/toolchain policy (pinned by the R24 pre-flight)
 

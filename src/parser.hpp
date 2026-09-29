@@ -86,6 +86,10 @@ enum class TokenKind : std::uint8_t {
 struct Token {
   TokenKind kind;
   std::string text;
+  // 1-based source line of the token's first character. Host-local
+  // bookkeeping only (never projected into `parse`/`lower` output); the
+  // Flow pipeline-stage diagnostic needs it for its `[<command>:N]` span.
+  int line = 1;
 };
 
 // Tokenizes `source`. Returns std::nullopt if any character sequence
@@ -95,7 +99,21 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
   std::vector<Token> tokens;
   size_t i = 0;
   const size_t n = source.size();
+  size_t stamped = 0;
+  size_t line_pos = 0;
+  int line_no = 1;
+  int iteration_line = 1;
+  auto line_at = [&](size_t offset) {
+    while (line_pos < offset) {
+      if (source[line_pos] == '\n') ++line_no;
+      ++line_pos;
+    }
+    return line_no;
+  };
   while (i < n) {
+    // Tokens pushed by the previous iteration start on that iteration's line.
+    for (; stamped < tokens.size(); ++stamped) tokens[stamped].line = iteration_line;
+    iteration_line = line_at(i);
     const unsigned char c = static_cast<unsigned char>(source[i]);
     if (std::isspace(c)) {
       ++i;
@@ -418,6 +436,7 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
         return std::nullopt;
     }
   }
+  for (; stamped < tokens.size(); ++stamped) tokens[stamped].line = iteration_line;
   tokens.push_back({TokenKind::End, ""});
   return tokens;
 }
@@ -703,6 +722,24 @@ class Parser {
       return std::nullopt;
     }
     advance();  // ')'
+    // `name(params) -> expr` is the same FuncDef production as
+    // `name(params) = expr` (src/genia/parser.py's `parse_toplevel` builds
+    // an identical FuncDef for both); the arrow form takes a single
+    // expression body only, never a case-clause body.
+    if (peek().kind == TokenKind::Arrow) {
+      advance();  // '->'
+      auto arrow_body = parse_pipeline_expr();
+      if (!arrow_body.has_value()) {
+        return std::nullopt;
+      }
+      std::vector<pattern::Pattern> arrow_patterns;
+      arrow_patterns.reserve(param_names.size());
+      for (auto& name : param_names) {
+        arrow_patterns.push_back(pattern::Pattern::bind(name));
+      }
+      return ast::Node::func_def(func_name, param_names, std::move(arrow_patterns),
+                                 std::move(*arrow_body));
+    }
     if (peek().kind != TokenKind::Eq) {
       pos_ = save;
       return std::nullopt;
@@ -1458,13 +1495,15 @@ class Parser {
         return std::nullopt;
       }
       if (peek_at(1).kind == TokenKind::LParen) {
-        advance();  // name
-        advance();  // '('
+        const int name_line = advance().line;  // name
+        advance();                             // '('
         auto args = parse_call_args(TokenKind::RParen);
         if (!args.has_value()) {
           return std::nullopt;
         }
-        return ast::Node::call(name, std::move(*args));
+        auto call_node = ast::Node::call(name, std::move(*args));
+        call_node.line = name_line;
+        return call_node;
       }
       // A dotted identifier (`root.items`) is genia-2026's real
       // "named access" sugar (parser.py's `parse_dotted_identifier_expr`:
@@ -1492,8 +1531,9 @@ class Parser {
       // undefined-name handling), never a parse-time restriction --
       // matching genia-2026's real grammar, where identifier acceptance
       // does not depend on binding status.
-      advance();
-      return ast::Node::var(name);
+      auto var_node = ast::Node::var(name);
+      var_node.line = advance().line;
+      return var_node;
     }
     return std::nullopt;
   }

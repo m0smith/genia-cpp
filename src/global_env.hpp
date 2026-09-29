@@ -51,6 +51,8 @@ namespace genia::global_env {
 inline const std::string& prelude_source() {
   static const std::string kPreludeSource =
       "sum(xs) = _sum(xs)\n"
+      "reduce(f, acc, xs) = (f, acc, []) -> acc | (f, acc, [x, ..rest]) -> "
+      "reduce(f, apply_raw(f, [acc, x]), rest) | (f, acc, xs) -> _seq_reduce(f, acc, xs)\n"
       "map(f, xs) = map_acc(f, xs, [])\n"
       "map_acc(f, xs, acc) = (f, [], acc) -> acc | (f, [x, ..rest], acc) -> "
       "map_acc(f, rest, [..acc, apply_raw(f, [x])]) | (f, xs, _) -> _seq_type_error(\"map\", xs)\n";

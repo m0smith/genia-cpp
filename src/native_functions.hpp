@@ -39,12 +39,129 @@
 #include "process.hpp"
 #include "rational.hpp"
 #include "ref.hpp"
+#include "render.hpp"
+#include "runtime_io.hpp"
 #include "utf8.hpp"
 #include "value.hpp"
 
 namespace genia::native_functions {
 
 using value::Value;
+
+// Names that may be passed around as first-class function values (for
+// example `map(upper)`, or a bare `lines`/`collect` pipeline stage).
+inline bool is_first_class(const std::string& name) {
+  return name == "lines" || name == "collect" || name == "run" || name == "keep_some" ||
+         name == "upper" || name == "trim" || name == "parse_int" || name == "print";
+}
+
+inline bool is_ascii(const std::string& text) {
+  for (const unsigned char c : text) {
+    if (c >= 0x80) return false;
+  }
+  return true;
+}
+
+// The ASCII whitespace set Python's `str.strip()`/`str.isspace()` uses.
+inline bool is_ascii_space(unsigned char c) {
+  return c == ' ' || (c >= '\t' && c <= '\r') || (c >= 0x1c && c <= 0x1f);
+}
+
+inline std::string ascii_strip(const std::string& text) {
+  size_t begin = 0;
+  size_t end = text.size();
+  while (begin < end && is_ascii_space(static_cast<unsigned char>(text[begin]))) ++begin;
+  while (end > begin && is_ascii_space(static_cast<unsigned char>(text[end - 1]))) --end;
+  return text.substr(begin, end - begin);
+}
+
+// `parse_int(text)`: base-10 `int(text.strip())` parsing, the reference host's
+// `parse_int_fn`. Only ASCII input is decided here (Unicode whitespace and
+// digits are not implemented, so such input is unsupported by the caller).
+inline Value parse_int_result(const std::string& text) {
+  const std::string stripped = ascii_strip(text);
+  bool valid = !stripped.empty();
+  size_t index = 0;
+  bool negative = false;
+  if (valid && (stripped[0] == '+' || stripped[0] == '-')) {
+    negative = stripped[0] == '-';
+    index = 1;
+  }
+  std::string digits;
+  bool previous_underscore = true;  // rejects a leading underscore
+  for (; valid && index < stripped.size(); ++index) {
+    const char c = stripped[index];
+    if (c >= '0' && c <= '9') {
+      digits.push_back(c);
+      previous_underscore = false;
+    } else if (c == '_' && !previous_underscore) {
+      previous_underscore = true;
+    } else {
+      valid = false;
+    }
+  }
+  if (valid && (digits.empty() || previous_underscore)) valid = false;
+  if (valid) {
+    auto magnitude = bignum::Integer::from_unsigned_decimal(digits);
+    if (magnitude.has_value()) {
+      return Value::make_outcome_some(
+          Value::make_integer(negative ? magnitude->negate() : *magnitude));
+    }
+  }
+  auto context = std::make_shared<value::OrderedMap>();
+  const std::vector<std::pair<std::string, Value>> entries = {
+      {"source", Value::make_string("parse_int")},
+      {"expected", Value::make_string("integer_string")},
+      {"received", Value::make_string(text)},
+      {"base", Value::make_integer(*bignum::Integer::from_unsigned_decimal("10"))}};
+  for (const auto& [key, mapped] : entries) {
+    auto key_value = Value::make_string(key);
+    context->put(equality::map_key_encoding(key_value), key_value, mapped);
+  }
+  return Value::make_outcome_none(Value::make_string("parse-error"), Value::make_map(context));
+}
+
+// R27 E27-1 string and output natives used by the first-wave Flow cases.
+// Each decides only ASCII input; any non-ASCII string is left unsupported
+// rather than guessing Unicode case mapping or whitespace classification.
+inline std::optional<Value> call_flow_support(const std::string& name,
+                                              const std::vector<Value>& args) {
+  if (name == "upper" && args.size() == 1 && args[0].kind == value::Kind::String &&
+      is_ascii(args[0].text)) {
+    std::string upper = args[0].text;
+    for (auto& c : upper) {
+      if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
+    }
+    return Value::make_string(std::move(upper));
+  }
+  if (name == "trim" && args.size() == 1 && args[0].kind == value::Kind::String &&
+      is_ascii(args[0].text)) {
+    return Value::make_string(ascii_strip(args[0].text));
+  }
+  if (name == "contains" && args.size() == 2 && args[0].kind == value::Kind::String &&
+      args[1].kind == value::Kind::String) {
+    // Byte search over well-formed UTF-8 is exactly code-point substring search.
+    return Value::make_boolean(args[0].text.find(args[1].text) != std::string::npos);
+  }
+  if (name == "parse_int" && args.size() == 1 && args[0].kind == value::Kind::String &&
+      is_ascii(args[0].text)) {
+    return parse_int_result(args[0].text);
+  }
+  if (name == "print" && args.size() == 1) {
+    // `print(x)` writes display(x) + newline and returns x. Only the kinds
+    // whose display form is evidenced are handled.
+    std::optional<std::string> rendered;
+    if (args[0].kind == value::Kind::String) {
+      rendered = args[0].text;
+    } else if (equality::is_numeric_kind(args[0].kind) || args[0].kind == value::Kind::Boolean) {
+      rendered = render::display(args[0]);
+    }
+    if (!rendered.has_value()) return std::nullopt;
+    runtime_io::g_stdout_text += *rendered + "\n";
+    return args[0];
+  }
+  return std::nullopt;
+}
 
 // Returns std::nullopt when `name`/arity is not one of this slice's
 // native callables, or when a call's arguments are shaped in a way
@@ -53,6 +170,7 @@ using value::Value;
 // Callers must treat std::nullopt as "this case is unsupported", never
 // attempt a fallback value.
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
+  if (auto support = call_flow_support(name, args); support.has_value()) return support;
   if (name == "none" && args.size() == 1) return Value::make_outcome_none(args[0]);
   if (name == "cell" && args.size() == 1) return Value::make_cell(value::Cell::create(args[0]));
   if (name == "cell_with_state" && args.size() == 1 && args[0].kind == value::Kind::Ref)
