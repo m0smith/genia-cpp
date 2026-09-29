@@ -218,11 +218,11 @@ TEST_CASE("an unknown future operation is still deterministically unsupported") 
 }
 
 TEST_CASE("scripted REPL keeps bindings and recovers after a failed submission") {
-  json request = {{"protocol_version", "1"},
-                  {"case_id", "repl-session"},
-                  {"operation", "cli"},
-                  {"input", {{"argv", json::array()},
-                             {"stdin", "x = 1\nundefined_name\nx + 1\n"}}}};
+  json request = {
+      {"protocol_version", "1"},
+      {"case_id", "repl-session"},
+      {"operation", "cli"},
+      {"input", {{"argv", json::array()}, {"stdin", "x = 1\nundefined_name\nx + 1\n"}}}};
   auto response = genia::adapter::handle_request(request.dump());
   REQUIRE(response.has_value());
   CHECK((*response)["status"] == "ok");
@@ -235,8 +235,7 @@ TEST_CASE("scripted REPL renders none and drops an incomplete final submission")
   json request = {{"protocol_version", "1"},
                   {"case_id", "repl-none"},
                   {"operation", "cli"},
-                  {"input", {{"argv", json::array()},
-                             {"stdin", "none(\"nil\")\nx = (\n"}}}};
+                  {"input", {{"argv", json::array()}, {"stdin", "none(\"nil\")\nx = (\n"}}}};
   auto response = genia::adapter::handle_request(request.dump());
   REQUIRE(response.has_value());
   CHECK((*response)["status"] == "ok");
@@ -248,8 +247,7 @@ TEST_CASE("scripted REPL evaluates multiline source after completion") {
   json request = {{"protocol_version", "1"},
                   {"case_id", "repl-multiline"},
                   {"operation", "cli"},
-                  {"input", {{"argv", json::array()},
-                             {"stdin", "x = (\n1 + 2\n)\nx + 4\n"}}}};
+                  {"input", {{"argv", json::array()}, {"stdin", "x = (\n1 + 2\n)\nx + 4\n"}}}};
   auto response = genia::adapter::handle_request(request.dump());
   REQUIRE(response.has_value());
   CHECK((*response)["status"] == "ok");
