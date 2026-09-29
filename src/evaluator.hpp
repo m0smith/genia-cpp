@@ -126,30 +126,6 @@ inline bool flow_dispatch_applies(const std::string& name, bool bound_genia_clos
          name == "drop";
 }
 
-// Runtime type names as they appear in the reference host's pipeline-stage
-// diagnostics (src/genia/values.py `_runtime_type_name`), for the kinds a
-// Flow diagnostic can be raised over.
-inline std::string stage_input_type_name(const value::Value& stage_input) {
-  switch (stage_input.kind) {
-    case value::Kind::Flow:
-      return "flow";
-    case value::Kind::StdinSource:
-      return "stdin";
-    case value::Kind::Integer:
-      return "int";
-    case value::Kind::String:
-      return "string";
-    case value::Kind::List:
-      return "list";
-    case value::Kind::Map:
-      return "map";
-    case value::Kind::Boolean:
-      return "bool";
-    default:
-      throw value::UnsupportedError{};
-  }
-}
-
 // Mirrors `_render_pipeline_stage` for the stage shapes the Flow cases can
 // reach: a bare name, or a call whose arguments are names, integer/string
 // literals, or lambdas. Anything else is left unsupported.
@@ -209,7 +185,7 @@ inline value::FlowError wrap_pipeline_stage_error(const value::FlowError& error,
   std::string rendered = "pipeline stage " + std::to_string(index + 1) + " failed in " + mode +
                          " at " + render_stage_text(stage) + " [" + runtime_io::g_source_name +
                          ":" + std::to_string(stage.line) + "]";
-  rendered += ": stage received " + stage_input_type_name(stage_input);
+  rendered += ": stage received " + flow::runtime_type_name(stage_input);
   if (!message.empty()) rendered += "; " + message;
   return value::FlowError{rendered};
 }
@@ -555,6 +531,29 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           next = eval_pipeline_stage(stage, *stage_value, env);
         } catch (const value::FlowError& error) {
           throw wrap_pipeline_stage_error(error, stage_index, stage, *stage_value);
+        } catch (const UndefinedNameError& error) {
+          // The reference host wraps every runtime error raised inside a
+          // stage (src/genia/evaluator.py `_wrap_pipeline_stage_error`), not
+          // only Flow errors; the message text is preserved.
+          throw wrap_pipeline_stage_error(value::FlowError{"Undefined name: " + error.name},
+                                          stage_index, stage, *stage_value);
+        } catch (const StatefulRuntimeError& error) {
+          throw wrap_pipeline_stage_error(value::FlowError{error.message}, stage_index, stage,
+                                          *stage_value);
+        } catch (const format::FormatError& error) {
+          throw wrap_pipeline_stage_error(value::FlowError{error.message}, stage_index, stage,
+                                          *stage_value);
+        } catch (const float64::MagnitudeOverflowError&) {
+          throw wrap_pipeline_stage_error(
+              value::FlowError{
+                  "float64: exact magnitude exceeds the largest finite binary64 value"},
+              stage_index, stage, *stage_value);
+        } catch (const float64::DivisionByZeroError&) {
+          throw wrap_pipeline_stage_error(value::FlowError{"float64 division by zero"}, stage_index,
+                                          stage, *stage_value);
+        } catch (const float64::RemainderByZeroError&) {
+          throw wrap_pipeline_stage_error(value::FlowError{"float64 remainder by zero"},
+                                          stage_index, stage, *stage_value);
         }
         if (!next.has_value()) {
           return std::nullopt;

@@ -43,6 +43,15 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
+**R27 E27-2 (`m0smith/genia-2026#1038`) adds `-p` pipe mode
+(`src/pipe_mode.hpp`): the stage expression is validated and run as
+`stdin |> lines |> <expr> |> _pipe_run` with `<pipe>` spans, and errors get
+the reference host's guidance text. `cli_pipe_mode` is declared `supported`
+for exactly the 9 `requires: [cli_pipe_mode]` shared cases. Trailing script
+arguments, the `collect_validated` aggregate boundary (json_compat), and
+Option-receiver guidance remain `unsupported`. Boundary:
+`docs/r27-e27-2-pipe-mode.md`.**
+
 **R27 E27-1 (`m0smith/genia-2026#1035`) adds the Flow phase 1 kernel
 (`src/flow.hpp`): lazy, pull-based, single-use Flow with `stdin`/list
 `lines`, `evolve`, `map`/`filter`/`take`/`drop`/`scan`/`keep_some`/`each`,
@@ -403,12 +412,12 @@ floor, `spec/flow/json-representation-template-flow.yaml` (Template
 
 Known commands:
 
-R27 E27-1 Flow phase 1 evidence at pinned `c3362628`: `total=772
-passed=209 failed=0 unsupported=563 protocol_error=0 crash=0 timeout=0
-invalid=0`. `flow_phase_1` is `supported` for exactly the 17
-`requires: [flow_phase_1]` first-wave shared cases; the rest of `spec/flow/*`,
-`cli_pipe_mode`, HTTP, and non-ASCII string handling remain `unsupported`. See
-`docs/r27-e27-1-flow-phase-1.md`.
+R27 E27-2 pipe-mode evidence at pinned `17ead363`: `total=772
+passed=220 failed=0 unsupported=552 protocol_error=0 crash=0 timeout=0
+invalid=0`. `flow_phase_1` (17 cases) and `cli_pipe_mode` (9 cases) are
+`supported`; the rest of `spec/flow/*`, HTTP, and non-ASCII string handling
+remain `unsupported`. See `docs/r27-e27-1-flow-phase-1.md` and
+`docs/r27-e27-2-pipe-mode.md`.
 
 R26-1 scripted REPL evidence (earlier pin `89d543ec`): the three
 `requires: [repl]` shared CLI cases pass. Interactive prompts, history, and
@@ -421,8 +430,8 @@ terminal handling remain host-local.
 - lint: `clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp && clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp`
 - conformance evidence: from a `genia-2026` checkout at the pinned
   revision, `python -m tools.spec_runner --host '<path>/genia-cpp/build/genia-adapter' --evidence evidence.json`
-  (R27 E27-1 `flow_phase_1` evidence: `total=772 passed=209 failed=0
-  unsupported=563 protocol_error=0 crash=0 timeout=0 invalid=0`)
+  (R27 E27-2 `cli_pipe_mode` evidence: `total=772 passed=220 failed=0
+  unsupported=552 protocol_error=0 crash=0 timeout=0 invalid=0`)
 
 ## Dependency/toolchain policy (pinned by the R24 pre-flight)
 

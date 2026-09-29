@@ -34,6 +34,7 @@
 #include "cell.hpp"
 #include "equality.hpp"
 #include "float64.hpp"
+#include "flow.hpp"
 #include "format.hpp"
 #include "json.hpp"
 #include "process.hpp"
@@ -52,7 +53,8 @@ using value::Value;
 // example `map(upper)`, or a bare `lines`/`collect` pipeline stage).
 inline bool is_first_class(const std::string& name) {
   return name == "lines" || name == "collect" || name == "run" || name == "keep_some" ||
-         name == "upper" || name == "trim" || name == "parse_int" || name == "print";
+         name == "_pipe_run" || name == "upper" || name == "trim" || name == "parse_int" ||
+         name == "print";
 }
 
 inline bool is_ascii(const std::string& text) {
@@ -126,6 +128,26 @@ inline Value parse_int_result(const std::string& text) {
 // rather than guessing Unicode case mapping or whitespace classification.
 inline std::optional<Value> call_flow_support(const std::string& name,
                                               const std::vector<Value>& args) {
+  // A Flow reaching a per-item string function is the reference host's
+  // `<name> expected a string, received flow` TypeError; pipe mode turns it
+  // into "Pipe mode passes a Flow through each stage" guidance. Only the
+  // Flow-argument case is decided here; other non-string arguments stay
+  // unsupported.
+  if ((name == "upper" || name == "trim" || name == "parse_int") && args.size() == 1 &&
+      args[0].kind == value::Kind::Flow) {
+    throw value::FlowError{name + " expected a string, received flow"};
+  }
+  if (name == "contains" && args.size() == 2 &&
+      ((args[0].kind == value::Kind::Flow &&
+        (args[1].kind == value::Kind::String || args[1].kind == value::Kind::Flow)) ||
+       (args[1].kind == value::Kind::Flow && args[0].kind == value::Kind::String))) {
+    throw value::FlowError{"contains expected a string, received flow"};
+  }
+  if (name == "argv" && args.empty() && runtime_io::g_argv.has_value()) {
+    std::vector<Value> items;
+    for (const auto& arg : *runtime_io::g_argv) items.push_back(Value::make_string(arg));
+    return Value::make_list(std::move(items));
+  }
   if (name == "upper" && args.size() == 1 && args[0].kind == value::Kind::String &&
       is_ascii(args[0].text)) {
     std::string upper = args[0].text;
@@ -155,6 +177,15 @@ inline std::optional<Value> call_flow_support(const std::string& name,
       rendered = args[0].text;
     } else if (equality::is_numeric_kind(args[0].kind) || args[0].kind == value::Kind::Boolean) {
       rendered = render::display(args[0]);
+    } else if (args[0].kind == value::Kind::List) {
+      // A list displays as its elements' display forms; only elements whose
+      // display equals their debug form (numerics, booleans) are decided.
+      bool decided = true;
+      for (const auto& item : *args[0].list_items) {
+        decided =
+            decided && (equality::is_numeric_kind(item.kind) || item.kind == value::Kind::Boolean);
+      }
+      if (decided) rendered = render::display(args[0]);
     }
     if (!rendered.has_value()) return std::nullopt;
     runtime_io::g_stdout_text += *rendered + "\n";
@@ -462,6 +493,9 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
       context = args[1];
     }
     return Value::make_outcome_err(args[0], context);
+  }
+  if (name == "_sum" && args.size() == 1 && args[0].kind == value::Kind::Flow) {
+    throw value::FlowError{"sum expected a list, received flow"};
   }
   if (name == "_sum" && args.size() == 1) {
     if (args[0].kind != value::Kind::List) {
