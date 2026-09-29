@@ -1340,7 +1340,7 @@ class Parser {
         }
         return ast::Node::quote(std::move(*inner), name == "quasiquote");
       }
-      if (is_reserved_keyword(name)) {
+      if (is_reserved_keyword(name) && !(name == "none" && peek_at(1).kind == TokenKind::LParen)) {
         return std::nullopt;
       }
       if (peek_at(1).kind == TokenKind::LParen) {

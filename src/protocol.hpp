@@ -151,6 +151,7 @@ inline constexpr const char* kUnsupportedReason =
 // (native_functions.hpp), Bytes values render as `<bytes N>`
 // (render.hpp), and the sole `requires: [bytes_utf8]` shared case,
 // spec/eval/r19-unicode-utf8-encode-decode-roundtrip.yaml, passes.
+// R26-1 scripted REPL now passes the three requires: [repl] CLI cases;
 // `json_strict`/`json_compat` are deliberately left absent (unsupported):
 // no strict-JSON or JSONL-compat behavior is implemented by this slice.
 // This map is the single source of truth for both the
@@ -170,6 +171,7 @@ inline const std::vector<std::pair<std::string, std::string>>& capability_overri
       {"cell_primitives", "supported"},
       {"process_primitives", "supported"},
       {"bytes_utf8", "supported"},
+      {"repl", "supported"},
   };
   return kOverrides;
 }

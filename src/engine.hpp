@@ -7,6 +7,7 @@
 #pragma once
 
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -133,6 +134,37 @@ inline std::optional<RunResult> try_run(const std::string& source,
   run_result.stdout_text = *rendered + "\n";
   run_result.exit_code = 0;
   return run_result;
+}
+
+// Scripted REPL sessions share one environment across complete submissions.
+// Parsing the accumulated source determines when a submission is complete.
+inline std::optional<RunResult> try_repl(const std::string& input) {
+  auto env = evaluator::new_session_environment();
+  RunResult output;
+  std::istringstream lines(input);
+  std::string line;
+  std::string pending;
+  while (std::getline(lines, line)) {
+    pending += line + "\n";
+    auto parsed = parser::parse_program(pending);
+    if (!parsed.has_value()) continue;
+    auto lowered = lowering::lower_program(*parsed);
+    if (!lowered.has_value()) return std::nullopt;
+    pending.clear();
+    if (lowered->empty()) continue;
+    try {
+      auto result = evaluator::eval_in_environment(*lowered, env);
+      if (!result.has_value()) return std::nullopt;
+      auto rendered = render::display(*result);
+      if (!rendered.has_value()) return std::nullopt;
+      output.stdout_text += *rendered + "\n";
+    } catch (const evaluator::UndefinedNameError& error) {
+      output.stderr_text += "Error: Undefined name: " + error.name + "\n";
+    } catch (const evaluator::StatefulRuntimeError& error) {
+      output.stderr_text += "Error: " + error.message + "\n";
+    }
+  }
+  return output;
 }
 
 }  // namespace genia::engine

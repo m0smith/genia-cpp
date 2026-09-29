@@ -474,7 +474,8 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
 
 - Actor and ActorRef, supervision, distribution, placement, and scheduler/timing
   guarantees belong to R38; R25 supports only portable Ref, Cell, and local Process.
-- R26: REPL and broader data bridges.
+- R26: scripted REPL is supported through the shared `repl` CLI cases; the
+  strict JSON bridge remains open under genia-2026#1024.
 - R27: Flow, pipe mode, HTTP serving, and outbound HTTP.
 - Cross-module open-function contribution/selection and wider parser/evaluator
   behavior outside the R24 floor, including general Option and compatibility JSON.
