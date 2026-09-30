@@ -1,6 +1,7 @@
 # genia-cpp
 
-**Status: R25 complete through E25-5, with the ordered release-candidate PR stack merged into both repositories.
+**Status: R27 complete (Flow phase 1, E27-1 and E27-5; `-p` pipe mode, E27-2). The text below is cumulative
+and begins with the R25 baseline: R25 complete through E25-5, with the ordered release-candidate PR stack merged into both repositories.
 `genia-adapter` implements integer/string/boolean/list/map literals,
 Decimal source literals (`1.25`, `1e3`, ...), the exact Rational
 runtime value and `rational(numerator, denominator)` construction
@@ -25,8 +26,12 @@ IR -> evaluator -> normalized adapter result), hardened against a C++
 stack-overflow crash from adversarially deep recursion/nesting (E24-5).
 The `refs` capability now implements creation, blocking get, set, set-state
 inspection, atomic update, and identity equality. The `cell_primitives` and
-local `process_primitives` capabilities are also supported. Actor and every
-other later Genia behavior remain honestly `unsupported`.**
+local `process_primitives` capabilities are also supported. Since R25 the
+host also supports the scripted REPL, Bytes/UTF-8, and strict JSON (R26), and
+Flow phase 1 and `-p` pipe mode (R27; boundaries in `docs/r27-e27-1-flow-phase-1.md`,
+`docs/r27-e27-2-pipe-mode.md`, `docs/r27-e27-5-hardening.md`). The HTTP server and
+outbound HTTP are not implemented (deferred by R27 E27-3/E27-4 in `genia-2026`).
+Actor and every other later Genia behavior remain honestly `unsupported`.**
 
 This is the bounded production C++ host for [Genia](https://github.com/m0smith/genia-2026).
 It was created by R16 E16-6 (`m0smith/genia-2026#763`) as a repository
