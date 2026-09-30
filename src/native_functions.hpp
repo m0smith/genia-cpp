@@ -160,6 +160,10 @@ inline std::optional<Value> call_flow_support(const std::string& name,
       is_ascii(args[0].text)) {
     return Value::make_string(ascii_strip(args[0].text));
   }
+  if (name == "concat" && args.size() == 2 && args[0].kind == value::Kind::String &&
+      args[1].kind == value::Kind::String) {
+    return Value::make_string(args[0].text + args[1].text);
+  }
   if (name == "contains" && args.size() == 2 && args[0].kind == value::Kind::String &&
       args[1].kind == value::Kind::String) {
     // Byte search over well-formed UTF-8 is exactly code-point substring search.

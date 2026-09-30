@@ -164,3 +164,18 @@ TEST_CASE("Flow stage wrapper applies to undefined names under -c too") {
   // File mode has no evidenced span file name, so the wrapped form is unsupported.
   CHECK_FALSE(genia::engine::try_run("1 |> nope").has_value());
 }
+
+TEST_CASE("Pipe hardening: a reducer result that is not a Flow reports its type") {
+  CHECK(pipe("count", "a\nb\n").stderr_text ==
+        "Error: Pipe mode stage must produce a flow; received int. Use -c/--command when you want "
+        "a final value such as `collect |> sum` or `collect |> count`.\n");
+}
+
+TEST_CASE("Pipe hardening: output printed before the error stays on stdout") {
+  auto result = pipe("each(print) |> collect", "a\n");
+  CHECK(result.stdout_text == "a\n");
+  CHECK(result.exit_code == 1);
+  CHECK(result.stderr_text ==
+        "Error: Pipe mode stage must produce a flow; received list. Use -c/--command when you "
+        "want a final value such as `collect |> sum` or `collect |> count`.\n");
+}

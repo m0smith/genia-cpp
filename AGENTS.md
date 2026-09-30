@@ -43,11 +43,19 @@ truth — read them from `genia-2026` directly.
 
 ## Status
 
+**R27 E27-5 (`m0smith/genia-2026#1047`) hardens Flow and pipe mode without
+adding a capability: 21 new Python-generated shared cases plus 8 newly gated
+existing cases, so `flow_phase_1` now has 37 gated cases and `cli_pipe_mode` 16,
+all passing. Small enabling changes: Seq-compatible diagnostics for the Flow
+terminals, `_seq_type_error`, `concat`, prelude `count`. Still `unsupported`:
+tee/merge/zip, rules/refine, cross-release pipe cases, and a pipeline inside call
+arguments (`f(a |> b)`, a parser gap). Boundary: `docs/r27-e27-5-hardening.md`.**
+
 **R27 E27-2 (`m0smith/genia-2026#1038`) adds `-p` pipe mode
 (`src/pipe_mode.hpp`): the stage expression is validated and run as
 `stdin |> lines |> <expr> |> _pipe_run` with `<pipe>` spans, and errors get
 the reference host's guidance text. `cli_pipe_mode` is declared `supported`
-for exactly the 9 `requires: [cli_pipe_mode]` shared cases. Trailing script
+for every `requires: [cli_pipe_mode]` shared case (9 at E27-2, 16 after E27-5). Trailing script
 arguments, the `collect_validated` aggregate boundary (json_compat), and
 Option-receiver guidance remain `unsupported`. Boundary:
 `docs/r27-e27-2-pipe-mode.md`.**
@@ -57,8 +65,8 @@ Option-receiver guidance remain `unsupported`. Boundary:
 `lines`, `evolve`, `map`/`filter`/`take`/`drop`/`scan`/`keep_some`/`each`,
 and `collect`/`run`/`reduce`, plus the `name(params) -> expr` function form
 and ASCII `upper`/`trim`/`contains`/`parse_int`/`print`. `flow_phase_1` is
-declared `supported` for exactly the 17 `requires: [flow_phase_1]` shared
-cases; everything else in `spec/flow/*`, `cli_pipe_mode` (E27-2), and HTTP
+declared `supported` for every `requires: [flow_phase_1]` shared case (17 at
+E27-1, 37 after E27-5); everything else in `spec/flow/*`, `cli_pipe_mode` (E27-2), and HTTP
 remain `unsupported`. Boundary: `docs/r27-e27-1-flow-phase-1.md`.**
 
 **R25 is complete through E25-5. The ordered release-candidate PR stack is
@@ -412,9 +420,9 @@ floor, `spec/flow/json-representation-template-flow.yaml` (Template
 
 Known commands:
 
-R27 E27-2 pipe-mode evidence at pinned `17ead363`: `total=772
-passed=220 failed=0 unsupported=552 protocol_error=0 crash=0 timeout=0
-invalid=0`. `flow_phase_1` (17 cases) and `cli_pipe_mode` (9 cases) are
+R27 E27-5 hardening evidence at pinned `6402e668`: `total=793
+passed=257 failed=0 unsupported=536 protocol_error=0 crash=0 timeout=0
+invalid=0`. `flow_phase_1` (37 gated cases) and `cli_pipe_mode` (16) are
 `supported`; the rest of `spec/flow/*`, HTTP, and non-ASCII string handling
 remain `unsupported`. See `docs/r27-e27-1-flow-phase-1.md` and
 `docs/r27-e27-2-pipe-mode.md`.
@@ -430,8 +438,8 @@ terminal handling remain host-local.
 - lint: `clang-format --dry-run --Werror src/*.cpp src/*.hpp tests/*.cpp && clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp`
 - conformance evidence: from a `genia-2026` checkout at the pinned
   revision, `python -m tools.spec_runner --host '<path>/genia-cpp/build/genia-adapter' --evidence evidence.json`
-  (R27 E27-2 `cli_pipe_mode` evidence: `total=772 passed=220 failed=0
-  unsupported=552 protocol_error=0 crash=0 timeout=0 invalid=0`)
+  (R27 E27-5 evidence: `total=793 passed=257 failed=0 unsupported=536
+  protocol_error=0 crash=0 timeout=0 invalid=0`)
 
 ## Dependency/toolchain policy (pinned by the R24 pre-flight)
 

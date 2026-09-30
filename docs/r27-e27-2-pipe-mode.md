@@ -7,10 +7,11 @@ This document records what `genia-cpp` claims; it defines no Genia semantics.
 
 ## Claim
 
-`cli_pipe_mode` is declared **`supported`** for exactly the 9 shared cases that
-carry `requires: [cli_pipe_mode]` in `genia-2026` (pinned revision in
-`README.md`), reached through the E16-1 `cli` operation as `-p <expr>` with
-piped stdin:
+`cli_pipe_mode` is declared **`supported`** for the shared cases that carry
+`requires: [cli_pipe_mode]` in `genia-2026` (pinned revision in `README.md`),
+reached through the E16-1 `cli` operation as `-p <expr>` with piped stdin. E27-2
+gated the 9 cases below; E27-5 broadened the gated set to 16 (see
+`docs/r27-e27-5-hardening.md`). The 9 first-wave cases:
 
 `pipe_mode_basic`, `pipe_mode_map_parse_int`, `pipe_mode_explicit_run_error`,
 `error_pipe_mode_explicit_run`, `pipe_mode_collect_error`,
