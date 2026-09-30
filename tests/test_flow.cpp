@@ -6,6 +6,7 @@
 
 #include "../src/adapter.hpp"
 #include "../src/engine.hpp"
+#include "../src/pipe_mode.hpp"
 #include "../third_party/catch2/catch.hpp"
 
 namespace {
@@ -133,7 +134,9 @@ TEST_CASE("Flow: string natives decide only ASCII and leave the rest unsupported
 TEST_CASE("Flow: unevidenced shapes stay unsupported") {
   // Displaying a Flow value, a bare stdin source, and non-callable stages.
   CHECK_FALSE(run_flow("evolve(0, (n) -> n + 1) |> take(2)").has_value());
-  CHECK_FALSE(run_flow("stdin |> collect", "a\n").has_value());
+  // A bare stdin source reaching collect is a real diagnostic (see the E27-5
+  // hardening tests below), no longer unsupported.
+  CHECK(run_flow("stdin |> collect", "a\n")->exit_code == 1);
   CHECK_FALSE(run_flow("evolve(0, 5) |> take(2) |> collect").has_value());
   CHECK_FALSE(run_flow("stdin |> lines |> filter((l) -> 1) |> collect", "a\n").has_value());
 }
@@ -156,4 +159,51 @@ TEST_CASE("Flow: file-mode CLI does not guess the pipeline span file name") {
   auto result = genia::engine::try_run("x = stdin |> lines\nx |> collect\nx |> collect", false,
                                        std::string("a\n"));
   CHECK_FALSE(result.has_value());
+}
+
+// ---- E27-5 hardening ------------------------------------------------------
+
+TEST_CASE("Flow hardening: non-Seq values get the Seq-compatible diagnostics") {
+  auto direct = run_flow("collect(5)");
+  REQUIRE(direct.has_value());
+  CHECK(direct->exit_code == 1);
+  CHECK(direct->stderr_text ==
+        "Error: collect expected a Seq-compatible value (list or Flow); received int.\n");
+  CHECK(run_flow("run(5)")->stderr_text ==
+        "Error: run expected a Seq-compatible value (list or Flow); received int.\n");
+  CHECK(run_flow("each(print, 5)")->stderr_text ==
+        "Error: each expected a Seq-compatible value (list or Flow); received int.\n");
+  CHECK(run_flow("map(upper, 5)")->stderr_text ==
+        "Error: map expected a Seq-compatible value (list or Flow); received int.\n");
+  CHECK(run_flow("scan((s, i) -> [s, i], 0, 5)")->stderr_text ==
+        "Error: scan expected a Seq-compatible value (list or Flow); received int.\n");
+  CHECK(run_flow("collect(stdin)", "a\n")->stderr_text ==
+        "Error: collect expected a Seq-compatible value (list or Flow); received stdin. Use "
+        "stdin |> lines to adapt stdin into a Flow.\n");
+  CHECK(run_flow("keep_some(5)")->stderr_text ==
+        "Error: keep_some expected a flow, received int\n");
+}
+
+TEST_CASE("Flow hardening: the Seq-compatible error is wrapped by its pipeline stage") {
+  CHECK(run_flow("5 |> collect")->stderr_text ==
+        "Error: pipeline stage 1 failed in Value mode at collect [<command>:1]: stage received "
+        "int; collect expected a Seq-compatible value (list or Flow); received int.\n");
+  CHECK(run_flow("stdin |> lines |> count |> collect", "1\n2\n3\n")->stderr_text ==
+        "Error: pipeline stage 3 failed in Value mode at collect [<command>:1]: stage received "
+        "int; collect expected a Seq-compatible value (list or Flow); received int.\n");
+}
+
+TEST_CASE("Flow hardening: count folds lists and Flows, concat joins strings only") {
+  CHECK(stdout_of("count([\"a\", \"b\"])") == "2\n");
+  CHECK(stdout_of("stdin |> lines |> count", "a\nb\n") == "2\n");
+  CHECK(stdout_of("concat(\"a\", \"b\")") == "\"ab\"\n");
+  CHECK_FALSE(run_flow("concat(\"a\", 1)").has_value());
+  CHECK(
+      stdout_of("[\"a\", \"b\"] |> lines |> each((x) -> print(concat(\"seen:\", x))) |> collect") ==
+      "seen:a\nseen:b\n[\"a\", \"b\"]\n");
+}
+
+TEST_CASE("Flow hardening: pipelines inside call arguments stay unsupported") {
+  // A parser gap, not a Flow one: the C++ host does not parse `f(a |> b)`.
+  CHECK_FALSE(run_flow("print([\"a\"] |> lines |> collect)").has_value());
 }

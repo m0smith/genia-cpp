@@ -103,6 +103,17 @@ inline std::string runtime_type_name(const Value& v) {
   }
 }
 
+// The reference host's `_seq_compatible_error`: a Flow/list terminal or stage
+// received something that is neither. A bare stdin source gets a hint.
+[[noreturn]] inline void seq_compatible_error(const std::string& name, const Value& v) {
+  std::string message = name + " expected a Seq-compatible value (list or Flow); received " +
+                        runtime_type_name(v) + ".";
+  if (v.kind == value::Kind::StdinSource) {
+    message += " Use stdin |> lines to adapt stdin into a Flow.";
+  }
+  throw value::FlowError{message};
+}
+
 inline Value make_flow(value::Flow::Factory factory) {
   return Value::make_flow(std::make_shared<value::Flow>(std::move(factory)));
 }
@@ -341,6 +352,7 @@ inline Value each(const Value& effect, const Value& source, const Invoke& invoke
 
 inline Value collect(const Value& source) {
   if (source.kind == value::Kind::List) return Value::make_list(*source.list_items);
+  if (source.kind != value::Kind::Flow) seq_compatible_error("collect", source);
   Pull items = require_flow(source).consume();
   std::vector<Value> collected;
   while (auto item = items()) collected.push_back(std::move(*item));
@@ -349,6 +361,7 @@ inline Value collect(const Value& source) {
 
 inline Value run(const Value& source) {
   if (source.kind != value::Kind::List) {
+    if (source.kind != value::Kind::Flow) seq_compatible_error("run", source);
     Pull items = require_flow(source).consume();
     while (items().has_value()) {
     }
@@ -371,6 +384,7 @@ inline Value reduce(const Value& reducer, Value accumulator, const Value& source
     for (const auto& item : *source.list_items) step(item);
     return accumulator;
   }
+  if (source.kind != value::Kind::Flow) seq_compatible_error("reduce", source);
   Pull items = require_flow(source).consume();
   while (auto item = items()) step(*item);
   return accumulator;
@@ -410,17 +424,20 @@ inline bool dispatch(const std::string& name, const std::vector<Value>& args, co
     return true;
   }
   if (name == "scan" && n == 3) {
+    if (args[2].kind != value::Kind::List && !last_is_flow) seq_compatible_error("scan", args[2]);
     if (!last_is_flow) throw value::UnsupportedError{};
     out = scan(args[0], args[1], args[2], invoke);
     return true;
   }
   if (name == "keep_some" && n == 1) {
-    require_flow(args[0]);
+    if (!last_is_flow) {
+      throw value::FlowError{"keep_some expected a flow, received " + runtime_type_name(args[0])};
+    }
     out = keep_some(args[0]);
     return true;
   }
   if (name == "each" && n == 2) {
-    if (args[1].kind != value::Kind::List && !last_is_flow) throw value::UnsupportedError{};
+    if (args[1].kind != value::Kind::List && !last_is_flow) seq_compatible_error("each", args[1]);
     out = each(args[0], args[1], invoke);
     return true;
   }
@@ -439,6 +456,11 @@ inline bool dispatch(const std::string& name, const std::vector<Value>& args, co
     }
     out = run(args[0]);
     return true;
+  }
+  if (name == "_seq_type_error" && n == 2 && args[0].kind == value::Kind::String) {
+    // Reached from the prelude's list helpers when their argument is neither a
+    // list nor a Flow.
+    seq_compatible_error(args[0].text, args[1]);
   }
   if (name == "_seq_reduce" && n == 3) {
     out = reduce(args[0], args[1], args[2], invoke);

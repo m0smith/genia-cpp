@@ -7,9 +7,10 @@ This document records what `genia-cpp` claims; it defines no Genia semantics.
 
 ## Claim
 
-`flow_phase_1` is declared **`supported`** for exactly the 17 shared cases that
-carry `requires: [flow_phase_1]` in `genia-2026` (pinned revision in
-`README.md`):
+`flow_phase_1` is declared **`supported`** for the shared cases that carry
+`requires: [flow_phase_1]` in `genia-2026` (pinned revision in `README.md`). E27-1
+gated the 17 first-wave cases below; E27-5 broadened the gated set to 37 (see
+`docs/r27-e27-5-hardening.md`). The 17 first-wave cases:
 
 | Slice | Cases |
 |---|---|

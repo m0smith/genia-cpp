@@ -55,7 +55,7 @@ inline constexpr const char* kProtocolVersion = "1";
 // genia-2026 `main` (PR #1027) -- the prior pin above was this PR's
 // still-open branch head; this identical-content commit is the one
 // that is now actually current-main pinned conformance per E16-4.
-inline constexpr const char* kContractRevision = "17ead363905702269e60f67840f24c57d59532de";
+inline constexpr const char* kContractRevision = "6402e668ae85a1e7efe94b3ac3d51f233b730ca4";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -158,20 +158,19 @@ inline constexpr const char* kUnsupportedReason =
 // behavior is implemented by this slice.
 // R27 E27-1 (genia-2026 issue #1035) declares `flow_phase_1` `supported`
 // -- deliberately, not `partial` (the requires-gate grants no credit for
-// `partial`): exactly the 17 `requires: [flow_phase_1]` first-wave shared
-// cases in spec/flow/ pass. That is the whole claim. It does not imply the
+// `partial`): every `requires: [flow_phase_1]` shared case passes (17
+// first-wave cases at E27-1, 37 after the E27-5 hardening). That is the
+// whole claim. It does not imply the
 // rest of spec/flow/ (tee/merge/zip, rules/refine, Template and model Flow
 // compositions, ...), pipe mode (`cli_pipe_mode`), Flow value display, or
 // Unicode string handling; see docs/r27-e27-1-flow-phase-1.md.
 // R27 E27-2 (genia-2026 issue #1038) declares `cli_pipe_mode` `supported`:
-// exactly the 9 `requires: [cli_pipe_mode]` shared cases pass (`-p <expr>`
-// with piped stdin). Trailing script arguments, the collect_validated
-// aggregate boundary (json_compat, Python-host-only) and the reference
-// host's Option-receiver guidance stay unsupported; see
-// docs/r27-e27-2-pipe-mode.md.
-// This map is the single source of truth for both the
-// `capabilities` response and this project's own honesty: a name
-// absent here defaults to `unsupported`.
+// every `requires: [cli_pipe_mode]` shared case passes (9 at E27-2, 16 after
+// the E27-5 hardening; `-p <expr>` with piped stdin). Trailing script arguments, the
+// collect_validated aggregate boundary (json_compat, Python-host-only) and the reference host's
+// Option-receiver guidance stay unsupported; see docs/r27-e27-2-pipe-mode.md. This map is the
+// single source of truth for both the `capabilities` response and this project's own honesty: a
+// name absent here defaults to `unsupported`.
 inline const std::vector<std::pair<std::string, std::string>>& capability_overrides() {
   static const std::vector<std::pair<std::string, std::string>> kOverrides = {
       {"parser", "supported"},

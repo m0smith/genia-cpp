@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: m0smith/genia-2026
-          ref: 17ead363905702269e60f67840f24c57d59532de
+          ref: 6402e668ae85a1e7efe94b3ac3d51f233b730ca4
           path: genia-2026
 
       - name: Set up Python 3.14
