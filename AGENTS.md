@@ -1,6 +1,6 @@
 # genia-cpp AGENTS
 
-This repository is the bounded R25 production C++ host for Genia. It
+This repository is the bounded R27 production C++ host for Genia. It
 **implements** Genia; it does **not define** Genia.
 
 ## Authority order
