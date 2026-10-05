@@ -72,7 +72,41 @@ jobs:
 
       - name: Run static analysis
         working-directory: genia-cpp
-        run: clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp
+        shell: bash
+        run: |
+          report="$RUNNER_TEMP/clang-tidy.log"
+          status=0
+          clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp > "$report" 2>&1 || status=$?
+          python - "$report" <<'PY'
+          import collections
+          import os
+          import pathlib
+          import re
+          import sys
+
+          report = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          checks = collections.Counter(re.findall(r"warning:.*\[([^\]]+)\]", report))
+          total = sum(checks.values())
+          print(f"clang-tidy: {total} project warning diagnostics; full output in the clang-tidy-report artifact.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"### Static analysis\n\n{total} project warning diagnostics. "
+                            "Full output is available in the **clang-tidy-report** artifact.\n\n")
+              summary.write("| Check | Diagnostics |\n| --- | ---: |\n")
+              for check, count in checks.most_common():
+                  summary.write(f"| `{check}` | {count} |\n")
+          PY
+          if [ "$status" -ne 0 ]; then
+            cat "$report"
+            exit "$status"
+          fi
+
+      - name: Upload static analysis report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tidy-report
+          path: ${{ runner.temp }}/clang-tidy.log
+          if-no-files-found: ignore
 
       - name: Bootstrap uv
         shell: bash
