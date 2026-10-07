@@ -1,0 +1,46 @@
+# Run the canonical development checker without altering the C++ semantic pin.
+name: Code documentation
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: genia-cpp
+          fetch-depth: 0
+      - name: Check out pinned documentation checker
+        uses: actions/checkout@v6
+        with:
+          repository: m0smith/genia-2026
+          ref: 469748098f1513aa38753ba3f0a24db29f4b1cb4
+          path: documentation-tools
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install development checker
+        working-directory: documentation-tools
+        run: |
+          python -m pip install uv
+          uv sync --dev
+      - name: Check C++ source documentation and baseline ratchet
+        working-directory: documentation-tools
+        env:
+          BASE_REV: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          args=()
+          if [ -n "$BASE_REV" ] && [ "$BASE_REV" != "0000000000000000000000000000000000000000" ]; then
+            args+=(--base-ref "$BASE_REV")
+          fi
+          uv run python -m tools.code_documentation --root ../genia-cpp "${args[@]}" --inventory ../cpp-documentation-inventory.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cpp-documentation-inventory
+          path: cpp-documentation-inventory.json
