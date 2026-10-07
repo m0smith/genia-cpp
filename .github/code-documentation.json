@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "exclude": [
+    {
+      "path": "third_party",
+      "reason": "Vendored upstream headers; first-party generators and integration stay maintained."
+    }
+  ],
+  "exemptions": {}
+}

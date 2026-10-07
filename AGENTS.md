@@ -465,3 +465,13 @@ updating that file too — it is the authoritative copy.
 | Ordered-map representation | In-house insertion-ordered map (vector of pairs + hash index) |
 | Diagnostic representation | In-house struct mirroring the R19 portable diagnostic schema; C++ exceptions caught and normalized before crossing the adapter boundary |
 | CI/conformance invocation | Local/self-hosted `cmake --build` + `ctest` + `python -m tools.spec_runner --host` with a committed evidence JSON; no large hosted matrix |
+
+## Maintained code documentation
+
+Follow genia-2026 `docs/contract/code-documentation.md` and its checker guide.
+Public APIs, entry points and substantial internal code need native contracts
+covering failures, side effects and relevant ownership/lifetime boundaries.
+New/changed bindings must comply; the legacy baseline is temporary debt and
+cannot grow. Existing useful C++ comments count; internal visibility is not an
+exemption. The documentation checker is development-only and its provider pin
+is separate from the semantic contract pin.

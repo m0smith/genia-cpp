@@ -519,3 +519,12 @@ clang-tidy -p build src/main.cpp src/adapter.hpp src/protocol.hpp
 ## Contributing
 
 Read `AGENTS.md` before making any change here.
+
+## Code documentation
+
+Maintained first-party code follows the canonical
+[documentation contract](https://github.com/m0smith/genia-2026/blob/main/docs/contract/code-documentation.md).
+The dedicated CI gate inventories declaration-associated comments and rejects
+new or changed documentation debt. Its provider revision does not change this
+host's pinned semantic contract or runtime/build dependencies. Existing legacy
+gaps remain in `.github/code-documentation-baseline.json` for staged remediation.
