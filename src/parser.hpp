@@ -46,6 +46,7 @@
 
 #include "ast.hpp"
 #include "bignum.hpp"
+#include "header_capture.hpp"
 #include "pattern.hpp"
 #include "utf8.hpp"
 
@@ -550,6 +551,15 @@ inline bool is_reserved_keyword(const std::string& name) {
          name == "delay" || name == "quasiquote" || name == "unquote" || name == "unquote_splicing";
 }
 
+// Recursive-descent parser over the token stream of one source text.
+//
+// Inputs: the tokens produced by the tokenizer. Output: `parse_program()`
+// returns the program's AST, or `std::nullopt` when the source lies outside
+// this host's grammar or would need a diagnostic this host does not produce
+// (the adapter then reports the case unsupported; nothing is guessed). That
+// includes, per R20 contract section 3.3, a grouped open clause whose arm
+// captures a header name. Instances are single-use and not thread-safe; no
+// I/O or global state is touched.
 class Parser {
  public:
   explicit Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)) {}
@@ -913,7 +923,20 @@ class Parser {
     advance();  // '='
 
     if (looks_like_case_clause_start()) {
-      return parse_case_clauses();
+      auto arms = parse_case_clauses();
+      if (!arms.has_value()) {
+        return std::nullopt;
+      }
+      // R20 contract section 3.3: header names are not bindings, so an arm
+      // that refers freely to one its pattern does not bind would capture an
+      // outer name. This host cannot diagnose that, so it refuses the whole
+      // program (unsupported) instead of running it with a guessed meaning.
+      for (const auto& arm : *arms) {
+        if (header_capture::arm_captures_header_name(header_patterns, arm.first, arm.second)) {
+          return std::nullopt;
+        }
+      }
+      return arms;
     }
 
     auto body = parse_pipeline_expr();
