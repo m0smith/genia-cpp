@@ -1,3 +1,11 @@
+# Build definition for the genia-cpp host.
+#
+# Targets: `genia-adapter` (the E16-1 conformance adapter binary driven by
+# genia-2026's tools.spec_runner) and `genia-adapter-tests` (the Catch2 unit
+# tests). Sources are header-only under src/ plus vendored single headers under
+# third_party/; nothing is installed. Build with
+# `cmake -S . -B build && cmake --build build`, then run `ctest`.
+
 cmake_minimum_required(VERSION 3.16)
 project(genia_cpp_host LANGUAGES CXX)
 
@@ -33,6 +41,7 @@ add_executable(genia-adapter-tests
   tests/test_bignum.cpp
   tests/test_engine.cpp
   tests/test_diagnostic_boundary.cpp
+  tests/test_header_capture.cpp
   tests/test_ref.cpp
   tests/test_cell.cpp
   tests/test_process.cpp
