@@ -115,7 +115,11 @@ pipelines, and one deterministic runtime-error diagnostic. E24-6
 declares the first clause of a new open interface, and every
 subsequent bare top-level `name(<pattern>, ...) = <body>` clause for
 that same name -- in a contiguous run, exactly like the grouped
-case-with-`|` spelling -- merges into it. Local dispatch is identical
+case-with-`|` spelling -- merges into it. A grouped clause whose arm
+refers freely to a header name its own pattern does not bind (R20 contract
+section 3.3, `m0smith/genia-2026#1067`) is not run: this host has no parse
+diagnostic, so it reports such a program unsupported instead of silently
+capturing an outer name. Local dispatch is identical
 to the existing E24-4 case-dispatch mechanism (one participating unit,
 first-match-in-source-order), so no new evaluator machinery was added,
 only new grammar and two new portable Core IR node types

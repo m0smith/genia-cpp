@@ -1,3 +1,11 @@
+# Build definition for the genia-cpp host.
+#
+# Targets: `genia-adapter` (the E16-1 conformance adapter binary driven by
+# genia-2026's tools.spec_runner) and `genia-adapter-tests` (the Catch2 unit
+# tests). Sources are header-only under src/ plus vendored single headers under
+# third_party/; nothing is installed. Build with
+# `cmake -S . -B build && cmake --build build`, then run `ctest`.
+
 cmake_minimum_required(VERSION 3.16)
 project(genia_cpp_host LANGUAGES CXX)
 
@@ -45,3 +53,11 @@ target_include_directories(genia-adapter-tests PRIVATE
   third_party/catch2
 )
 add_test(NAME genia-adapter-tests COMMAND genia-adapter-tests)
+
+# --- Plain header-name-capture checks (R20 contract section 3.3). Not Catch2:
+# the pinned documentation checker cannot parse TEST_CASE macros. ---
+add_executable(genia-header-capture-check tests/check_header_capture.cpp)
+target_include_directories(genia-header-capture-check PRIVATE
+  third_party/nlohmann_json
+)
+add_test(NAME genia-header-capture-check COMMAND genia-header-capture-check)
