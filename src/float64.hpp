@@ -15,14 +15,24 @@
 
 namespace genia::float64 {
 
+// Native conversion-failure marker; caller normalizes it without exposing C++ text.
 struct MagnitudeOverflowError {};
+// Native Float64 division-by-either-signed-zero marker, normalized by the caller.
 struct DivisionByZeroError {};
+// Native Float64 remainder-by-either-signed-zero marker, normalized by the caller.
 struct RemainderByZeroError {};
 
+// Negate the boxed binary64 payload, including signed zero/non-finite values.
+// Caller must supply a Float64 Value; this helper does not validate its kind.
 inline value::Value negate(const value::Value& input) {
   return value::Value::make_float64(-input.float64);
 }
 
+// Compute Float64-only +,-,*,/,% using native binary64; mixed/exact operands or
+// other operators return nullopt for caller dispatch/rejection. Division/remainder
+// by either signed zero throw distinct native markers. Remainder adjusts fmod to
+// divisor sign, including zero. Overflow/non-finite arithmetic follows binary64
+// rather than throwing the exact-conversion magnitude marker; inputs are unchanged.
 inline std::optional<value::Value> arithmetic(core_ir::Op op, const value::Value& left,
                                               const value::Value& right) {
   if (left.kind != value::Kind::Float64 || right.kind != value::Kind::Float64) {
@@ -53,6 +63,11 @@ inline std::optional<value::Value> arithmetic(core_ir::Op op, const value::Value
   }
 }
 
+// Convert owned numerator/strictly-positive denominator by exact ties-to-even
+// rounding, including subnormals and underflow. Exact zero returns positive zero;
+// nonzero sign survives underflow. Nullopt rejects magnitude beyond largest finite
+// or an unrepresentable internal quotient. Caller supplies valid finite fraction
+// invariants; no denominator-zero/kind check or Python resource-limit guard exists.
 inline std::optional<double> fraction_to_binary64(bignum::Integer numerator,
                                                   bignum::Integer denominator) {
   if (numerator.is_zero()) return 0.0;
@@ -111,6 +126,10 @@ inline std::optional<double> fraction_to_binary64(bignum::Integer numerator,
   return std::bit_cast<double>(bits);
 }
 
+// Preserve a Float64 Value or convert a valid exact-family Value via exact ratio
+// rounding; unsupported input kinds return nullopt. Conversion absence throws
+// MagnitudeOverflowError for caller normalization. Exact zero becomes positive
+// zero; allocation failures propagate and Decimal exponent bounds remain host-local.
 inline std::optional<value::Value> from_exact(const value::Value& input) {
   if (input.kind == value::Kind::Float64) return input;
   if (!equality::is_exact_family_kind(input.kind)) return std::nullopt;
@@ -120,6 +139,11 @@ inline std::optional<value::Value> from_exact(const value::Value& input) {
   return value::Value::make_float64(*converted);
 }
 
+// Preserve exact-family Values; decode finite Float64 bits to an exact canonical
+// Decimal of the represented dyadic value, normalizing either signed zero to
+// Decimal zero. Non-numeric or NaN/infinity returns nullopt for caller rejection.
+// This creates owned bignum storage and may allocate; it does not pass through
+// approximate decimal text or claim all Python resource-limit behavior.
 inline std::optional<value::Value> to_exact(const value::Value& input) {
   if (equality::is_exact_family_kind(input.kind)) return input;
   if (input.kind != value::Kind::Float64 || !std::isfinite(input.float64)) return std::nullopt;

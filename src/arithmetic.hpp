@@ -172,12 +172,20 @@ inline std::optional<value::Value> rational_add(const value::Value& a, const val
   return rational::construct_rational(n1.mul(d2).add(n2.mul(d1)), d1.mul(d2));
 }
 
+// Subtract valid exact-family Values by integer fraction algebra, then reduce
+// and collapse denominator-one results to Integer. No binary-float conversion
+// or mutation occurs. Return the constructor's optional result; fraction helper
+// preconditions apply and allocation failures propagate.
 inline std::optional<value::Value> rational_sub(const value::Value& a, const value::Value& b) {
   const auto [n1, d1] = equality::exact_family_numerator_denominator(a);
   const auto [n2, d2] = equality::exact_family_numerator_denominator(b);
   return rational::construct_rational(n1.mul(d2).sub(n2.mul(d1)), d1.mul(d2));
 }
 
+// Multiply valid exact-family Values exactly, reducing through construct_rational
+// and collapsing denominator one to Integer. Inputs must have canonical positive
+// denominators; this does not validate kinds or enforce Python resource limits.
+// Constructor absence and allocation failures propagate without mutating operands.
 inline std::optional<value::Value> rational_mul(const value::Value& a, const value::Value& b) {
   const auto [n1, d1] = equality::exact_family_numerator_denominator(a);
   const auto [n2, d2] = equality::exact_family_numerator_denominator(b);
