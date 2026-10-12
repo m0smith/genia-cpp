@@ -27,7 +27,9 @@
 // Finalization: the reference host closes an upstream generator when a
 // downstream stage stops early. The C++ Flow kernel owns no resource that
 // needs closing (stdin is a shared in-memory line cursor), so early
-// termination is simply "stop pulling"; shared specs expose only stdout,
+// termination is simply "stop pulling". There is no close callback here and
+// no close-error precedence guarantee; pull/callback errors propagate directly.
+// Shared specs expose only stdout,
 // stderr and exit code, so no finer-grained finalization is claimed.
 #pragma once
 
@@ -53,13 +55,21 @@ struct FlowError {
 // it into an `unsupported` adapter response.
 struct UnsupportedError {};
 
+// Own a factory for one consumption attempt; no concurrent-consumption safety
+// or reusable-source contract. Pull copies follow their captures' ownership rules.
 class Flow {
  public:
+  // A present Value is an item (including Outcome data); nullopt means end.
   using Pull = std::function<std::optional<Value>()>;
+  // Produce a pull function when consumed; factories may defer upstream work.
   using Factory = std::function<Pull()>;
 
+  // Move in the factory without running it or consuming an upstream source.
   explicit Flow(Factory factory) : factory_(std::move(factory)) {}
 
+  // Mark consumed before invoking the factory; second attempts throw FlowError,
+  // even if factory creation failed. Factory exceptions propagate without reset.
+  // Returning a pull does not itself require any upstream item to be read.
   Pull consume() {
     if (consumed_) throw FlowError{"Flow has already been consumed"};
     consumed_ = true;
@@ -114,11 +124,15 @@ inline std::string runtime_type_name(const Value& v) {
   throw value::FlowError{message};
 }
 
+// Allocate a shared-identity Flow Value owning the moved factory and its captures.
+// Allocation errors propagate; construction performs no pull or factory invocation.
 inline Value make_flow(value::Flow::Factory factory) {
   return Value::make_flow(std::make_shared<value::Flow>(std::move(factory)));
 }
 
-// Defers `start` (which consumes the upstream) to the first pull.
+// Defer start until first pull and share the resulting pull state across copies.
+// Successful initialization is cached; start/pull exceptions propagate. Failed
+// start is not cached, so a later pull retries it without restoring consumed state.
 inline Pull lazy(std::function<Pull()> start) {
   auto inner = std::make_shared<std::optional<Pull>>();
   return [start = std::move(start), inner]() -> std::optional<Value> {
@@ -127,6 +141,9 @@ inline Pull lazy(std::function<Pull()> start) {
   };
 }
 
+// Invoke one Closure with the supplied Values. Non-Closure, none arguments and
+// a missing native result throw UnsupportedError in this bounded kernel. Other
+// callback exceptions propagate; a present Outcome result remains ordinary data.
 inline Value apply(const Invoke& invoke, const Value& fn, const std::vector<Value>& args) {
   if (fn.kind != value::Kind::Closure) throw value::UnsupportedError{};
   for (const auto& arg : args) {
@@ -139,13 +156,16 @@ inline Value apply(const Invoke& invoke, const Value& fn, const std::vector<Valu
   return std::move(*result);
 }
 
+// Borrow the Flow owned by a Flow Value; keep the source handle alive while used.
+// Non-Flow throws UnsupportedError; valid Flow Values must carry a non-null handle.
 inline value::Flow& require_flow(const Value& source) {
   if (source.kind != value::Kind::Flow) throw value::UnsupportedError{};
   return *source.flow;
 }
 
-// Clamps an Integer count to int64_t. Counts beyond +-2^62 behave the same
-// as unbounded/empty for any real stream.
+// Require an Integer and convert its decimal text to the native count. More than
+// 18 magnitude digits saturate to signed 2^62; this is a bounded host realization,
+// not a mathematical unbounded-count guarantee. Non-Integer is UnsupportedError.
 inline int64_t count_of(const Value& count) {
   if (count.kind != value::Kind::Integer) throw value::UnsupportedError{};
   const std::string text = count.integer.to_decimal_string();
@@ -155,6 +175,10 @@ inline int64_t count_of(const Value& count) {
   return std::stoll(text);
 }
 
+// Build a lazy single-use string Flow. stdin captures the shared in-memory cursor;
+// list strings are validated eagerly and their shared list retained. Flow input
+// is consumed only on first pull and each demanded item is checked then. Unsupported
+// source/non-string items throw UnsupportedError; no newline splitting occurs here.
 inline Value lines(const Value& source) {
   switch (source.kind) {
     case value::Kind::StdinSource: {
@@ -198,6 +222,10 @@ inline Value lines(const Value& source) {
   }
 }
 
+// Produce an unbounded progression: emit init on first pull, then call the Closure
+// once per subsequent demanded item. Check the step kind eagerly, defer invocation,
+// and retain init/step/invoke captures. Callback errors follow apply. Callers must
+// bound unbounded consumption before collect/run.
 inline Value evolve(const Value& init, const Value& step, const Invoke& invoke) {
   if (step.kind != value::Kind::Closure) throw value::UnsupportedError{};
   return make_flow([init, step, invoke]() -> Pull {
@@ -212,6 +240,9 @@ inline Value evolve(const Value& init, const Value& step, const Invoke& invoke) 
   });
 }
 
+// Derive a lazy Flow, retaining fn/upstream/invoke; source must be a valid Flow.
+// Each output demands one upstream item and calls apply once. The upstream is
+// consumed on first pull; callback validation/errors are deferred to demanded items.
 inline Value map(const Value& fn, const Value& source, const Invoke& invoke) {
   auto upstream = source.flow;
   return make_flow([fn, upstream, invoke]() -> Pull {
@@ -226,6 +257,10 @@ inline Value map(const Value& fn, const Value& source, const Invoke& invoke) {
   });
 }
 
+// Derive a lazy Flow retaining predicate/upstream/invoke; source must be a Flow.
+// Pull until a Boolean true verdict or end; false skips an item. Non-Boolean is
+// UnsupportedError. One output may require arbitrarily many pulls/callbacks, so an
+// unbounded source with no match never returns. Validation follows demanded items.
 inline Value filter(const Value& predicate, const Value& source, const Invoke& invoke) {
   auto upstream = source.flow;
   return make_flow([predicate, upstream, invoke]() -> Pull {
@@ -244,6 +279,10 @@ inline Value filter(const Value& predicate, const Value& source, const Invoke& i
   });
 }
 
+// Validate Integer count eagerly and retain the valid Flow upstream. First pull
+// consumes upstream, even for a non-positive limit, but reads no item in that case.
+// Positive limits demand at most count items with no extra pull after the limit;
+// upstream/pull errors propagate and early termination supplies no close hook.
 inline Value take(const Value& count, const Value& source) {
   const int64_t limit = count_of(count);
   auto upstream = source.flow;
@@ -264,6 +303,10 @@ inline Value take(const Value& count, const Value& source) {
   });
 }
 
+// Validate Integer count eagerly and lazily consume the valid Flow upstream.
+// First output skips up to count items then pulls its item; non-positive skips none.
+// Captured upstream is retained, skipped callbacks/effects still happen, and pull
+// errors propagate. An unbounded skip is limited by count_of's native saturation.
 inline Value drop(const Value& count, const Value& source) {
   const int64_t skip = count_of(count);
   auto upstream = source.flow;
@@ -284,6 +327,10 @@ inline Value drop(const Value& count, const Value& source) {
   });
 }
 
+// Lazily retain initial/step/upstream/invoke; source must be a valid Flow. For
+// each demanded item apply step(state,item), require exactly [new_state, emitted],
+// then update local state and emit the second Value. Seed is not emitted; invalid
+// result shape is UnsupportedError and callback errors propagate without rollback.
 inline Value scan(const Value& step, const Value& initial, const Value& source,
                   const Invoke& invoke) {
   auto upstream = source.flow;
@@ -304,6 +351,9 @@ inline Value scan(const Value& step, const Value& initial, const Value& source,
   });
 }
 
+// Lazily consume a valid Flow, skipping none and unwrapping some in source order.
+// Raw values or err Outcomes throw UnsupportedError in this bounded helper. A pull
+// may scan arbitrarily many skipped items; upstream captures remain owned by it.
 inline Value keep_some(const Value& source) {
   auto upstream = source.flow;
   return make_flow([upstream]() -> Pull {
@@ -324,6 +374,10 @@ inline Value keep_some(const Value& source) {
   });
 }
 
+// Retain a list or valid Flow and lazily invoke effect once per demanded item,
+// returning that same item; callback result is ignored but apply errors propagate.
+// List input is not eager iteration; Flow input consumes upstream on first pull.
+// Captures own source/effect/invoke and already-performed effects are not rolled back.
 inline Value each(const Value& effect, const Value& source, const Invoke& invoke) {
   if (source.kind == value::Kind::List) {
     auto items = source.list_items;
@@ -350,6 +404,10 @@ inline Value each(const Value& effect, const Value& source, const Invoke& invoke
   });
 }
 
+// Eagerly materialize a list/Flow in order, copying a list or consuming a Flow
+// once. An unbounded Flow may never finish and storage is not bounded. Pull and
+// allocation failures propagate; nested Value handles retain shared identity.
+// Non-compatible sources use seq_compatible_error; no close hook is called.
 inline Value collect(const Value& source) {
   if (source.kind == value::Kind::List) return Value::make_list(*source.list_items);
   if (source.kind != value::Kind::Flow) seq_compatible_error("collect", source);
@@ -359,6 +417,9 @@ inline Value collect(const Value& source) {
   return Value::make_list(std::move(collected));
 }
 
+// Drain a Flow once for effects and return nil; a list returns nil without
+// traversing its items here. An unbounded Flow may never finish; pull errors
+// propagate and incompatible input uses seq_compatible_error. No close hook exists.
 inline Value run(const Value& source) {
   if (source.kind != value::Kind::List) {
     if (source.kind != value::Kind::Flow) seq_compatible_error("run", source);
