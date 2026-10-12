@@ -125,8 +125,9 @@ class Cell : public std::enable_shared_from_this<Cell> {
   }
 
   // Install replacement state and reopen admission on the same shared cell.
-  // Discard queued old work and invalidate any in-flight generation: its callback
-  // may finish but cannot commit state or staged sends. Clear cached failure.
+  // Discard queued old work and invalidate callbacks checked after restart; their
+  // results cannot commit state or staged sends. Already-committed staged actions
+  // may still execute outside the lock. Clear cached failure.
   // The owned worker is reused; this is not a general supervision/retry policy.
   std::shared_ptr<Cell> restart(Value new_state) {
     // Serialize this admission/state operation with worker commits and restart.
