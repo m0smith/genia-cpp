@@ -52,10 +52,17 @@ inline bool is_exact_family_kind(value::Kind kind) {
          kind == value::Kind::Rational;
 }
 
+// Recognize the exact family and boxed Float64, excluding Boolean even though
+// some host languages treat it as numeric. This performs no value conversion.
 inline bool is_numeric_kind(value::Kind kind) {
   return is_exact_family_kind(kind) || kind == value::Kind::Float64;
 }
 
+// Return owned exact numerator/positive denominator for a valid exact-family
+// Value. Callers must exclude other kinds and supply canonical Rational data
+// and representable Decimal exponents; this does not validate those invariants
+// or enforce the Python numeric resource limit. Decimal powers allocate/iterate
+// with exponent magnitude, so no unbounded exponent or host-parity claim applies.
 inline std::pair<bignum::Integer, bignum::Integer> exact_family_numerator_denominator(
     const value::Value& v) {
   const bignum::Integer one = bignum::Integer::from_u64(1);
@@ -81,6 +88,9 @@ inline std::pair<bignum::Integer, bignum::Integer> exact_family_numerator_denomi
   return {v.decimal_coefficient, denominator};
 }
 
+// Compare two valid exact-family Values by integer cross-products without
+// floating conversion. Fraction-helper preconditions and allocation costs apply;
+// operands are not mutated and bignum allocation failures propagate.
 inline bool exact_family_equal(const value::Value& a, const value::Value& b) {
   const auto [numerator_a, denominator_a] = exact_family_numerator_denominator(a);
   const auto [numerator_b, denominator_b] = exact_family_numerator_denominator(b);
@@ -127,8 +137,14 @@ inline std::pair<bignum::Integer, bignum::Integer> finite_float64_numerator_deno
   return {numerator, denominator};
 }
 
+// Numeric relation result; Unordered also represents a non-numeric input, not
+// an exception or a fabricated ordering for NaN.
 enum class NumericOrder : std::uint8_t { Less, Equal, Greater, Unordered };
 
+// Compare numeric Values exactly, decoding finite Float64 to its represented
+// dyadic ratio rather than rounding exact operands. NaN or non-numeric input is
+// Unordered; signed zeros compare equal, infinities order by sign. Canonical
+// exact-family preconditions apply and allocations may throw; no mutation occurs.
 inline NumericOrder numeric_compare(const value::Value& a, const value::Value& b) {
   if (!is_numeric_kind(a.kind) || !is_numeric_kind(b.kind)) return NumericOrder::Unordered;
   if ((a.kind == value::Kind::Float64 && std::isnan(a.float64)) ||
@@ -178,6 +194,9 @@ inline std::optional<std::string> numeric_map_key_encoding(const value::Value& k
   return "N:" + numerator.to_decimal_string() + "/" + denominator.to_decimal_string();
 }
 
+// Return an owned legal-key identity for numbers, Boolean or String; reject NaN
+// and all other kinds with nullopt. Numeric cross-kind equality shares one reduced
+// fraction identity; Boolean keys remain distinct. No caller diagnostic is raised.
 inline std::optional<std::string> map_key_encoding_checked(const value::Value& key) {
   if (is_numeric_kind(key.kind)) return numeric_map_key_encoding(key);
   switch (key.kind) {
@@ -190,11 +209,21 @@ inline std::optional<std::string> map_key_encoding_checked(const value::Value& k
   }
 }
 
+// Return a legal key identity, or an empty string sentinel for an illegal key.
+// Callers must enforce key legality; this helper does not throw a misuse diagnostic.
+// An empty String key is still legal and encodes as "S:". Allocation errors propagate.
 inline std::string map_key_encoding(const value::Value& key) {
   auto encoding = map_key_encoding_checked(key);
   return encoding.value_or(std::string());
 }
 
+// Compare this host's bounded Value subset without reading Ref/Cell/Process/Flow
+// contents: those handles compare by entity identity. Numbers use numeric_compare;
+// lists compare recursively in order and maps by encoded keys/recursive values,
+// independent of insertion order. Mismatched non-numeric kinds are false. Outcome,
+// Represented, Closure, StdinSource, Nil and Opaque branches return false, so this
+// is not full portable equality coverage for those kinds. Require valid acyclic
+// containers/handles; recursion and allocation have no additional bound here.
 inline bool structural_equal(const value::Value& a, const value::Value& b) {
   if (is_numeric_kind(a.kind) && is_numeric_kind(b.kind)) {
     return numeric_compare(a, b) == NumericOrder::Equal;
