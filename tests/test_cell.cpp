@@ -1,4 +1,5 @@
 #include <atomic>
+#include <future>
 #include <thread>
 
 #include "../src/cell.hpp"
@@ -77,4 +78,38 @@ TEST_CASE("R25 nested Cell sends commit only with the enclosing update") {
       true);
   REQUIRE(result.has_value());
   CHECK(result->stdout_text == "[1, 15, true]\n");
+}
+
+// Read exactly the predicate used by await_idle while dispatch is causally paused.
+// This avoids timing assertions about whether a separate waiter was scheduled.
+namespace genia::value {
+struct CellQuiescenceProbe {
+  static bool settled(const Cell& cell) {
+    std::lock_guard lock(cell.mutex_);
+    return cell.accepted_ == cell.completed_;
+  }
+};
+}  // namespace genia::value
+
+TEST_CASE("R25 paused committed action remains outstanding", "[quiescence]") {
+  std::promise<void> entered;
+  std::promise<void> release;
+  auto gate = release.get_future().share();
+  auto target = Cell::create(integer(10));
+  auto parent = Cell::create(integer(0));
+  REQUIRE(parent->send([&](const Value&) {
+    genia::value::stage_cell_send([&, gate] {
+      entered.set_value();
+      gate.wait();
+      target->send([](const Value&) { return std::optional<Value>(integer(15)); });
+    });
+    return std::optional<Value>(integer(1));
+  }));
+  entered.get_future().wait();
+  CHECK(parent->get()->integer.to_decimal_string() == "1");
+  CHECK(target->get()->integer.to_decimal_string() == "10");
+  CHECK_FALSE(genia::value::CellQuiescenceProbe::settled(*parent));
+  release.set_value();
+  Cell::await_all_idle();
+  CHECK(target->get()->integer.to_decimal_string() == "15");
 }

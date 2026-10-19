@@ -182,6 +182,7 @@ class Cell : public std::enable_shared_from_this<Cell> {
   }
 
  private:
+  friend struct CellQuiescenceProbe;
   // Queue-owned update paired with its acceptance generation for stale rejection.
   struct Work {
     std::uint64_t generation;
