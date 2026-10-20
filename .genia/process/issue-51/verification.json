@@ -103,6 +103,48 @@
   "authority_revision": "f2670d422636e52a39dce8b267413602aea0df7a",
   "authority_diff_from_prior_979302c": "AGENTS and four root authorities and both R25 contracts unchanged",
   "public_semantics_changed": false,
-  "independent_review": "pending Claude; no self-review or audit verdict",
-  "main_repo_ci_validation": "not run on unmerged candidate; local Docker validation is separate; integration after independent review"
+  "independent_review": {
+    "verdict": "PASS WITH NON-BLOCKING FINDINGS",
+    "audited_sha": "af0239984ca6f9725657e87596e25c23a2eafc4e",
+    "url": "https://github.com/m0smith/genia-cpp/pull/52#issuecomment-6297673785",
+    "independent_environment": "Linux x86_64; GCC 13.3 and Clang 18; GCC sanitizers",
+    "scope": "Pinned full R16 corpus: 257 pass / 536 unsupported / zero failure classes; corrected unchanged R25 case: 12000/12000 pass; baseline failures independently reproduced. Detailed checks and limits in verdict.",
+    "not_reproduced": [
+      "implementer macOS/Apple Clang results",
+      "implementer Docker results",
+      "f2670d4 full compatibility corpus"
+    ]
+  },
+  "main_repo_ci_validation": "not run on unmerged candidate; implementer local Docker and independent Linux results are separate; corrected-host pin promotion and required Docker/host-parity workflows remain integration gates",
+  "implementer_evidence_scope": "Existing native macOS/Apple Clang and Linux Docker results above are implementer-reported; neither independent reviewer reproduced those environments.",
+  "independent_truth_audit": {
+    "verdict": "PASS WITH NON-BLOCKING FINDINGS",
+    "audited_sha": "af0239984ca6f9725657e87596e25c23a2eafc4e",
+    "url": "https://github.com/m0smith/genia-cpp/pull/52#issuecomment-6301362049",
+    "independent_environment": "Linux; clang++ 18 and g++; GCC sanitizers",
+    "scope": "CTest 3/3; 300 adversarial check invocations; unchanged R25 case 500/500 at exact pin and 500/500 at main 21691ff; pre-fix control 481 pass / 19 fail; RED two assertions fail. Detailed checks and limits in verdict.",
+    "not_reproduced": [
+      "implementer macOS/Apple Clang results",
+      "implementer Docker results",
+      "full R16 corpora",
+      "clang-tidy"
+    ]
+  },
+  "post_audit_distillation": {
+    "scope": "N2 wait comments/host documentation; N3 durable README; evidence verdict attribution only",
+    "n1": "deferred; independently classified nonblocking; unsigned-counter logic unchanged",
+    "independent_documentation_truth_spot_check": "pending for corrected head; prior verdicts apply only to audited_sha",
+    "final_head_ci": "required for corrected head",
+    "authority_revision_read": "21691ff818f914e0f39ce1bb138178d7773ca865",
+    "root_authority_semantic_edits_needed": false,
+    "historical_build_inputs_digest_scope": "build_inputs_sha256 describes tested source 793f100 and audited af02399; distillation adds header comments, so the old raw-input digest does not identify the corrected documentation head",
+    "validation": {
+      "code_documentation": "Pinned provider 469748098f1513aa38753ba3f0a24db29f4b1cb4 and current 21691ff818f914e0f39ce1bb138178d7773ca865: 552 records / 276 legacy gaps / 2 exclusions / 0 errors; base bb7c747",
+      "authority_sync_tests": "244 passed / 34 skipped: semantic_doc_sync, state_anchors_and_registry_sync, portability_contract_sync",
+      "strict_public_doc_lint": "24 files / 286 @doc strings / 0 errors / 0 warnings",
+      "formatting": "clang-format 23.1.3 --dry-run --Werror over src/*.cpp src/*.hpp tests/*.cpp: exit 0",
+      "scope_and_integrity": "Six-file diff; C++ additions are comments only; N1, tests, protocol, capabilities and original evidence values unchanged; RED/GREEN ancestry preserved; git diff --check passes",
+      "authoritative_docs_strict_build": "genia-2026 at 21691ff818f914e0f39ce1bb138178d7773ca865: mkdocs build --strict exit 0; no authoritative source edits"
+    }
+  }
 }

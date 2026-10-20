@@ -86,6 +86,9 @@ class Process : public std::enable_shared_from_this<Process> {
   // Private evidence wait: block without timeout until accepted messages are
   // handled/discarded, including committed staged dispatch. Descendant work is
   // joined by the shared causal barrier, not this entity-local wait.
+  // C++ API: do not call from this entity's own callback or staged action; its
+  // outstanding work cannot retire until that callback/action finishes, so the
+  // wait cannot return. Genia staged actions are send-only.
   void await_idle() const {
     // Release the mutex during idle waiting and recheck the counter predicate.
     std::unique_lock lock(mutex_);
@@ -94,6 +97,9 @@ class Process : public std::enable_shared_from_this<Process> {
 
   // Private shared causal barrier, including Cell targets and new entities.
   // External root admissions must precede this call; callbacks can block forever.
+  // C++ API: do not call from any entity's own callback or staged action; its
+  // outstanding work cannot retire until that callback/action finishes, so the
+  // shared wait cannot return. Genia staged actions are send-only.
   static void await_all_idle() { R25Quiescence::await_idle(); }
 
  private:

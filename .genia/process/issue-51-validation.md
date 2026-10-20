@@ -1,7 +1,11 @@
 # Issue #51 implementation and verification handoff
 
-Status: implementer validation only. Independent Claude maintainability review
-and truth audit are pending. No self-review verdict, merge or issue closure.
+Status: independent Claude maintainability review and behavioral/documentation
+truth audit both returned **PASS WITH NON-BLOCKING FINDINGS** at exact audited
+head `af0239984ca6f9725657e87596e25c23a2eafc4e` (links below). These verdicts
+apply to that head, not to subsequent documentation corrections. Independent
+documentation-truth spot-check and final-head CI remain required. No merge or
+issue closure.
 
 ## History
 
@@ -15,10 +19,12 @@ and truth audit are pending. No self-review verdict, merge or issue closure.
   following the existing header-check target. The pinned checker does not parse
   Catch2 TEST_CASE macros. No assertion was weakened or baseline exemption added.
 - `793f100`: host README and durable accounting/lifetime documentation.
-- This handoff/evidence commit changes no build input. The tested source and
-  build-input digest are recorded in `issue-51/verification.json`.
+- `af02399`: evidence-only commit changes no build input from `793f100`.
+  That tested source and its historical build-input digest are recorded in
+  `issue-51/verification.json`. Subsequent distillation adds header comments,
+  so that digest is not a digest of the corrected documentation head.
 
-## Validation observed
+## Implementer-reported validation (macOS and Docker)
 
 | Check | Native macOS | Linux development image |
 | --- | --- | --- |
@@ -115,15 +121,54 @@ behavior changes, together with applicable shared specs, host documentation,
 book/cheatsheets and generated MCP guidance. Do not infer conformance from
 ancestor-pinned evidence or expand the portable contract while fixing this host.
 
-## Independent Claude gate
+## Independent Claude verdicts and remaining gates
 
-Review the actual diff from `bb7c747...`, not an implementer certification.
-Inspect admission-before-visibility, dispatch-before-retirement, generation and
-queue discard accounting, destruction/join retirement, lock ordering, dynamic
-target/alternating entity chains, public diagnostic/transaction preservation and
-fixture privacy. Verify the paused predicates and cleanup oracles, rerun the
-unchanged shared case and check actual executable provenance. Existing native
-staged-action exceptions remain uncaught; existing off-worker final-owner and
-ownership-cycle restrictions are documented rather than silently redesigned.
-No review or audit PASS is supplied by this handoff. Keep #51 open and the PR
-draft until independent review and required CI/integration confirmation.
+Both verdicts audit exact `af0239984ca6f9725657e87596e25c23a2eafc4e`:
+
+- [Maintainability/correctness review — PASS WITH NON-BLOCKING FINDINGS](https://github.com/m0smith/genia-cpp/pull/52#issuecomment-6297673785).
+  Independently reproduced Linux results include 3/3 CTest targets, GCC/Clang
+  adversarial repetitions, GCC sanitizers and mutation checks, pinned R16 corpus
+  257 pass / 536 unsupported with zero failure classes, and the unchanged R25
+  case passing 12,000/12,000 corrected runs. Baseline stress reproduced failures.
+- [Behavioral/documentation truth audit — PASS WITH NON-BLOCKING FINDINGS](https://github.com/m0smith/genia-cpp/pull/52#issuecomment-6301362049).
+  Independent Linux clang/GCC execution includes 3/3 CTest targets, 300 check
+  invocations, GCC sanitizer checks, and 500/500 unchanged R25 passes at each of
+  the exact contract pin and main `21691ff`. The pre-fix control at main had
+  481 pass / 19 fail. RED reproduced its two failed assertions.
+
+Neither reviewer reproduced the implementer's macOS/Apple Clang or Docker
+results above. The maintainability review reproduced the full pinned corpus;
+the separate truth audit did not rerun either full corpus. Repetitions and
+sanitizers are regression evidence, not exhaustive concurrency proof or
+comparative failure-rate claims. Review comments retain the detailed independent
+binary, compiler, scheduling and evidence limits.
+
+Post-audit corrections address N2 (C++ self-wait limitation in host docs and
+wait comments) and N3 (durable README wording). Genia staged actions are
+send-only; no public language restriction is added. N1's unsigned-counter guard
+remains deferred as independently classified nonblocking; no executable logic,
+test, capability, protocol or contract pin changes are part of this distillation.
+Latest authorities read at genia-2026 `21691ff818f914e0f39ce1bb138178d7773ca865` remain accurate for this
+host-private clarification; no root-authority or MCP semantic edit is needed.
+
+Stop for an independent documentation-truth spot-check of the corrected head
+and require final-head CI. The earlier verdicts do not certify the new prose.
+Keep #51 open and PR #52 draft. Main-repository corrected-host pin promotion
+and required Docker/host-parity workflows remain separate integration gates;
+this distillation neither performs nor certifies them. Do not begin Slice C.
+
+## Post-audit distillation validation
+
+- Pinned (`469748098f…`) and current (`21691ff8…`) code-documentation providers:
+  552 records / 276 legacy gaps / 2 exclusions / 0 errors against `bb7c747`.
+- Authority-sync tests: 244 passed / 34 skipped. Strict public-doc coverage lint:
+  24 files / 286 doc strings / 0 errors / 0 warnings.
+- Authoritative documentation `mkdocs build --strict` at `21691ff8…`: exit 0;
+  no authoritative source edits.
+- Full first-party C++ formatting check (`clang-format` 23.1.3): exit 0.
+- Scope/integrity checks: exactly six documentation/evidence/comment files;
+  C++ additions are comments only, N1/tests/protocol/capabilities and historical
+  evidence values unchanged, RED/GREEN ancestry intact, `git diff --check` clean.
+
+These are correction validation results, not an independent documentation-truth
+verdict. Final-head CI and the independent spot-check remain separate gates.

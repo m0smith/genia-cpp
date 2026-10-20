@@ -24,6 +24,12 @@ items; an older in-flight callback remains outstanding until its stale result is
 discarded. A committed parent's dispatch remains outstanding across a later
 restart. Stop still rejects admission and drains accepted work.
 
+C++ host API limitation: do not call an entity's `await_idle`, or either
+`await_all_idle` helper, from inside that entity's own callback or staged action.
+Its outstanding work cannot retire until that callback/action finishes, so the
+wait cannot return. Genia staged actions are send-only; this C++ API limitation
+is not a new Genia language restriction.
+
 Destruction requests termination and joins the active worker, then retires any
 remaining queued items that will never execute. The shared counter owns no
 handles and does not keep entities alive. Existing lifetime restrictions remain:

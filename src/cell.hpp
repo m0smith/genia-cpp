@@ -145,6 +145,9 @@ class Cell : public std::enable_shared_from_this<Cell> {
   // Wait without timeout for accepted work to be accounted for as completed or
   // discarded, including committed staged dispatch. Callbacks/actions may block
   // forever. Target work itself is joined by the shared causal evidence barrier.
+  // C++ API: do not call from this entity's own callback or staged action; its
+  // outstanding work cannot retire until that callback/action finishes, so the
+  // wait cannot return. Genia staged actions are send-only.
   void await_idle() const {
     // Release the cell mutex while waiting; recheck counters on every wake.
     std::unique_lock lock(mutex_);
@@ -153,6 +156,9 @@ class Cell : public std::enable_shared_from_this<Cell> {
 
   // Private evidence barrier shared with Process: includes all causal targets,
   // including entities created by callbacks. No unrelated future producer join.
+  // C++ API: do not call from any entity's own callback or staged action; its
+  // outstanding work cannot retire until that callback/action finishes, so the
+  // shared wait cannot return. Genia staged actions are send-only.
   static void await_all_idle() { R25Quiescence::await_idle(); }
 
  private:

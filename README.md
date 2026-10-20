@@ -92,12 +92,11 @@ before implementing:
 
 ## R25 quiescence correction
 
-The private concurrency fixture includes committed staged-send dispatch in
-completion accounting across Cell and Process. See [host accounting and lifetime
-boundaries](docs/r25-quiescence.md) and the issue #51 implementation evidence under
-`.genia/process/`. This changes no public wait API, Cell transaction semantics,
-capability claim or semantic contract pin. Independent Claude review is required
-before merge; a successful intermittent run of an older binary is not repair evidence.
+The private concurrency fixture uses shared causal accounting across Cell and
+Process, including committed staged-send dispatch and descendant work. See
+[host accounting and lifetime boundaries](docs/r25-quiescence.md). This changes
+no public Genia wait API, Cell transaction semantics, capability claim, protocol
+or semantic contract pin.
 
 ## Pinned contract
 
