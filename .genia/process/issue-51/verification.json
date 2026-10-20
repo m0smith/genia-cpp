@@ -1,0 +1,108 @@
+{
+  "kind": "implementer verification; independent Claude review and audit pending",
+  "source_revision": "793f100758947b39b7dbc3dfa556f5e62a84a26e",
+  "red_commit": "aa25d9ae80409b9740a089d794115876ceaf4437",
+  "green_commit": "ca10d4c8c610e3df4a8e0e25aa88ecd348def2e8",
+  "build_inputs_sha256": "2d562f3d3fb02962591838e787d55ef4361f4a3a49c744a05b4783ddb8531f6f",
+  "build_inputs_definition": "sorted git-tracked paths under src, tests, third_party and CMakeLists.txt; path NUL bytes NUL",
+  "docker_image": "sha256:c2c55f90362671c79c54f978f5120ee21f6b76e77f9952b571793fcfed07d1d6",
+  "native_compiler": "Apple Clang 17.0.0; x86_64-apple-darwin24.6.0",
+  "docker_compiler": "Clang 22.1.8; x86_64 Linux; Python 3.14.7",
+  "schedules": {
+    "native_pinned_serial": {
+      "runner_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_module": "/Users/m0smith/projects/genia-workspace/cpp51-contract/tools/spec_runner/protocol.py",
+      "binary": "/Users/m0smith/projects/genia-workspace/issue-51-cell-quiescence/build/genia-adapter",
+      "binary_sha256": "2f70303fcb1ff8482029f336534c72317ca171fcdcec988418a9b697309d8e0c",
+      "adapter_contract_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_version": "1",
+      "case_sha256": "935738ea0406c3249688352f3680ae01e5a3809279c381f6fe0e43976b39cc5a",
+      "expected_stdout": "[1, 15, true]\n",
+      "repeats": 1000,
+      "jobs": 1,
+      "counts": {
+        "pass": 1000
+      },
+      "nonpasses": []
+    },
+    "native_current_parallel": {
+      "runner_revision": "f2670d422636e52a39dce8b267413602aea0df7a",
+      "protocol_module": "/Users/m0smith/projects/genia-workspace/cpp51-current-main/tools/spec_runner/protocol.py",
+      "binary": "/Users/m0smith/projects/genia-workspace/issue-51-cell-quiescence/build/genia-adapter",
+      "binary_sha256": "2f70303fcb1ff8482029f336534c72317ca171fcdcec988418a9b697309d8e0c",
+      "adapter_contract_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_version": "1",
+      "case_sha256": "935738ea0406c3249688352f3680ae01e5a3809279c381f6fe0e43976b39cc5a",
+      "expected_stdout": "[1, 15, true]\n",
+      "repeats": 1000,
+      "jobs": 8,
+      "counts": {
+        "pass": 1000
+      },
+      "nonpasses": []
+    },
+    "docker_pinned_serial": {
+      "runner_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_module": "/Users/m0smith/projects/genia-workspace/cpp51-contract/tools/spec_runner/protocol.py",
+      "binary": "/workspace/genia-cpp/build-docker/genia-adapter",
+      "binary_sha256": "9d4687dfcc2300aac9f2226c50c04ecc43270341b56f6cf3d40d88bec061e81c",
+      "adapter_contract_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_version": "1",
+      "case_sha256": "935738ea0406c3249688352f3680ae01e5a3809279c381f6fe0e43976b39cc5a",
+      "expected_stdout": "[1, 15, true]\n",
+      "repeats": 1000,
+      "jobs": 1,
+      "counts": {
+        "pass": 1000
+      },
+      "nonpasses": []
+    },
+    "docker_current_parallel": {
+      "runner_revision": "f2670d422636e52a39dce8b267413602aea0df7a",
+      "protocol_module": "/Users/m0smith/projects/genia-workspace/cpp51-current-main/tools/spec_runner/protocol.py",
+      "binary": "/workspace/genia-cpp/build-docker/genia-adapter",
+      "binary_sha256": "9d4687dfcc2300aac9f2226c50c04ecc43270341b56f6cf3d40d88bec061e81c",
+      "adapter_contract_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_version": "1",
+      "case_sha256": "935738ea0406c3249688352f3680ae01e5a3809279c381f6fe0e43976b39cc5a",
+      "expected_stdout": "[1, 15, true]\n",
+      "repeats": 1000,
+      "jobs": 8,
+      "counts": {
+        "pass": 1000
+      },
+      "nonpasses": []
+    }
+  },
+  "native_ctest": {
+    "targets": 3,
+    "failed": 0
+  },
+  "docker_ctest": {
+    "targets": 3,
+    "failed": 0
+  },
+  "adversarial_standalone": {
+    "schedules": 7,
+    "assertions": 33,
+    "failures": 0,
+    "additional_docker_repetitions": 100,
+    "workers": 8
+  },
+  "checks": {
+    "docker_full_formatting": "exit 0",
+    "docker_clang_tidy": "exit 0; 510 emitted project warnings, not a warning-free claim",
+    "code_documentation": "552 records; 276 legacy gaps; 2 classified exclusions; 0 errors; no new exemptions/baseline entries"
+  },
+  "canonical_report_files": [
+    "pinned-native-r16.json",
+    "pinned-docker-r16.json",
+    "current-native-r16.json",
+    "current-docker-r16.json"
+  ],
+  "authority_revision": "f2670d422636e52a39dce8b267413602aea0df7a",
+  "authority_diff_from_prior_979302c": "AGENTS and four root authorities and both R25 contracts unchanged",
+  "public_semantics_changed": false,
+  "independent_review": "pending Claude; no self-review or audit verdict",
+  "main_repo_ci_validation": "not run on unmerged candidate; local Docker validation is separate; integration after independent review"
+}
