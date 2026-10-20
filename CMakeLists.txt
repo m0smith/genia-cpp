@@ -61,3 +61,9 @@ target_include_directories(genia-header-capture-check PRIVATE
   third_party/nlohmann_json
 )
 add_test(NAME genia-header-capture-check COMMAND genia-header-capture-check)
+
+# Deterministic private quiescence schedules use a plain C++ executable, like
+# the header-capture check, so the canonical documentation checker can parse it.
+add_executable(genia-quiescence-check tests/check_quiescence.cpp)
+add_test(NAME genia-quiescence-check COMMAND genia-quiescence-check)
+set_tests_properties(genia-quiescence-check PROPERTIES TIMEOUT 120)

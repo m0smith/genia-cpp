@@ -239,10 +239,7 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
     return args[0];
   }
   if (name == "_r25_await_idle" && args.empty() && value::g_r25_fixture_enabled) {
-    for (int pass = 0; pass < 2; ++pass) {
-      value::Cell::await_all_idle();
-      value::Process::await_all_idle();
-    }
+    value::R25Quiescence::await_idle();
     return Value::make_boolean(true);
   }
   if ((name == "process_alive?" || name == "process_failed?") && args.size() == 1 &&

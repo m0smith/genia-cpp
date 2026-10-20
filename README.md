@@ -90,6 +90,14 @@ before implementing:
   evidence credit for `partial`, which would have made the two pinned
   `open_functions_r20` cases permanently un-runnable.
 
+## R25 quiescence correction
+
+The private concurrency fixture uses shared causal accounting across Cell and
+Process, including committed staged-send dispatch and descendant work. See
+[host accounting and lifetime boundaries](docs/r25-quiescence.md). This changes
+no public Genia wait API, Cell transaction semantics, capability claim, protocol
+or semantic contract pin.
+
 ## Pinned contract
 
 | | |

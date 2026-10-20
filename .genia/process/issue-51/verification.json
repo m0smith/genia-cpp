@@ -1,0 +1,150 @@
+{
+  "kind": "implementer verification; independent Claude review and audit pending",
+  "source_revision": "793f100758947b39b7dbc3dfa556f5e62a84a26e",
+  "red_commit": "aa25d9ae80409b9740a089d794115876ceaf4437",
+  "green_commit": "ca10d4c8c610e3df4a8e0e25aa88ecd348def2e8",
+  "build_inputs_sha256": "2d562f3d3fb02962591838e787d55ef4361f4a3a49c744a05b4783ddb8531f6f",
+  "build_inputs_definition": "sorted git-tracked paths under src, tests, third_party and CMakeLists.txt; path NUL bytes NUL",
+  "docker_image": "sha256:c2c55f90362671c79c54f978f5120ee21f6b76e77f9952b571793fcfed07d1d6",
+  "native_compiler": "Apple Clang 17.0.0; x86_64-apple-darwin24.6.0",
+  "docker_compiler": "Clang 22.1.8; x86_64 Linux; Python 3.14.7",
+  "schedules": {
+    "native_pinned_serial": {
+      "runner_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_module": "/Users/m0smith/projects/genia-workspace/cpp51-contract/tools/spec_runner/protocol.py",
+      "binary": "/Users/m0smith/projects/genia-workspace/issue-51-cell-quiescence/build/genia-adapter",
+      "binary_sha256": "2f70303fcb1ff8482029f336534c72317ca171fcdcec988418a9b697309d8e0c",
+      "adapter_contract_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_version": "1",
+      "case_sha256": "935738ea0406c3249688352f3680ae01e5a3809279c381f6fe0e43976b39cc5a",
+      "expected_stdout": "[1, 15, true]\n",
+      "repeats": 1000,
+      "jobs": 1,
+      "counts": {
+        "pass": 1000
+      },
+      "nonpasses": []
+    },
+    "native_current_parallel": {
+      "runner_revision": "f2670d422636e52a39dce8b267413602aea0df7a",
+      "protocol_module": "/Users/m0smith/projects/genia-workspace/cpp51-current-main/tools/spec_runner/protocol.py",
+      "binary": "/Users/m0smith/projects/genia-workspace/issue-51-cell-quiescence/build/genia-adapter",
+      "binary_sha256": "2f70303fcb1ff8482029f336534c72317ca171fcdcec988418a9b697309d8e0c",
+      "adapter_contract_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_version": "1",
+      "case_sha256": "935738ea0406c3249688352f3680ae01e5a3809279c381f6fe0e43976b39cc5a",
+      "expected_stdout": "[1, 15, true]\n",
+      "repeats": 1000,
+      "jobs": 8,
+      "counts": {
+        "pass": 1000
+      },
+      "nonpasses": []
+    },
+    "docker_pinned_serial": {
+      "runner_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_module": "/Users/m0smith/projects/genia-workspace/cpp51-contract/tools/spec_runner/protocol.py",
+      "binary": "/workspace/genia-cpp/build-docker/genia-adapter",
+      "binary_sha256": "9d4687dfcc2300aac9f2226c50c04ecc43270341b56f6cf3d40d88bec061e81c",
+      "adapter_contract_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_version": "1",
+      "case_sha256": "935738ea0406c3249688352f3680ae01e5a3809279c381f6fe0e43976b39cc5a",
+      "expected_stdout": "[1, 15, true]\n",
+      "repeats": 1000,
+      "jobs": 1,
+      "counts": {
+        "pass": 1000
+      },
+      "nonpasses": []
+    },
+    "docker_current_parallel": {
+      "runner_revision": "f2670d422636e52a39dce8b267413602aea0df7a",
+      "protocol_module": "/Users/m0smith/projects/genia-workspace/cpp51-current-main/tools/spec_runner/protocol.py",
+      "binary": "/workspace/genia-cpp/build-docker/genia-adapter",
+      "binary_sha256": "9d4687dfcc2300aac9f2226c50c04ecc43270341b56f6cf3d40d88bec061e81c",
+      "adapter_contract_revision": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4",
+      "protocol_version": "1",
+      "case_sha256": "935738ea0406c3249688352f3680ae01e5a3809279c381f6fe0e43976b39cc5a",
+      "expected_stdout": "[1, 15, true]\n",
+      "repeats": 1000,
+      "jobs": 8,
+      "counts": {
+        "pass": 1000
+      },
+      "nonpasses": []
+    }
+  },
+  "native_ctest": {
+    "targets": 3,
+    "failed": 0
+  },
+  "docker_ctest": {
+    "targets": 3,
+    "failed": 0
+  },
+  "adversarial_standalone": {
+    "schedules": 7,
+    "assertions": 33,
+    "failures": 0,
+    "additional_docker_repetitions": 100,
+    "workers": 8
+  },
+  "checks": {
+    "docker_full_formatting": "exit 0",
+    "docker_clang_tidy": "exit 0; 510 emitted project warnings, not a warning-free claim",
+    "code_documentation": "552 records; 276 legacy gaps; 2 classified exclusions; 0 errors; no new exemptions/baseline entries"
+  },
+  "canonical_report_files": [
+    "pinned-native-r16.json",
+    "pinned-docker-r16.json",
+    "current-native-r16.json",
+    "current-docker-r16.json"
+  ],
+  "authority_revision": "f2670d422636e52a39dce8b267413602aea0df7a",
+  "authority_diff_from_prior_979302c": "AGENTS and four root authorities and both R25 contracts unchanged",
+  "public_semantics_changed": false,
+  "independent_review": {
+    "verdict": "PASS WITH NON-BLOCKING FINDINGS",
+    "audited_sha": "af0239984ca6f9725657e87596e25c23a2eafc4e",
+    "url": "https://github.com/m0smith/genia-cpp/pull/52#issuecomment-6297673785",
+    "independent_environment": "Linux x86_64; GCC 13.3 and Clang 18; GCC sanitizers",
+    "scope": "Pinned full R16 corpus: 257 pass / 536 unsupported / zero failure classes; corrected unchanged R25 case: 12000/12000 pass; baseline failures independently reproduced. Detailed checks and limits in verdict.",
+    "not_reproduced": [
+      "implementer macOS/Apple Clang results",
+      "implementer Docker results",
+      "f2670d4 full compatibility corpus"
+    ]
+  },
+  "main_repo_ci_validation": "not run on unmerged candidate; implementer local Docker and independent Linux results are separate; corrected-host pin promotion and required Docker/host-parity workflows remain integration gates",
+  "implementer_evidence_scope": "Existing native macOS/Apple Clang and Linux Docker results above are implementer-reported; neither independent reviewer reproduced those environments.",
+  "independent_truth_audit": {
+    "verdict": "PASS WITH NON-BLOCKING FINDINGS",
+    "audited_sha": "af0239984ca6f9725657e87596e25c23a2eafc4e",
+    "url": "https://github.com/m0smith/genia-cpp/pull/52#issuecomment-6301362049",
+    "independent_environment": "Linux; clang++ 18 and g++; GCC sanitizers",
+    "scope": "CTest 3/3; 300 adversarial check invocations; unchanged R25 case 500/500 at exact pin and 500/500 at main 21691ff; pre-fix control 481 pass / 19 fail; RED two assertions fail. Detailed checks and limits in verdict.",
+    "not_reproduced": [
+      "implementer macOS/Apple Clang results",
+      "implementer Docker results",
+      "full R16 corpora",
+      "clang-tidy"
+    ]
+  },
+  "post_audit_distillation": {
+    "scope": "N2 wait comments/host documentation; N3 durable README; evidence verdict attribution only",
+    "n1": "deferred; independently classified nonblocking; unsigned-counter logic unchanged",
+    "independent_documentation_truth_spot_check": "pending for corrected head; prior verdicts apply only to audited_sha",
+    "final_head_ci": "required for corrected head",
+    "authority_revision_read": "21691ff818f914e0f39ce1bb138178d7773ca865",
+    "root_authority_semantic_edits_needed": false,
+    "historical_build_inputs_digest_scope": "build_inputs_sha256 describes tested source 793f100 and audited af02399; distillation adds header comments, so the old raw-input digest does not identify the corrected documentation head",
+    "validation": {
+      "code_documentation": "Pinned provider 469748098f1513aa38753ba3f0a24db29f4b1cb4 and current 21691ff818f914e0f39ce1bb138178d7773ca865: 552 records / 276 legacy gaps / 2 exclusions / 0 errors; base bb7c747",
+      "authority_sync_tests": "244 passed / 34 skipped: semantic_doc_sync, state_anchors_and_registry_sync, portability_contract_sync",
+      "strict_public_doc_lint": "24 files / 286 @doc strings / 0 errors / 0 warnings",
+      "formatting": "clang-format 23.1.3 --dry-run --Werror over src/*.cpp src/*.hpp tests/*.cpp: exit 0",
+      "scope_and_integrity": "Six-file diff; C++ additions are comments only; N1, tests, protocol, capabilities and original evidence values unchanged; RED/GREEN ancestry preserved; git diff --check passes",
+      "authoritative_docs_strict_build": "genia-2026 at 21691ff818f914e0f39ce1bb138178d7773ca865: mkdocs build --strict exit 0; no authoritative source edits"
+    }
+  }
+}

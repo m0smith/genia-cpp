@@ -1,0 +1,61 @@
+{
+  "applicable_cases": 874,
+  "capabilities": {
+    "allowlisted_host_interop": "unsupported",
+    "ast_lowering": "supported",
+    "bytes_utf8": "supported",
+    "cell_primitives": "supported",
+    "cli_command_mode": "supported",
+    "cli_file_mode": "supported",
+    "cli_pipe_mode": "supported",
+    "configuration_dotenv_snapshot": "unsupported",
+    "configuration_environment_snapshot": "unsupported",
+    "core_ir_eval": "partial",
+    "debugger_stdio": "unsupported",
+    "doc_help": "unsupported",
+    "embedding_deterministic_fixture": "unsupported",
+    "execution_process": "unsupported",
+    "flow_phase_1": "supported",
+    "http_outbound_transport": "unsupported",
+    "http_server": "unsupported",
+    "indexing_deterministic_fixture": "unsupported",
+    "json_compat": "unsupported",
+    "json_strict": "supported",
+    "model_deterministic_fixture": "unsupported",
+    "model_gemini_rest": "unsupported",
+    "multi_file_eval": "unsupported",
+    "open_functions": "supported",
+    "parser": "supported",
+    "prelude_autoload": "partial",
+    "process_primitives": "supported",
+    "refs": "supported",
+    "repl": "supported",
+    "reranking_deterministic_fixture": "unsupported",
+    "resource_io": "unsupported",
+    "retrieval_deterministic_fixture": "unsupported",
+    "shared_spec_runner": "partial",
+    "shell_stage": "unsupported"
+  },
+  "capability_operations": [
+    "parse",
+    "lower",
+    "eval",
+    "cli"
+  ],
+  "contract_revision": {
+    "checkout": "f2670d422636e52a39dce8b267413602aea0df7a",
+    "classification": "resolvable_ancestor",
+    "declared": "6402e668ae85a1e7efe94b3ac3d51f233b730ca4"
+  },
+  "counts": {
+    "crash": 0,
+    "fail": 0,
+    "invalid": 0,
+    "pass": 268,
+    "protocol_error": 0,
+    "timeout": 0,
+    "unsupported": 606
+  },
+  "protocol_version": "1",
+  "total_cases": 874
+}
