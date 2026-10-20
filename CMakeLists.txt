@@ -42,6 +42,7 @@ add_executable(genia-adapter-tests
   tests/test_engine.cpp
   tests/test_diagnostic_boundary.cpp
   tests/test_ref.cpp
+  tests/test_quiescence.cpp
   tests/test_cell.cpp
   tests/test_process.cpp
   tests/test_r25_hardening.cpp

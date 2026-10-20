@@ -28,13 +28,10 @@ class Process : public std::enable_shared_from_this<Process> {
   // fails the process. Value-level Outcomes are still present Values, not exceptions.
   using Handler = std::function<std::optional<Value>(const Value&)>;
 
-  // Move the handler into a new process owning its worker; register a weak handle.
+  // Move the handler into a new process owning its worker; the caller owns the returned handle.
   // Allocation/thread-start failures propagate; no message is invoked at creation.
   static std::shared_ptr<Process> create(Handler handler) {
     auto process = std::shared_ptr<Process>(new Process(std::move(handler)));
-    // Serialize weak registration without retaining process lifetime.
-    std::lock_guard lock(registry_mutex());
-    registry().push_back(process);
     return process;
   }
 
@@ -49,6 +46,7 @@ class Process : public std::enable_shared_from_this<Process> {
     }
     condition_.notify_all();
     if (worker_.joinable()) worker_.join();
+    R25Quiescence::complete(messages_.size());
   }
 
   // Move a message into FIFO admission order, or return false after failure.
@@ -60,6 +58,7 @@ class Process : public std::enable_shared_from_this<Process> {
     if (failed_) return false;
     messages_.push_back(std::move(message));
     ++accepted_;
+    R25Quiescence::accept();
     condition_.notify_all();
     return true;
   }
@@ -85,44 +84,28 @@ class Process : public std::enable_shared_from_this<Process> {
     return error_;
   }
   // Private evidence wait: block without timeout until accepted messages are
-  // handled/discarded. Counter completion precedes staged-action execution, so
-  // this is not a nested-send commit barrier or global quiescence guarantee.
+  // handled/discarded, including committed staged dispatch. Descendant work is
+  // joined by the shared causal barrier, not this entity-local wait.
   void await_idle() const {
     // Release the mutex during idle waiting and recheck the counter predicate.
     std::unique_lock lock(mutex_);
     idle_.wait(lock, [this] { return accepted_ == completed_; });
   }
 
-  // Private evidence helper: prune the weak registry and await one owning
-  // snapshot. Later registrations/sends/staged actions may race it; no global
-  // quiescence or repeated counter sweep is promised by this Process helper.
-  static void await_all_idle() {
-    std::vector<std::shared_ptr<Process>> snapshot;
-    {
-      // Protect weak entry pruning and temporary snapshot ownership acquisition.
-      std::lock_guard lock(registry_mutex());
-      auto& entries = registry();
-      for (auto it = entries.begin(); it != entries.end();) {
-        if (auto process = it->lock()) {
-          snapshot.push_back(std::move(process));
-          ++it;
-        } else {
-          it = entries.erase(it);
-        }
-      }
-    }
-    for (const auto& process : snapshot) process->await_idle();
-  }
+  // Private shared causal barrier, including Cell targets and new entities.
+  // External root admissions must precede this call; callbacks can block forever.
+  static void await_all_idle() { R25Quiescence::await_idle(); }
 
  private:
+  friend struct ProcessQuiescenceProbe;
   // Own the handler and start the worker; create establishes shared ownership
-  // and weak registration. Worker invocation begins only after a message arrives.
+  // before use. Worker invocation begins only after a message arrives.
   explicit Process(Handler handler) : handler_(std::move(handler)), worker_([this] { run(); }) {}
 
   // Consume FIFO messages one at a time outside the process lock. Stage nested
   // sends thread-locally; nullopt/handler exception clears queued work, records
   // stable failure text and discards that invocation's staged actions. Success
-  // accounts for the message before invoking staged actions outside the lock.
+  // dispatches staged actions outside the lock before completing the message.
   // Staged-action exceptions are uncaught here; handlers are not cancelled and
   // failure does not roll back other effects already performed by the handler.
   void run() {
@@ -152,27 +135,20 @@ class Process : public std::enable_shared_from_this<Process> {
           failed_ = true;
           error_ = "process handler failed";
           completed_ += 1 + messages_.size();
+          R25Quiescence::complete(1 + messages_.size());
           messages_.clear();
-        } else {
-          ++completed_;
         }
         idle_.notify_all();
       }
-      if (result.has_value())
+      if (result.has_value()) {
         for (auto& action : staged) action();
+        // Retire the parent only after all committed child admissions finish.
+        std::lock_guard lock(mutex_);
+        ++completed_;
+        R25Quiescence::complete();
+        idle_.notify_all();
+      }
     }
-  }
-
-  // Borrow the process-local weak registry; all access requires registry_mutex.
-  // Entries never keep the process or its worker alive.
-  static std::vector<std::weak_ptr<Process>>& registry() {
-    static std::vector<std::weak_ptr<Process>> processes;
-    return processes;
-  }
-  // Borrow the process-local mutex protecting weak registry mutation/traversal.
-  static std::mutex& registry_mutex() {
-    static std::mutex mutex;
-    return mutex;
   }
 
   Handler handler_;

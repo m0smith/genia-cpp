@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "r25_quiescence.hpp"
 #include "ref.hpp"
 
 namespace genia::value {
@@ -47,7 +48,7 @@ class Cell : public std::enable_shared_from_this<Cell> {
   using Update = std::function<std::optional<Value>(const Value&)>;
 
   // Allocate an initialized Ref and start a cell owning that shared state.
-  // Allocation/thread-start failures propagate; registration retains only a weak handle.
+  // Allocation/thread-start failures propagate; the caller owns the handle.
   static std::shared_ptr<Cell> create(Value initial) {
     return create_with_state(std::make_shared<Ref>(std::move(initial)));
   }
@@ -56,11 +57,6 @@ class Cell : public std::enable_shared_from_this<Cell> {
   // An unset Ref blocks state reads and the worker until set. Construction may throw.
   static std::shared_ptr<Cell> create_with_state(std::shared_ptr<Ref> state) {
     auto cell = std::shared_ptr<Cell>(new Cell(std::move(state)));
-    {
-      // Serialize weak registry mutation without extending cell lifetime.
-      std::lock_guard lock(registry_mutex());
-      registry().push_back(cell);
-    }
     return cell;
   }
 
@@ -75,6 +71,7 @@ class Cell : public std::enable_shared_from_this<Cell> {
     }
     condition_.notify_all();
     if (worker_.joinable()) worker_.join();
+    R25Quiescence::complete(queue_.size());
   }
 
   // Enqueue one update in admission order, returning false if stopped or failed.
@@ -86,6 +83,7 @@ class Cell : public std::enable_shared_from_this<Cell> {
     if (status_ != Status::Ready) return false;
     queue_.push_back(Work{generation_, std::move(update)});
     ++accepted_;
+    R25Quiescence::accept();
     condition_.notify_all();
     return true;
   }
@@ -134,52 +132,28 @@ class Cell : public std::enable_shared_from_this<Cell> {
     std::lock_guard lock(mutex_);
     ++generation_;
     completed_ += queue_.size();
+    R25Quiescence::complete(queue_.size());
     queue_.clear();
     state_->set(std::move(new_state));
     status_ = Status::Ready;
     error_.reset();
+    idle_.notify_all();
     condition_.notify_all();
     return shared_from_this();
   }
 
   // Wait without timeout for accepted work to be accounted for as completed or
-  // discarded. An in-flight callback can block forever; staged actions execute
-  // after counter completion, so this alone is not a nested-send commit barrier.
+  // discarded, including committed staged dispatch. Callbacks/actions may block
+  // forever. Target work itself is joined by the shared causal evidence barrier.
   void await_idle() const {
     // Release the cell mutex while waiting; recheck counters on every wake.
     std::unique_lock lock(mutex_);
     idle_.wait(lock, [this] { return accepted_ == completed_; });
   }
 
-  // Evidence helper: wait on weak-registry snapshots, pruning expired entries
-  // and repeating when snapshot counters changed. Concurrent new registration
-  // or staged actions can race the final check; no global quiescence is promised.
-  static void await_all_idle() {
-    for (;;) {
-      std::vector<std::shared_ptr<Cell>> snapshot;
-      {
-        // Protect registry pruning and snapshot ownership acquisition.
-        std::lock_guard lock(registry_mutex());
-        auto& entries = registry();
-        for (auto it = entries.begin(); it != entries.end();) {
-          if (auto cell = it->lock()) {
-            snapshot.push_back(std::move(cell));
-            ++it;
-          } else {
-            it = entries.erase(it);
-          }
-        }
-      }
-      for (const auto& cell : snapshot) cell->await_idle();
-      bool settled = true;
-      for (const auto& cell : snapshot) {
-        // Read each cell counter pair consistently for this snapshot check.
-        std::lock_guard lock(cell->mutex_);
-        settled = settled && cell->accepted_ == cell->completed_;
-      }
-      if (settled) return;
-    }
-  }
+  // Private evidence barrier shared with Process: includes all causal targets,
+  // including entities created by callbacks. No unrelated future producer join.
+  static void await_all_idle() { R25Quiescence::await_idle(); }
 
  private:
   friend struct CellQuiescenceProbe;
@@ -190,14 +164,14 @@ class Cell : public std::enable_shared_from_this<Cell> {
   };
 
   // Own the non-null backing Ref and start the worker; use create_with_state
-  // so shared_from_this and weak registration are established for later restart.
+  // so shared_from_this is established for later restart.
   explicit Cell(std::shared_ptr<Ref> state)
       : state_(std::move(state)), worker_([this] { run(); }) {}
 
   // Consume FIFO work outside the cell lock, staging nested sends thread-locally.
   // Nullopt or callback exception fails only current-generation work, clears its
   // queue and preserves state; stale results are discarded even on failure.
-  // Commit state/counters under lock, then invoke staged actions outside it.
+  // Commit state under lock, dispatch outside it, then complete the accepted item.
   // Staged-action exceptions are not caught here and callbacks are not cancelled.
   void run() {
     for (;;) {
@@ -225,33 +199,28 @@ class Cell : public std::enable_shared_from_this<Cell> {
         std::lock_guard lock(mutex_);
         if (work.generation != generation_) {
           ++completed_;
+          R25Quiescence::complete();
         } else if (!replacement.has_value()) {
           status_ = Status::Failed;
           error_ = "cell update failed";
           completed_ += 1 + queue_.size();
+          R25Quiescence::complete(1 + queue_.size());
           queue_.clear();
         } else {
           state_->set(std::move(*replacement));
-          ++completed_;
           commit_staged = true;
         }
         idle_.notify_all();
       }
-      if (commit_staged)
+      if (commit_staged) {
         for (auto& action : staged) action();
+        // Retire the parent only after all committed child admissions finish.
+        std::lock_guard lock(mutex_);
+        ++completed_;
+        R25Quiescence::complete();
+        idle_.notify_all();
+      }
     }
-  }
-
-  // Borrow the process-local weak registry; callers must hold registry_mutex.
-  // Weak entries do not keep cells or workers alive.
-  static std::vector<std::weak_ptr<Cell>>& registry() {
-    static std::vector<std::weak_ptr<Cell>> cells;
-    return cells;
-  }
-  // Borrow the process-local mutex guarding weak registry traversal and mutation.
-  static std::mutex& registry_mutex() {
-    static std::mutex mutex;
-    return mutex;
   }
 
   std::shared_ptr<Ref> state_;
