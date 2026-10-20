@@ -16,6 +16,7 @@ class R25Quiescence {
  public:
   // Record admission while holding the entity lock, before worker visibility.
   static void accept() {
+    // Serialize the shared pending count without calling back into an entity.
     std::lock_guard lock(mutex_);
     ++pending_;
   }
@@ -23,6 +24,7 @@ class R25Quiescence {
   // Retire exactly count previously accepted items after dispatch or discard.
   // Never hold this lock while acquiring an entity lock or invoking user code.
   static void complete(std::size_t count = 1) {
+    // Serialize the shared pending count without calling back into an entity.
     std::lock_guard lock(mutex_);
     pending_ -= count;
     if (pending_ == 0) idle_.notify_all();
@@ -31,6 +33,7 @@ class R25Quiescence {
   // Private evidence barrier; wait without polling until causal work settles.
   // Unfinished callbacks may block forever. No worker is stopped or retained.
   static void await_idle() {
+    // Release the accounting mutex during the condition wait.
     std::unique_lock lock(mutex_);
     idle_.wait(lock, [] { return pending_ == 0; });
   }
