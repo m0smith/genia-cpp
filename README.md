@@ -90,6 +90,15 @@ before implementing:
   evidence credit for `partial`, which would have made the two pinned
   `open_functions_r20` cases permanently un-runnable.
 
+## R25 quiescence correction
+
+The private concurrency fixture includes committed staged-send dispatch in
+completion accounting across Cell and Process. See [host accounting and lifetime
+boundaries](docs/r25-quiescence.md) and the issue #51 implementation evidence under
+`.genia/process/`. This changes no public wait API, Cell transaction semantics,
+capability claim or semantic contract pin. Independent Claude review is required
+before merge; a successful intermittent run of an older binary is not repair evidence.
+
 ## Pinned contract
 
 | | |
