@@ -1298,15 +1298,16 @@ TEST_CASE("unit: R26-2 json_strict encode escapes control characters but not '/'
   CHECK(encoded.value->text == "\"a\\tb\\nc\\u0001d/e\"");
 }
 
-TEST_CASE("host repair #53: ordinary grouped bodies bind header before arm locals", "[host-repair]") {
-  for (const auto& source : {"f(x) = (0) -> x | (n) -> n + x\n[f(0), f(5)]",
-                             "f(a) = (n) -> n + a\nf(3)",
-                             "f(a) = ([n]) -> n + nth(0, a)\nf([3])"}) {
+TEST_CASE("host repair #53: ordinary grouped bodies bind header before arm locals",
+          "[host-repair]") {
+  for (const auto& source :
+       {"f(x) = (0) -> x | (n) -> n + x\n[f(0), f(5)]", "f(a) = (n) -> n + a\nf(3)",
+        "f(a) = ([n]) -> n + nth(0, a)\nf([3])"}) {
     auto result = try_run(source);
     REQUIRE(result.has_value());
     CHECK(result->stderr_text.empty());
-    CHECK(result->stdout_text == (std::string(source).find("[f(") != std::string::npos
-                                     ? "[0, 10]\n" : "6\n"));
+    CHECK(result->stdout_text ==
+          (std::string(source).find("[f(") != std::string::npos ? "[0, 10]\n" : "6\n"));
   }
   CHECK_FALSE(try_parse("open f(x) = (n) -> n + x\nf(3)").has_value());
   CHECK_FALSE(try_parse("f(x) = (n) ? n > 0 -> n + x").has_value());
@@ -1317,23 +1318,25 @@ TEST_CASE("host repair #54: explicit open alias cannot be replaced", "[host-repa
   REQUIRE(result.has_value());
   CHECK(result->stdout_text.empty());
   CHECK(result->exit_code == 1);
-  CHECK(result->stderr_text == "Error: Cannot define function a/2: name is bound to an open "
-                               "function interface or linked view, which an ordinary definition "
-                               "cannot replace\n");
+  CHECK(result->stderr_text ==
+        "Error: Cannot define function a/2: name is bound to an open "
+        "function interface or linked view, which an ordinary definition "
+        "cannot replace\n");
 }
 
 TEST_CASE("host repair #54: open duplicate keys normalize binders and retain clause lines",
           "[host-repair]") {
-  for (const auto& source : {"open f(x) = (0) -> 1 | (n) -> 2\nf(0) = 3\nf(0)",
-                             "open f(x) = 1\nf(y) = 2\nf(3)",
-                             "open f([x, x]) = 1\nf([y, y]) = 2\nf([3, 3])"}) {
+  for (const auto& source :
+       {"open f(x) = (0) -> 1 | (n) -> 2\nf(0) = 3\nf(0)", "open f(x) = 1\nf(y) = 2\nf(3)",
+        "open f([x, x]) = 1\nf([y, y]) = 2\nf([3, 3])"}) {
     auto result = try_run(source);
     REQUIRE(result.has_value());
     CHECK(result->stdout_text.empty());
     CHECK(result->exit_code == 1);
-    CHECK(result->stderr_text == "Error: open-function-duplicate-clause: f in unit 'base' has "
-                                 "two clauses with an identical dispatch key shape=('fixed', 1) "
-                                 "(first at <command>:1, duplicate at <command>:2)\n");
+    CHECK(result->stderr_text ==
+          "Error: open-function-duplicate-clause: f in unit 'base' has "
+          "two clauses with an identical dispatch key shape=('fixed', 1) "
+          "(first at <command>:1, duplicate at <command>:2)\n");
   }
   auto distinct = try_run("open f([x, x]) = 1\nf([x, y]) = 2\nf([3, 4])");
   REQUIRE(distinct.has_value());
@@ -1343,8 +1346,7 @@ TEST_CASE("host repair #54: open duplicate keys normalize binders and retain cla
 
 TEST_CASE("host repair #55: inline docs are metadata and string-only bodies stay bodies",
           "[host-repair]") {
-  for (const auto& source : {"f(x) = \"d\" x + 1\nf(1)",
-                             "f(x) = \"d\" { x + 1 }\nf(1)",
+  for (const auto& source : {"f(x) = \"d\" x + 1\nf(1)", "f(x) = \"d\" { x + 1 }\nf(1)",
                              "f(x) = \"d\" (0) -> x + 2 | (n) -> n + x\nf(1)",
                              "f(x) = \"d\" x + 1\nf(x, y) = \"d\" x + y\nf(1)"}) {
     auto result = try_run(source);
@@ -1372,9 +1374,9 @@ TEST_CASE("host repair #55: conflicting docstrings reject before installation", 
         "Error: Conflicting docstrings for function f: got 'd2', expected 'd1'\n");
 }
 
-TEST_CASE("host repair #56: ordinary duplicates reject before subsequent effects", "[host-repair]") {
-  for (const auto& source : {"f(x) = 1\nf(x) = 2\nprint(99)",
-                             "f(x) = 1\nf(y) = 2\nprint(99)",
+TEST_CASE("host repair #56: ordinary duplicates reject before subsequent effects",
+          "[host-repair]") {
+  for (const auto& source : {"f(x) = 1\nf(x) = 2\nprint(99)", "f(x) = 1\nf(y) = 2\nprint(99)",
                              "f(x) = (0) -> 1 | (n) -> 2\nf(y) = 3\nprint(99)"}) {
     auto result = try_run(source);
     REQUIRE(result.has_value());
@@ -1407,4 +1409,18 @@ TEST_CASE("host repair #57: complete semicolon submissions run, incomplete input
   auto quoted = genia::engine::try_repl("\"a;b\"; \"c;d\"\n");
   REQUIRE(quoted.has_value());
   CHECK(quoted->stdout_text == "\"c;d\"\n");
+}
+
+TEST_CASE("host repair #57: REPL parses named block body without implicit main dispatch",
+          "[host-repair]") {
+  auto result = genia::engine::try_repl("main() = { print(\"ran\"); 1 }; 0\n42\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "0\n42\n");
+  CHECK(result->stderr_text.empty());
+}
+
+TEST_CASE("host repair #55: string expressions remain ordinary bodies", "[host-repair]") {
+  auto result = try_run("f(x) = \"hello \" + x\nf(\"world\")");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "\"hello world\"\n");
 }
