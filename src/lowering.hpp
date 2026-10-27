@@ -46,6 +46,8 @@ inline std::optional<std::pair<ast::Node, std::vector<ast::Node>>> flatten_pipel
   return std::make_pair(node, std::vector<ast::Node>{});
 }
 
+// Lowers one supported AST recursively, retaining inert docstrings and clause
+// provenance. Returns nullopt for an unsupported shape; performs no evaluation.
 inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
   switch (node.kind) {
     case ast::Kind::Literal:
@@ -179,15 +181,19 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
           }
           results.push_back(std::move(*lowered_result));
         }
-        return core_ir::Node::func_def_case(node.name, node.header_param_names, node.case_patterns,
-                                            std::move(results));
+        auto lowered = core_ir::Node::func_def_case(node.name, node.header_param_names,
+                                                    node.case_patterns, std::move(results));
+        lowered.docstring = node.docstring;
+        return lowered;
       }
       auto body = lower_node(*node.left);
       if (!body.has_value()) {
         return std::nullopt;
       }
-      return core_ir::Node::func_def(node.name, node.header_param_names, node.params,
-                                     std::move(*body));
+      auto lowered = core_ir::Node::func_def(node.name, node.header_param_names, node.params,
+                                             std::move(*body));
+      lowered.docstring = node.docstring;
+      return lowered;
     }
     case ast::Kind::OpenFuncDef: {
       std::vector<core_ir::Node> results;

@@ -32,6 +32,8 @@ enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple, Literal
 
 struct PatternMapEntry;
 
+// Recursive pattern value shared by AST/IR in this bounded host. Children
+// are owned by value; source_line is diagnostic metadata, excluded from keys.
 struct Pattern {
   Pattern();
   ~Pattern();
@@ -41,6 +43,9 @@ struct Pattern {
   Pattern& operator=(Pattern&&) noexcept;
 
   Kind kind = Kind::Wildcard;
+  // Original clause header line for local R20 diagnostics, excluded from keys
+  // and portable pattern projection. Zero for synthetic/runtime patterns.
+  int source_line = 0;
 
   // Bind, Rest: the name to bind (Rest's name may be empty, meaning the
   // spread remainder is discarded rather than bound). Literal: the

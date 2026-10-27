@@ -114,7 +114,9 @@ inline std::optional<std::string> read_file_contents(const std::string& path) {
 // implemented: `-p <expr>` pipe mode (R27 E27-2), `-c <source>` command mode, and bare
 // `<file>` file mode (matching tools/spec_runner/host_executor.py's
 // `_cli_argv`: file mode sends exactly `[file, *trailing_args]`, no
-// flag). Pipe/test modes are out of R24's floor entirely.
+// flag). Source evaluation is followed by ordinary main/1 then main/0 selection;
+// REPL and pipe mode bypass that convention. File trailing arguments and test
+// mode remain outside the implemented boundary.
 inline std::optional<json> handle_cli(const std::string& case_id, const json& input) {
   if (!input.contains("argv") || !input["argv"].is_array()) {
     return std::nullopt;
@@ -156,7 +158,11 @@ inline std::optional<json> handle_cli(const std::string& case_id, const json& in
   if (!source.has_value()) {
     return std::nullopt;
   }
-  auto result = engine::try_run(*source);
+  const bool command_mode = argv[0] == "-c";
+  std::vector<std::string> program_args;
+  if (command_mode) program_args.assign(argv.begin() + 2, argv.end());
+  auto result = engine::try_run(*source, false, std::nullopt, command_mode ? "<command>" : argv[0],
+                                nullptr, std::move(program_args), true);
   if (!result.has_value()) {
     return std::nullopt;
   }

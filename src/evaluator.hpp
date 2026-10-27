@@ -35,6 +35,7 @@
 #include "arithmetic.hpp"
 #include "bignum.hpp"
 #include "core_ir.hpp"
+#include "dispatch_key.hpp"
 #include "environment.hpp"
 #include "equality.hpp"
 #include "flow.hpp"
@@ -90,7 +91,14 @@ struct CallDepthGuard {
   CallDepthGuard& operator=(CallDepthGuard&&) = delete;
 };
 
+// Evaluates supported IR in env, mutating bindings and capturing explicit IO.
+// Named declarations validate before installation; normalized runtime errors
+// throw to the engine, while unsupported operations return nullopt.
 inline std::optional<value::Value> eval_node(const core_ir::Node& node, const EnvPtr& env);
+// Invokes a closure in a fresh child of its captured environment. Ordinary
+// groups select fixed arity and bind headers before arm locals; explicit-open
+// groups bind only arm patterns. Arity/pattern misses return nullopt, runtime
+// failures propagate; the call-depth guard prevents unbounded native recursion.
 inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
                                                   const std::vector<value::Value>& args);
 inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stage,
@@ -232,6 +240,9 @@ inline const char* arithmetic_symbol(core_ir::Op op) {
   }
 }
 
+// Evaluates one supported node in env. Declaration validation precedes mutation;
+// errors propagate to the engine and unsupported evaluation returns nullopt.
+// The declaration above documents the IO and environment ownership contract.
 inline std::optional<value::Value> eval_node(const core_ir::Node& node, const EnvPtr& env) {
   switch (node.kind) {
     case core_ir::Kind::Literal:
@@ -478,18 +489,18 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       closure->captured_env = env;
       return value::Value::make_closure(closure);
     }
-    // E24-6: a local open function's runtime representation is
-    // identical to a case-body FuncDef's -- dispatching against only
-    // its own clauses IS the whole contract §5 algorithm when exactly
-    // one unit participates (docs/design/r20-open-functions-syntax-ir-
-    // design.md section 5's `GeniaOpenFunction`, "dispatches using only
-    // its own clauses as the single participating unit"). No new
-    // dispatch code, so both Kinds share this block.
+    // Named ordinary groups retain header bindings and fixed-arity overloads.
+    // Local explicit-open groups instead flatten arms and validate R20 keys.
+    // Both retain captured environments; validation precedes group mutation.
     case core_ir::Kind::OpenFuncDef:
     case core_ir::Kind::FuncDef: {
       auto closure = std::make_shared<value::Closure>();
       closure->name = node.name;
       closure->captured_env = env;
+      closure->is_named_definition = true;
+      closure->is_open = node.kind == core_ir::Kind::OpenFuncDef;
+      closure->header_names = node.header_param_names;
+      closure->docstring = node.docstring;
       if (node.is_case_body) {
         closure->case_clauses.reserve(node.case_patterns.size());
         for (size_t i = 0; i < node.case_patterns.size(); ++i) {
@@ -501,6 +512,71 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       } else {
         closure->params = node.params;
         closure->body = node.left;
+      }
+      // Validate before installing or extending a callable. Ordinary function
+      // groups keep one shared identity so existing aliases observe new arities.
+      auto existing = env->lookup(node.name);
+      if (existing.has_value() && existing->kind == value::Kind::Closure &&
+          existing->closure->is_open && !closure->is_open) {
+        throw StatefulRuntimeError{
+            "Cannot define function " + node.name + "/" +
+            std::to_string(node.header_param_names.size()) +
+            ": name is bound to an open function interface or linked view, which an ordinary "
+            "definition cannot replace"};
+      }
+      if (closure->is_open) {
+        std::vector<value::CaseClause> candidates;
+        if (existing.has_value() && existing->kind == value::Kind::Closure &&
+            existing->closure->is_open && existing->closure->name == node.name) {
+          candidates = existing->closure->case_clauses;
+        }
+        for (const auto& clause : closure->case_clauses) {
+          const auto key = dispatch_key::clause_key(clause.pattern);
+          for (const auto& previous : candidates) {
+            if (dispatch_key::clause_key(previous.pattern) == key) {
+              const size_t arity =
+                  clause.pattern.kind == pattern::Kind::Tuple ? clause.pattern.items.size() : 1;
+              // The direct engine API may have no diagnostic filename. Do
+              // not invent provenance there; adapter eval/CLI always supply it.
+              if (runtime_io::g_source_name.empty()) throw value::UnsupportedError{};
+              const std::string& source = runtime_io::g_source_name;
+              throw StatefulRuntimeError{"open-function-duplicate-clause: " + node.name +
+                                         " in unit 'base' has two clauses with an identical "
+                                         "dispatch key shape=('fixed', " +
+                                         std::to_string(arity) + ") (first at " + source + ":" +
+                                         std::to_string(previous.pattern.source_line) +
+                                         ", duplicate at " + source + ":" +
+                                         std::to_string(clause.pattern.source_line) + ")"};
+            }
+          }
+          candidates.push_back(clause);
+        }
+        if (existing.has_value() && existing->kind == value::Kind::Closure &&
+            existing->closure->is_open && existing->closure->name == node.name) {
+          existing->closure->case_clauses = std::move(candidates);
+          return existing;
+        }
+      } else if (existing.has_value() && existing->kind == value::Kind::Closure &&
+                 existing->closure->is_named_definition && existing->closure->name == node.name) {
+        auto& group = *existing->closure;
+        if (group.docstring.has_value() && node.docstring.has_value() &&
+            *group.docstring != *node.docstring) {
+          throw StatefulRuntimeError{"Conflicting docstrings for function " + node.name +
+                                     ": got '" + *node.docstring + "', expected '" +
+                                     *group.docstring + "'"};
+        }
+        const size_t arity = node.header_param_names.size();
+        bool duplicate = group.header_names.size() == arity;
+        for (const auto& overload : group.overloads) {
+          duplicate = duplicate || overload->header_names.size() == arity;
+        }
+        if (duplicate) {
+          throw StatefulRuntimeError{"Duplicate function definition: " + node.name + "/" +
+                                     std::to_string(arity)};
+        }
+        group.overloads.push_back(closure);
+        if (node.docstring.has_value()) group.docstring = node.docstring;
+        return existing;
       }
       auto closure_value = value::Value::make_closure(closure);
       // Bind before returning (not after): a recursive body looks up
@@ -746,6 +822,13 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
   if (!closure.native_name.empty()) {
     return call_native_reference(closure.native_name, args);
   }
+  if (closure.is_named_definition && !closure.is_open &&
+      closure.header_names.size() != args.size()) {
+    for (const auto& overload : closure.overloads) {
+      if (overload->header_names.size() == args.size()) return invoke_closure(*overload, args);
+    }
+    return std::nullopt;
+  }
   if (!closure.case_clauses.empty()) {
     for (const auto& clause : closure.case_clauses) {
       auto bindings = pattern_match::match(clause.pattern, args);
@@ -753,6 +836,13 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
         continue;
       }
       auto child = std::make_shared<Environment>(closure.captured_env);
+      // Ordinary grouped bodies first bind their identifier header positionally.
+      // Arm bindings then shadow those names. Explicit-open headers bind nothing.
+      if (!closure.is_open) {
+        for (size_t i = 0; i < closure.header_names.size(); ++i) {
+          child->define(closure.header_names[i], args[i]);
+        }
+      }
       for (auto& binding : *bindings) {
         child->define(binding.first, binding.second);
       }

@@ -26,6 +26,8 @@ namespace genia::ir_projection {
 
 using json = nlohmann::json;
 
+// Projects supported IR into the portable JSON shape, including present
+// docstrings but excluding host-local spans. Unsupported shapes return nullopt.
 inline std::optional<json> project(const core_ir::Node& node);
 
 // Mirrors src/genia/lowering.py's `_lambda_pattern_is_simple_parameter_shape`:
@@ -137,6 +139,8 @@ inline std::optional<json> project_case_clause(const pattern::Pattern& pattern,
       {"node", "IrCaseClause"}, {"pattern", *projected_pattern}, {"result", *projected_result}};
 }
 
+// Recursively emits the portable node projection, retaining present metadata
+// and omitting host-local spans; an unsupported child fails the whole result.
 inline std::optional<json> project(const core_ir::Node& node) {
   switch (node.kind) {
     case core_ir::Kind::Literal:
@@ -311,10 +315,12 @@ inline std::optional<json> project(const core_ir::Node& node) {
         }
         body = *projected_body;
       }
-      return json{{"node", "IrFuncDef"},
+      json result{{"node", "IrFuncDef"},
                   {"name", node.name},
                   {"params", node.header_param_names},
                   {"body", body}};
+      if (node.docstring.has_value()) result["docstring"] = *node.docstring;
+      return result;
     }
     case core_ir::Kind::OpenFuncDef: {
       // hosts/python/ir_normalize.py's real IrOpenFuncDef handler:

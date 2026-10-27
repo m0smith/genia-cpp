@@ -67,3 +67,9 @@ add_test(NAME genia-header-capture-check COMMAND genia-header-capture-check)
 add_executable(genia-quiescence-check tests/check_quiescence.cpp)
 add_test(NAME genia-quiescence-check COMMAND genia-quiescence-check)
 set_tests_properties(genia-quiescence-check PROPERTIES TIMEOUT 120)
+
+# Native portability regressions use plain C++, like the header-capture check,
+# so the canonical maintained-code documentation checker can inspect them.
+add_executable(genia-host-repairs-check tests/check_host_repairs.cpp)
+target_include_directories(genia-host-repairs-check PRIVATE third_party/nlohmann_json)
+add_test(NAME genia-host-repairs-check COMMAND genia-host-repairs-check)
