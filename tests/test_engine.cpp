@@ -1297,3 +1297,114 @@ TEST_CASE("unit: R26-2 json_strict encode escapes control characters but not '/'
   REQUIRE(encoded.value.has_value());
   CHECK(encoded.value->text == "\"a\\tb\\nc\\u0001d/e\"");
 }
+
+TEST_CASE("host repair #53: ordinary grouped bodies bind header before arm locals", "[host-repair]") {
+  for (const auto& source : {"f(x) = (0) -> x | (n) -> n + x\n[f(0), f(5)]",
+                             "f(a) = (n) -> n + a\nf(3)",
+                             "f(a) = ([n]) -> n + nth(0, a)\nf([3])"}) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->stderr_text.empty());
+    CHECK(result->stdout_text == (std::string(source).find("[f(") != std::string::npos
+                                     ? "[0, 10]\n" : "6\n"));
+  }
+  CHECK_FALSE(try_parse("open f(x) = (n) -> n + x\nf(3)").has_value());
+  CHECK_FALSE(try_parse("f(x) = (n) ? n > 0 -> n + x").has_value());
+}
+
+TEST_CASE("host repair #54: explicit open alias cannot be replaced", "[host-repair]") {
+  auto result = try_run("open f(x) = x\na = f\na(x, y) = x + y\na(1, 2)");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text.empty());
+  CHECK(result->exit_code == 1);
+  CHECK(result->stderr_text == "Error: Cannot define function a/2: name is bound to an open "
+                               "function interface or linked view, which an ordinary definition "
+                               "cannot replace\n");
+}
+
+TEST_CASE("host repair #54: open duplicate keys normalize binders and retain clause lines",
+          "[host-repair]") {
+  for (const auto& source : {"open f(x) = (0) -> 1 | (n) -> 2\nf(0) = 3\nf(0)",
+                             "open f(x) = 1\nf(y) = 2\nf(3)",
+                             "open f([x, x]) = 1\nf([y, y]) = 2\nf([3, 3])"}) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->stdout_text.empty());
+    CHECK(result->exit_code == 1);
+    CHECK(result->stderr_text == "Error: open-function-duplicate-clause: f in unit 'base' has "
+                                 "two clauses with an identical dispatch key shape=('fixed', 1) "
+                                 "(first at <command>:1, duplicate at <command>:2)\n");
+  }
+  auto distinct = try_run("open f([x, x]) = 1\nf([x, y]) = 2\nf([3, 4])");
+  REQUIRE(distinct.has_value());
+  CHECK(distinct->stdout_text == "2\n");
+  CHECK_FALSE(try_parse("open f(x) ? x > 0 = 1\nf(y) ? y < 0 = 2").has_value());
+}
+
+TEST_CASE("host repair #55: inline docs are metadata and string-only bodies stay bodies",
+          "[host-repair]") {
+  for (const auto& source : {"f(x) = \"d\" x + 1\nf(1)",
+                             "f(x) = \"d\" { x + 1 }\nf(1)",
+                             "f(x) = \"d\" (0) -> x + 2 | (n) -> n + x\nf(1)",
+                             "f(x) = \"d\" x + 1\nf(x, y) = \"d\" x + y\nf(1)"}) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->stdout_text == "2\n");
+    CHECK(result->stderr_text.empty());
+  }
+  auto string_body = try_run("f(x) = \"body\"\nf(1)");
+  REQUIRE(string_body.has_value());
+  CHECK(string_body->stdout_text == "\"body\"\n");
+  auto parsed = genia::parser::parse_program("f(x) = \"d\" x + 1");
+  REQUIRE(parsed.has_value());
+  CHECK(parsed->size() == 1);
+  auto lowered = try_lower("f(x) = \"d\" x + 1");
+  REQUIRE(lowered.has_value());
+  CHECK((*lowered)[0]["docstring"] == "d");
+}
+
+TEST_CASE("host repair #55: conflicting docstrings reject before installation", "[host-repair]") {
+  auto result = try_run("f(x) = \"d1\" x\nf(x, y) = \"d2\" x + y\nprint(99)");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text.empty());
+  CHECK(result->exit_code == 1);
+  CHECK(result->stderr_text ==
+        "Error: Conflicting docstrings for function f: got 'd2', expected 'd1'\n");
+}
+
+TEST_CASE("host repair #56: ordinary duplicates reject before subsequent effects", "[host-repair]") {
+  for (const auto& source : {"f(x) = 1\nf(x) = 2\nprint(99)",
+                             "f(x) = 1\nf(y) = 2\nprint(99)",
+                             "f(x) = (0) -> 1 | (n) -> 2\nf(y) = 3\nprint(99)"}) {
+    auto result = try_run(source);
+    REQUIRE(result.has_value());
+    CHECK(result->stdout_text.empty());
+    CHECK(result->exit_code == 1);
+    CHECK(result->stderr_text == "Error: Duplicate function definition: f/1\n");
+  }
+}
+
+TEST_CASE("host repair #56 #57: ordinary arities accumulate and aliases see later arities",
+          "[host-repair]") {
+  auto result = try_run("f(x) = x\na = f\nf(x, y) = x + y\n[f(4), a(1, 2)]");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "[4, 3]\n");
+  auto repl = genia::engine::try_repl("f(x) = x; 0\na = f; 0\nf(x, y) = x + y; 0\na(1, 2)\nf(4)\n");
+  REQUIRE(repl.has_value());
+  CHECK(repl->stdout_text == "0\n0\n0\n3\n4\n");
+}
+
+TEST_CASE("host repair #57: complete semicolon submissions run, incomplete input stays inert",
+          "[host-repair]") {
+  auto result = genia::engine::try_repl("1; 2\nx = 1; 0\nx\nmissing; 8\nx\n");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "2\n0\n1\n1\n");
+  CHECK(result->stderr_text == "Error: Undefined name: missing\n");
+  auto incomplete = genia::engine::try_repl("x = (\n");
+  REQUIRE(incomplete.has_value());
+  CHECK(incomplete->stdout_text.empty());
+  CHECK(incomplete->stderr_text.empty());
+  auto quoted = genia::engine::try_repl("\"a;b\"; \"c;d\"\n");
+  REQUIRE(quoted.has_value());
+  CHECK(quoted->stdout_text == "\"c;d\"\n");
+}
