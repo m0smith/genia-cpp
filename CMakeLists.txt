@@ -80,3 +80,9 @@ add_executable(genia-parser-depth-check tests/check_parser_depth.cpp)
 target_include_directories(genia-parser-depth-check PRIVATE third_party/nlohmann_json)
 add_test(NAME genia-parser-depth-check COMMAND genia-parser-depth-check)
 set_tests_properties(genia-parser-depth-check PROPERTIES TIMEOUT 120)
+
+# Documented shared fixtures use line comments while retaining the bounded
+# host's existing CLI and diagnostic behavior; annotations stay unsupported.
+add_executable(genia-source-comments-check tests/check_source_comments.cpp)
+target_include_directories(genia-source-comments-check PRIVATE third_party/nlohmann_json)
+add_test(NAME genia-source-comments-check COMMAND genia-source-comments-check)
