@@ -52,6 +52,7 @@
 
 namespace genia::parser {
 
+// Lexical categories; semicolons delimit statements without being expressions.
 enum class TokenKind : std::uint8_t {
   Integer,
   Decimal,
@@ -81,6 +82,7 @@ enum class TokenKind : std::uint8_t {
   PipeFwd,
   Pipe,
   DotDot,
+  Semicolon,
   End,
 };
 
@@ -116,6 +118,11 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
     for (; stamped < tokens.size(); ++stamped) tokens[stamped].line = iteration_line;
     iteration_line = line_at(i);
     const unsigned char c = static_cast<unsigned char>(source[i]);
+    if (c == ';') {
+      tokens.push_back({TokenKind::Semicolon, ";"});
+      ++i;
+      continue;
+    }
     if (std::isspace(c)) {
       ++i;
       continue;
@@ -564,9 +571,16 @@ class Parser {
  public:
   explicit Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)) {}
 
+  // Parses statements in lexical order, consuming semicolon separators and
+  // merging contiguous open clauses without losing original clause lines.
+  // Returns nullopt for unsupported or incomplete input; never evaluates it.
   std::optional<ast::Program> parse_program() {
     ast::Program program;
     while (peek().kind != TokenKind::End) {
+      if (peek().kind == TokenKind::Semicolon) {
+        advance();
+        continue;
+      }
       auto stmt = parse_statement();
       if (!stmt.has_value()) {
         return std::nullopt;
@@ -649,6 +663,9 @@ class Parser {
 
   // ---- Statements --------------------------------------------------
 
+  // Parses one statement, backtracking only before a declaration header is
+  // committed. A failed declaration body must not drop its prefix and accept
+  // a later expression as the whole program. Unsupported forms return nullopt.
   std::optional<ast::Node> parse_statement() {
     // A top-level statement starting with the literal identifier
     // "pattern" is always genia-2026's NamedPatternDef production
@@ -680,14 +697,17 @@ class Parser {
     if (peek().kind == TokenKind::Ident && (peek().text == "extend" || peek().text == "use")) {
       return std::nullopt;
     }
+    const size_t declaration_start = pos_;
     auto open_related = try_parse_open_related_toplevel();
     if (open_related.has_value()) {
       return open_related;
     }
+    if (pos_ != declaration_start) return std::nullopt;
     auto func_def = try_parse_func_def();
     if (func_def.has_value()) {
       return func_def;
     }
+    if (pos_ != declaration_start) return std::nullopt;
     if (peek().kind == TokenKind::Ident && peek_at(1).kind == TokenKind::Eq) {
       const std::string name = advance().text;
       advance();  // '='
@@ -756,6 +776,19 @@ class Parser {
     }
     advance();  // '='
 
+    // A leading string is metadata only when another body follows on the
+    // same line. A string-only function retains its ordinary string body.
+    std::optional<std::string> docstring;
+    const auto next = peek_at(1).kind;
+    const bool body_follows_string = next == TokenKind::Ident || next == TokenKind::Integer ||
+                                     next == TokenKind::Decimal || next == TokenKind::String ||
+                                     next == TokenKind::LParen || next == TokenKind::LBracket ||
+                                     next == TokenKind::LBrace;
+    if (peek().kind == TokenKind::String && peek_at(1).line == peek().line && body_follows_string &&
+        !looks_like_case_clause_start()) {
+      docstring = advance().text;
+    }
+
     if (looks_like_case_clause_start()) {
       auto clauses = parse_case_clauses();
       if (!clauses.has_value()) {
@@ -769,11 +802,16 @@ class Parser {
         patterns.push_back(std::move(clause.first));
         results.push_back(std::move(clause.second));
       }
-      return ast::Node::func_def_case(func_name, param_names, std::move(patterns),
-                                      std::move(results));
+      auto node =
+          ast::Node::func_def_case(func_name, param_names, std::move(patterns), std::move(results));
+      node.docstring = std::move(docstring);
+      return node;
     }
 
-    auto body = parse_pipeline_expr();
+    const bool block_body = peek().kind == TokenKind::LBrace &&
+                            peek_at(1).kind != TokenKind::RBrace &&
+                            peek_at(2).kind != TokenKind::Colon;
+    auto body = block_body ? parse_function_block() : parse_pipeline_expr();
     if (!body.has_value()) {
       return std::nullopt;
     }
@@ -782,7 +820,43 @@ class Parser {
     for (auto& name : param_names) {
       patterns.push_back(pattern::Pattern::bind(name));
     }
-    return ast::Node::func_def(func_name, param_names, std::move(patterns), std::move(*body));
+    auto node = ast::Node::func_def(func_name, param_names, std::move(patterns), std::move(*body));
+    node.docstring = std::move(docstring);
+    return node;
+  }
+
+  // Parses the existing named block-body form, with or without metadata. Statements
+  // evaluate in order; incomplete/unsupported bodies return nullopt.
+  std::optional<ast::Node> parse_function_block() {
+    // Block bodies can contain statements, and statement parsing speculatively
+    // recognizes declaration headers before rejecting nested declarations below.
+    // Count that descent in the same budget as expression/pattern nesting so a
+    // chain of nested declaration bodies cannot overflow the C++ stack before
+    // the outer block gets a chance to reject the nested FuncDef.
+    NestingGuard guard(nesting_depth_);
+    if (nesting_depth_ > kMaxNestingDepth) {
+      return std::nullopt;
+    }
+    advance();  // '{'
+    std::vector<ast::Node> expressions;
+    while (peek().kind != TokenKind::RBrace) {
+      if (peek().kind == TokenKind::End) return std::nullopt;
+      if (peek().kind == TokenKind::Semicolon) {
+        advance();
+        continue;
+      }
+      // Nested declarations are outside the bounded grammar, especially R20
+      // open interfaces, which must never acquire local-scope semantics.
+      if (peek().kind == TokenKind::Ident && peek().text == "open") return std::nullopt;
+      auto expression = parse_statement();
+      if (!expression.has_value() || expression->kind == ast::Kind::FuncDef ||
+          expression->kind == ast::Kind::OpenFuncDef)
+        return std::nullopt;
+      expressions.push_back(std::move(*expression));
+    }
+    advance();
+    if (expressions.empty()) return std::nullopt;
+    return ast::Node::block(std::move(expressions));
   }
 
   // ---- R20 open functions (local scope only) ------------------------
@@ -897,6 +971,7 @@ class Parser {
     if (peek().kind != TokenKind::LParen) {
       return std::nullopt;
     }
+    const int header_line = tokens_[pos_ - 1].line;
     advance();  // '('
     std::vector<pattern::Pattern> header_patterns;
     if (peek().kind != TokenKind::RParen) {
@@ -944,7 +1019,9 @@ class Parser {
       return std::nullopt;
     }
     std::vector<std::pair<pattern::Pattern, ast::Node>> clauses;
-    clauses.emplace_back(pattern::Pattern::tuple(std::move(header_patterns)), std::move(*body));
+    auto header = pattern::Pattern::tuple(std::move(header_patterns));
+    header.source_line = header_line;
+    clauses.emplace_back(std::move(header), std::move(*body));
     return clauses;
   }
 
@@ -1114,9 +1191,12 @@ class Parser {
     return matched;
   }
 
+  // Parses ordered pattern/result arms and records each pattern header line.
+  // Returns nullopt on incomplete or unsupported syntax, including guards.
   std::optional<std::vector<std::pair<pattern::Pattern, ast::Node>>> parse_case_clauses() {
     std::vector<std::pair<pattern::Pattern, ast::Node>> clauses;
     while (true) {
+      const int clause_line = peek().line;
       auto clause_pattern = parse_case_clause_pattern();
       if (!clause_pattern.has_value()) {
         return std::nullopt;
@@ -1129,6 +1209,7 @@ class Parser {
       if (!result.has_value()) {
         return std::nullopt;
       }
+      clause_pattern->source_line = clause_line;
       clauses.emplace_back(std::move(*clause_pattern), std::move(*result));
       if (peek().kind == TokenKind::Pipe) {
         advance();

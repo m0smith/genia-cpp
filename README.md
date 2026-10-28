@@ -90,6 +90,14 @@ before implementing:
   evidence credit for `partial`, which would have made the two pinned
   `open_functions_r20` cases permanently un-runnable.
 
+## Supported-behavior conformance repairs
+
+The repairs for #53–#57 preserve the existing capability floor while correcting
+ordinary grouped-header capture, explicit-open validation, inline docstrings,
+fixed-arity accumulation/duplicate rejection, and complete REPL submissions.
+See [implemented boundaries and evidence provenance](docs/host-conformance-repairs.md).
+Python Slice C's `default_open_functions` remains unsupported.
+
 ## R25 quiescence correction
 
 The private concurrency fixture uses shared causal accounting across Cell and

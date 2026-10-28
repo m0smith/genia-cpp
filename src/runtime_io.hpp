@@ -28,7 +28,8 @@ inline thread_local std::string g_stdout_text;
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline thread_local std::shared_ptr<StdinState> g_stdin;
 // Script arguments visible to `argv()`. Unset (std::nullopt) outside modes whose
-// argv shape is evidenced (pipe mode), where `argv()` stays unsupported.
+// argv shape is evidenced (pipe, command and argument-free file mode), where
+// `argv()` stays unsupported.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline thread_local std::optional<std::vector<std::string>> g_argv;
 // File name used in pipeline-stage error spans (`<command>` for command-source

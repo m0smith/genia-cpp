@@ -83,8 +83,10 @@ struct CaseClause {
 
 // A lambda or named-function value. Exactly one of `case_clauses` or
 // `params` is meaningful for a given closure (never both): a
-// case-bodied function (e.g. `map_acc`) carries `case_clauses` and
-// binds nothing positionally beforehand; an ordinary function/lambda
+// case-bodied function (e.g. `map_acc`) carries `case_clauses`; an ordinary
+// named grouped definition also binds `header_names` positionally before arm
+// bindings. Explicit-open definitions bind only their arm patterns.
+// An ordinary function/lambda
 // (e.g. `inc(x) = x + 1`, or `([a, b]) -> a + b`) carries one
 // positional pattern per parameter and a single `body` expression.
 struct Closure {
@@ -98,6 +100,14 @@ struct Closure {
   // `map(upper)` passing `upper` by name): invocation dispatches to the
   // native function of this name instead of evaluating `body`.
   std::string native_name;
+  // Named ordinary definitions retain a shared identity across arities.
+  // Each additional definition owns its body/environment; aliases share this
+  // closure and observe later arities. No self-pointer is stored here.
+  bool is_named_definition = false;
+  bool is_open = false;
+  std::vector<std::string> header_names;
+  std::vector<std::shared_ptr<Closure>> overloads;
+  std::optional<std::string> docstring;
 };
 
 struct Value {

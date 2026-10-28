@@ -69,11 +69,15 @@ inline std::optional<json> try_lower(const std::string& source) {
 // rewriting for that message is not implemented, so the run is unsupported.
 using ErrorMapper = std::function<std::optional<std::string>(const std::string&)>;
 
-inline std::optional<RunResult> try_run(
-    const std::string& source, bool enable_r25_fixture = false,
-    const std::optional<std::string>& stdin_text = std::nullopt,
-    const std::string& source_name = "", const ErrorMapper& map_error = nullptr,
-    std::optional<std::vector<std::string>> argv = std::nullopt) {
+// dispatch_main is enabled only by file/command CLI; argv carries their raw
+// arguments. source_name must be supplied for span-bearing R20 diagnostics;
+// without provenance those errors are unsupported rather than guessed.
+inline std::optional<RunResult> try_run(const std::string& source, bool enable_r25_fixture = false,
+                                        const std::optional<std::string>& stdin_text = std::nullopt,
+                                        const std::string& source_name = "",
+                                        const ErrorMapper& map_error = nullptr,
+                                        std::optional<std::vector<std::string>> argv = std::nullopt,
+                                        bool dispatch_main = false) {
   struct FixtureGuard {
     bool previous;
     explicit FixtureGuard(bool enabled) : previous(value::g_r25_fixture_enabled) {
@@ -117,7 +121,35 @@ inline std::optional<RunResult> try_run(
   };
   std::optional<value::Value> result;
   try {
-    result = evaluator::eval_program(*ir_program);
+    auto env = evaluator::new_session_environment();
+    result = evaluator::eval_in_environment(*ir_program, env);
+    // File/command CLI modes use the existing main/1-before-main/0 rule.
+    // Eval requests, pipe mode and REPL never perform implicit dispatch.
+    if (result.has_value() && dispatch_main) {
+      const auto main = env->lookup("main");
+      if (main.has_value() && main->kind == value::Kind::Closure &&
+          main->closure->is_named_definition && !main->closure->is_open) {
+        const auto& group = *main->closure;
+        bool has_one = group.header_names.size() == 1;
+        bool has_zero = group.header_names.empty();
+        for (const auto& overload : group.overloads) {
+          has_one = has_one || overload->header_names.size() == 1;
+          has_zero = has_zero || overload->header_names.empty();
+        }
+        if (has_one) {
+          std::vector<value::Value> arguments;
+          if (runtime_io::g_argv.has_value()) {
+            for (const auto& arg : *runtime_io::g_argv) {
+              arguments.push_back(value::Value::make_string(arg));
+            }
+          }
+          result =
+              evaluator::invoke_closure(group, {value::Value::make_list(std::move(arguments))});
+        } else if (has_zero) {
+          result = evaluator::invoke_closure(group, {});
+        }
+      }
+    }
   } catch (const evaluator::UndefinedNameError& error) {
     // E24-4's `deterministic_runtime_error_behavior` evidence
     // (error-undefined-name.yaml): genia-2026's real reference host

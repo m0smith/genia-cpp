@@ -108,6 +108,8 @@ inline const char* op_token_name(Op op) {
   return "";
 }
 
+// Portable-subset IR node with owned child nodes and inert optional metadata.
+// Source lines are host-local diagnostics only; projections omit them.
 struct Node {
   Node();
   ~Node();
@@ -167,6 +169,8 @@ struct Node {
   // `params`/`case_patterns` (genia-2026's real IrFuncDef.params wire
   // field always carries these, regardless of case-dispatch body).
   std::vector<std::string> header_param_names;
+  // Optional inline documentation; never an evaluated body expression.
+  std::optional<std::string> docstring;
 
   // Lambda/FuncDef: true when the body is a local case/pattern-dispatch
   // expression (E24-4's `pattern_case_dispatch` category) rather than a

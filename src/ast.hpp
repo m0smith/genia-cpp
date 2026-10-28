@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -71,6 +72,8 @@ enum class Kind : std::uint8_t {
 
 struct MapEntry;
 
+// Host-local AST node owning its children and optional function metadata.
+// Only fields selected by kind are meaningful; docstrings never form a body.
 struct Node {
   Node();
   ~Node();
@@ -143,6 +146,8 @@ struct Node {
   // use the header's `node.params`, never anything derived from the
   // body).
   std::vector<std::string> header_param_names;
+  // Optional inline documentation; never an evaluated body expression.
+  std::optional<std::string> docstring;
 
   // Lambda/FuncDef: true when the body is a local case/pattern-dispatch
   // expression (`pat -> result | pat -> result | ...`) rather than a
