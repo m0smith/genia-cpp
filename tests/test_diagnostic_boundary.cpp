@@ -43,6 +43,18 @@ std::string nested_lists(int depth) {
          std::string(static_cast<size_t>(depth), ']');
 }
 
+std::string nested_function_blocks(int depth, const std::string& innermost = "1") {
+  std::string source;
+  for (int i = 0; i < depth; ++i) {
+    source += "f() = { ";
+  }
+  source += innermost;
+  for (int i = 0; i < depth; ++i) {
+    source += " }";
+  }
+  return source;
+}
+
 std::string recursive_sum_list_source(int list_length) {
   std::ostringstream items;
   for (int i = 0; i < list_length; ++i) {
@@ -75,6 +87,39 @@ TEST_CASE("hardening: a moderate nesting depth well under the guard still works 
   auto result = try_run(nested_parens(50));
   REQUIRE(result.has_value());
   CHECK(result->stdout_text == "1\n");
+}
+
+TEST_CASE("adapter boundary: 2000 nested declaration blocks return a controlled response") {
+  using genia::protocol::json;
+  const json request = {{"protocol_version", "1"},
+                        {"case_id", "nested-function-block-depth"},
+                        {"operation", "parse"},
+                        {"input", {{"source", nested_function_blocks(2000)}}}};
+
+  auto response = genia::adapter::handle_request(request.dump());
+  REQUIRE(response.has_value());
+  CHECK((*response)["case_id"] == "nested-function-block-depth");
+  CHECK((*response)["status"] == "unsupported");
+  CHECK((*response)["result"].is_null());
+  CHECK((*response)["unsupported_reason"] == genia::protocol::kUnsupportedReason);
+}
+
+TEST_CASE("hardening: function blocks retain ordinary expressions near the nesting boundary") {
+  const std::string source = "f() = { " + nested_parens(250) + " }\nf()";
+  auto result = try_run(source);
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "1\n");
+}
+
+TEST_CASE("hardening: shallow ordinary function blocks retain their existing semantics") {
+  auto result = try_run("f() = { x = 40; x + 2 }\nf()");
+  REQUIRE(result.has_value());
+  CHECK(result->stdout_text == "42\n");
+}
+
+TEST_CASE("hardening: nested open declarations remain unsupported without a crash") {
+  CHECK_FALSE(try_parse("f() = { open g(x) = x }").has_value());
+  CHECK_FALSE(try_parse(nested_function_blocks(2000, "open g(x) = x")).has_value());
 }
 
 TEST_CASE(
