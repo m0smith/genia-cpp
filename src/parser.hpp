@@ -828,6 +828,15 @@ class Parser {
   // Parses the existing named block-body form, with or without metadata. Statements
   // evaluate in order; incomplete/unsupported bodies return nullopt.
   std::optional<ast::Node> parse_function_block() {
+    // Block bodies can contain statements, and statement parsing speculatively
+    // recognizes declaration headers before rejecting nested declarations below.
+    // Count that descent in the same budget as expression/pattern nesting so a
+    // chain of nested declaration bodies cannot overflow the C++ stack before
+    // the outer block gets a chance to reject the nested FuncDef.
+    NestingGuard guard(nesting_depth_);
+    if (nesting_depth_ > kMaxNestingDepth) {
+      return std::nullopt;
+    }
     advance();  // '{'
     std::vector<ast::Node> expressions;
     while (peek().kind != TokenKind::RBrace) {
