@@ -73,3 +73,10 @@ set_tests_properties(genia-quiescence-check PROPERTIES TIMEOUT 120)
 add_executable(genia-host-repairs-check tests/check_host_repairs.cpp)
 target_include_directories(genia-host-repairs-check PRIVATE third_party/nlohmann_json)
 add_test(NAME genia-host-repairs-check COMMAND genia-host-repairs-check)
+
+# Preserve the parser-depth crash checks in a form the documentation parser
+# can inspect, without extending its existing Catch2 macro baseline.
+add_executable(genia-parser-depth-check tests/check_parser_depth.cpp)
+target_include_directories(genia-parser-depth-check PRIVATE third_party/nlohmann_json)
+add_test(NAME genia-parser-depth-check COMMAND genia-parser-depth-check)
+set_tests_properties(genia-parser-depth-check PROPERTIES TIMEOUT 120)
