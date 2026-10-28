@@ -98,6 +98,7 @@ struct Token {
 // Tokenizes `source`. Returns std::nullopt if any character sequence
 // does not belong to this slice's minimal token vocabulary, or if a
 // string literal is unterminated or contains an unsupported escape.
+// Outside strings, # comments extend to the next newline or end of source.
 inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
   std::vector<Token> tokens;
   size_t i = 0;
@@ -125,6 +126,10 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
     }
     if (std::isspace(c)) {
       ++i;
+      continue;
+    }
+    if (c == '#') {
+      while (i < n && source[i] != '\n') ++i;
       continue;
     }
     if (std::isdigit(c)) {
