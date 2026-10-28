@@ -4,6 +4,13 @@ This host retains its bounded R27 capability floor. These corrections implement
 existing Genia contracts; they do not implement Python Slice C or declare
 `default_open_functions`, `immutable_bindings`, or `doc_help` supported.
 
+Documented shared fixtures may contain `#` line comments. The tokenizer ignores
+them outside strings through the next newline or end of source, preserving
+original diagnostic lines. Ordinary inline function docstrings remain inert
+metadata; `@doc` annotation execution remains unsupported. The native
+`genia-source-comments-check` target covers these boundaries and the ordinary
+main-selection shapes used by the documented shared guards.
+
 - Ordinary grouped bodies bind their identifier headers positionally before
   arm-local bindings. Explicit-open arms retain the separate R20 rule: headers
   do not bind, and free header capture remains refused.
