@@ -155,6 +155,8 @@ struct Node {
   bool is_case_body = false;
   std::vector<pattern::Pattern> case_patterns;
   std::vector<Node> case_results;
+  // Parallel optional guards; an empty vector means all clauses are unguarded.
+  std::vector<std::shared_ptr<Node>> case_guards;
 
   // Lambda/FuncDef (ordinary body): the body expression (reuses
   // `left`). Spread: the spread expression (reuses `left`).

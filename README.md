@@ -288,7 +288,7 @@ JSON. Increment 10 completed the remaining required R22 shared evidence and fina
   class of silent-misparse risk with no diagnostic to fall back on).
   Anything else outside this grammar (parens as anything but
   grouping/lambda, general postfix call application on a non-identifier
-  expression, guard clauses, leading-/trailing-dot numeric forms,
+  expression, leading-/trailing-dot numeric forms,
   malformed exponents, string escapes, ...) is rejected at the
   tokenizer/parser level and reported `unsupported`, never guessed at.
 - `src/core_ir.hpp`, `src/lowering.hpp` — the portable Core IR subset
@@ -548,3 +548,19 @@ The dedicated CI gate inventories declaration-associated comments and rejects
 new or changed documentation debt. Its provider revision does not change this
 host's pinned semantic contract or runtime/build dependencies. Existing legacy
 gaps remain in `.github/code-documentation-baseline.json` for staged remediation.
+
+
+## Local guard acceptance follow-up (#53/#54)
+
+Ordinary grouped-arm guards and local explicit-R20 guards use the existing
+bounded expression subset. Ordinary headers bind before arm-local patterns and
+guards; arm bindings shadow header names. Guards run once after a pattern match,
+false guards continue, and errors stop dispatch. Local R20 duplicate keys include
+span-free guard structure with pattern and lambda binders alpha-normalized;
+different guards remain distinct. Explicit-open grouped arms still refuse free
+header capture in guards and results. Absent guard fields stay omitted from IR.
+
+This is a bounded C++ implementation of existing Genia semantics, not Python
+Slice C default-open/pattern-header support. Varargs, module linking, closed
+publication, annotations and unsupported guard expressions remain unsupported.
+See docs/host-conformance-repairs.md for evidence and acceptance provenance.

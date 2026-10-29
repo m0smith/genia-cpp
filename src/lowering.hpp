@@ -184,6 +184,15 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
         auto lowered = core_ir::Node::func_def_case(node.name, node.header_param_names,
                                                     node.case_patterns, std::move(results));
         lowered.docstring = node.docstring;
+        for (const auto& guard : node.case_guards) {
+          if (!guard) {
+            lowered.case_guards.push_back(nullptr);
+            continue;
+          }
+          auto expression = lower_node(*guard);
+          if (!expression) return std::nullopt;
+          lowered.case_guards.push_back(std::make_shared<core_ir::Node>(std::move(*expression)));
+        }
         return lowered;
       }
       auto body = lower_node(*node.left);
@@ -205,7 +214,18 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
         }
         results.push_back(std::move(*lowered_result));
       }
-      return core_ir::Node::open_func_def(node.name, node.case_patterns, std::move(results));
+      auto lowered =
+          core_ir::Node::open_func_def(node.name, node.case_patterns, std::move(results));
+      for (const auto& guard : node.case_guards) {
+        if (!guard) {
+          lowered.case_guards.push_back(nullptr);
+          continue;
+        }
+        auto expression = lower_node(*guard);
+        if (!expression) return std::nullopt;
+        lowered.case_guards.push_back(std::make_shared<core_ir::Node>(std::move(*expression)));
+      }
+      return lowered;
     }
     case ast::Kind::Map: {
       std::vector<core_ir::MapEntry> entries;

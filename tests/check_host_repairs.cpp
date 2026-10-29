@@ -43,7 +43,9 @@ void check_repair_1() {
            (std::string(source).find("[f(") != std::string::npos ? "[0, 10]\n" : "6\n"));
   }
   expect(!(try_parse("open f(x) = (n) -> n + x\nf(3)").has_value()));
-  expect(!(try_parse("f(x) = (n) ? n > 0 -> n + x").has_value()));
+  auto guarded = run("f(x) = (n) ? n > 0 -> n + x\nf(3)");
+  require(guarded.has_value());
+  expect(guarded->stdout_text == "6\n");
 }
 
 // host repair #54: explicit open alias cannot be replaced
@@ -75,7 +77,9 @@ void check_repair_3() {
   auto distinct = run("open f([x, x]) = 1\nf([x, y]) = 2\nf([3, 4])");
   require(distinct.has_value());
   expect(distinct->stdout_text == "2\n");
-  expect(!(try_parse("open f(x) ? x > 0 = 1\nf(y) ? y < 0 = 2").has_value()));
+  auto guarded = run("open f(x) ? x > 0 = 1\nf(y) ? y < 0 = 2\n[f(3), f(-3)]");
+  require(guarded.has_value());
+  expect(guarded->stdout_text == "[1, 2]\n");
 }
 
 // host repair #55: inline docs are metadata and string-only bodies stay bodies

@@ -36,6 +36,12 @@ target_include_directories(genia-adapter PRIVATE
 # tests only; real conformance evidence comes from genia-2026's
 # tools.spec_runner --host against the built genia-adapter binary. ---
 enable_testing()
+
+# Positive controls and outstanding #53/#54 acceptance requirements. This target
+# stays RED until explicitly authorized guard work satisfies the reference cases.
+add_executable(genia-slice-c-acceptance-check tests/check_slice_c_acceptance.cpp)
+target_include_directories(genia-slice-c-acceptance-check PRIVATE third_party/nlohmann_json)
+add_test(NAME genia-slice-c-acceptance-check COMMAND genia-slice-c-acceptance-check)
 add_executable(genia-adapter-tests
   tests/test_protocol.cpp
   tests/test_bignum.cpp

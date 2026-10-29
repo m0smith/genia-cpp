@@ -240,6 +240,32 @@ inline const char* arithmetic_symbol(core_ir::Op op) {
   }
 }
 
+// Reference truthiness for the implemented runtime kinds. Decimal/Rational and
+// GeniaMap/GeniaBytes are reference-host objects without __bool__/__len__, so
+// zero Decimal, empty map and empty Bytes are true; Integer/Float64/list/string
+// use value truth.
+// This never renders, unwraps or evaluates a value and performs no IO.
+inline bool guard_truthy(const value::Value& condition) {
+  switch (condition.kind) {
+    case value::Kind::Integer:
+      return !condition.integer.is_zero();
+    case value::Kind::Float64:
+      return condition.float64 != 0.0;
+    case value::Kind::Boolean:
+      return condition.boolean;
+    case value::Kind::String:
+      return !condition.text.empty();
+    case value::Kind::List:
+      return !condition.list_items->empty();
+    case value::Kind::Nil:
+      return false;
+    case value::Kind::Outcome:
+      return !condition.outcome_is_none;
+    default:
+      return true;
+  }
+}
+
 // Evaluates one supported node in env. Declaration validation precedes mutation;
 // errors propagate to the engine and unsupported evaluation returns nullopt.
 // The declaration above documents the IO and environment ownership contract.
@@ -506,6 +532,7 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         for (size_t i = 0; i < node.case_patterns.size(); ++i) {
           value::CaseClause clause;
           clause.pattern = node.case_patterns[i];
+          clause.guard = node.case_guards.empty() ? nullptr : node.case_guards[i];
           clause.result = std::make_shared<core_ir::Node>(node.case_results[i]);
           closure->case_clauses.push_back(std::move(clause));
         }
@@ -531,9 +558,9 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
           candidates = existing->closure->case_clauses;
         }
         for (const auto& clause : closure->case_clauses) {
-          const auto key = dispatch_key::clause_key(clause.pattern);
+          const auto key = dispatch_key::clause_key(clause.pattern, clause.guard);
           for (const auto& previous : candidates) {
-            if (dispatch_key::clause_key(previous.pattern) == key) {
+            if (dispatch_key::clause_key(previous.pattern, previous.guard) == key) {
               const size_t arity =
                   clause.pattern.kind == pattern::Kind::Tuple ? clause.pattern.items.size() : 1;
               // The direct engine API may have no diagnostic filename. Do
@@ -845,6 +872,11 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
       }
       for (auto& binding : *bindings) {
         child->define(binding.first, binding.second);
+      }
+      if (clause.guard) {
+        auto condition = eval_node(*clause.guard, child);
+        if (!condition) return std::nullopt;
+        if (!guard_truthy(*condition)) continue;
       }
       return eval_node(*clause.result, child);
     }

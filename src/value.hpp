@@ -79,6 +79,7 @@ struct Value;
 struct CaseClause {
   pattern::Pattern pattern;
   std::shared_ptr<core_ir::Node> result;
+  std::shared_ptr<core_ir::Node> guard;  // absent means unconditional pattern match
 };
 
 // A lambda or named-function value. Exactly one of `case_clauses` or

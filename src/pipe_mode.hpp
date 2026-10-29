@@ -74,6 +74,8 @@ inline void scan_reserved(const ast::Node& node, std::set<std::string> bound,
   for (const auto& item : node.items) scan_reserved(item, bound, usage);
   for (const auto& entry : node.map_entries) scan_reserved(entry.value, bound, usage);
   for (const auto& result : node.case_results) scan_reserved(result, bound, usage);
+  for (const auto& guard : node.case_guards)
+    if (guard) scan_reserved(*guard, bound, usage);
 }
 
 inline bool ends_word(const std::string& text, size_t end) {

@@ -19,7 +19,7 @@ main-selection shapes used by the documented shared guards.
   Duplicate identifier headers reject before later statements execute.
 - Explicit-open aliases cannot be replaced by ordinary declarations. Local
   duplicate detection compares structural, alpha-normalized, span-free patterns
-  and retains original clause lines in the normalized error. Guards, varargs
+  and retains original clause lines in the normalized error. Varargs
   headers, nested open declarations and cross-module linking remain unsupported.
 - A short inline string followed by a same-line body is inert docstring metadata,
   carried through AST and portable IR. Identical metadata across arities is valid;
@@ -62,3 +62,37 @@ Regression provenance and per-case diagnosis are recorded in
 `.genia/process/issue-53-57-evidence.md`.
 Independent maintainability and behavioral/truth review are required before
 integration or closing the issues.
+
+
+## Final #53/#54 acceptance follow-up
+
+The maintainer explicitly authorized the bounded guard extension and accepted
+nested lambda-arm header capture as the nested-arm requirement. The positive
+case `f(x) = (n) -> (m) -> m + x; g = f(3); g(4)` returns `7` in both hosts.
+Doubly nested list-pattern capture also returns `6`. Literal nested multi-arm
+case syntax rejected by Python is not introduced by this follow-up.
+
+Ordinary case-arm guards use the positional header frame and arm-local bindings.
+Local explicit-R20 guards use pattern bindings; grouped explicit-open headers
+remain nonbindings and free capture in guards or results remains refused.
+Guards execute once, after successful matching, in source order. Errors stop
+selection. Duplicate keys include guard structure, pattern binder slots, typed
+literals and lambda scopes; alpha-equivalent guards duplicate, differing guards
+remain separate clauses. The portable existing `IrCaseClause.guard` field is
+present only when supplied. No capability, oracle, normalizer, semantic contract
+pin or protocol version changes. Unsupported forms remain unsupported.
+
+The separate RED commit is `166fc5b8c1654f529838b9f3307dad0892affd31`:
+four missing positive guard checks fail and six supported controls pass. Native
+coverage also exercises guard order/errors, shadowing, reference truthiness,
+guard-key lambda shadowing/capture, integer spelling and omitted IR fields.
+The two former negative guard-refusal assertions are replaced with demonstrated
+positive outputs, not weakened to accept unsupported results. Existing nesting
+and explicit-open header-capture controls are retained.
+
+Acceptance matrix and explicit maintainer decisions are in
+`.genia/process/issue-53-54-acceptance-preflight.md`. The prior repair's blanket
+guard exclusion is superseded only for this authorized bounded follow-up.
+Current exact-head shared/native/CI and independent-review evidence is recorded
+in the PR handoff; issue closure and authority pin integration still require
+those gates. Earlier suite counts above remain historical evidence.
