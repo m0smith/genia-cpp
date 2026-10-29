@@ -62,6 +62,8 @@ int main() {
   check("guard truthiness preserves reference value kinds",
         "f(x) = (n) ? n -> 1 | (n) -> 2\n[f(0), f(0.0), f([]), f({}), f(false)]",
         "[2, 1, 2, 1, 2]\n");
+  check("empty Bytes retains reference object truthiness",
+        "f(x) = (n) ? utf8_encode(\"\") -> 1 | (n) -> 2\nf(0)", "1\n");
   check("guard key normalizes integer spelling", "open f(x) ? x > 00 = 1\nf(y) ? y > 0 = 2\nf(3)",
         "", duplicate, 1);
   check("guard key normalizes shadowing lambda parameters",
