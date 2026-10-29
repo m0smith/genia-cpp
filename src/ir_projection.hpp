@@ -128,15 +128,24 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
   return std::nullopt;
 }
 
-inline std::optional<json> project_case_clause(const pattern::Pattern& pattern,
-                                               const core_ir::Node& result) {
+// Project one existing portable clause, omitting absent guards. Unsupported
+// pattern, guard or result projection fails the complete clause without effects.
+inline std::optional<json> project_case_clause(
+    const pattern::Pattern& pattern, const core_ir::Node& result,
+    const std::shared_ptr<core_ir::Node>& guard = nullptr) {
   auto projected_pattern = project_pattern(pattern);
   auto projected_result = project(result);
   if (!projected_pattern.has_value() || !projected_result.has_value()) {
     return std::nullopt;
   }
-  return json{
+  json clause{
       {"node", "IrCaseClause"}, {"pattern", *projected_pattern}, {"result", *projected_result}};
+  if (guard) {
+    auto expression = project(*guard);
+    if (!expression) return std::nullopt;
+    clause["guard"] = *expression;
+  }
+  return clause;
 }
 
 // Recursively emits the portable node projection, retaining present metadata
@@ -301,7 +310,9 @@ inline std::optional<json> project(const core_ir::Node& node) {
       if (node.is_case_body) {
         json clauses = json::array();
         for (size_t i = 0; i < node.case_patterns.size(); ++i) {
-          auto clause = project_case_clause(node.case_patterns[i], node.case_results[i]);
+          auto clause =
+              project_case_clause(node.case_patterns[i], node.case_results[i],
+                                  node.case_guards.empty() ? nullptr : node.case_guards[i]);
           if (!clause.has_value()) {
             return std::nullopt;
           }
@@ -330,7 +341,8 @@ inline std::optional<json> project(const core_ir::Node& node) {
       // appear (verified directly against that source).
       json clauses = json::array();
       for (size_t i = 0; i < node.case_patterns.size(); ++i) {
-        auto clause = project_case_clause(node.case_patterns[i], node.case_results[i]);
+        auto clause = project_case_clause(node.case_patterns[i], node.case_results[i],
+                                          node.case_guards.empty() ? nullptr : node.case_guards[i]);
         if (!clause.has_value()) {
           return std::nullopt;
         }

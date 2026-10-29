@@ -181,6 +181,8 @@ struct Node {
   bool is_case_body = false;
   std::vector<pattern::Pattern> case_patterns;
   std::vector<Node> case_results;
+  // Parallel optional guards; an empty vector means all clauses are unguarded.
+  std::vector<std::shared_ptr<Node>> case_guards;
 
   // Map: key -> value-expression entries, in source order (matching
   // genia-2026's IrMap.items; map-literal keys are always plain

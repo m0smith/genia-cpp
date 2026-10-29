@@ -8,7 +8,7 @@
 //   func_def   := IDENT '(' (IDENT (',' IDENT)*)? ')' '=' func_body
 //   func_body  := case_clauses | pipeline_expr
 //   case_clauses := case_clause ('|' case_clause)*
-//   case_clause  := (pattern_tuple | pattern_atom) '->' pipeline_expr
+//   case_clause  := (pattern_tuple | pattern_atom) ('?' pipeline_expr)? '->' pipeline_expr
 //   assignment := IDENT '=' pipeline_expr
 //   pipeline_expr := expr ('|>' expr)*
 //   expr       := equality
@@ -26,8 +26,8 @@
 //   pattern_tuple := '(' (pattern_atom (',' pattern_atom)*)? ')'
 //   pattern_atom  := IDENT | '_' | '[' list_pattern_items? ']' | '{' map_pattern_items? '}'
 //
-// No general prefix/unary operators, no field access, no guard clauses
-// (`? expr` before `->`), no glob/option/named patterns -- any token or
+// Guard expressions use the existing bounded expression grammar; ordinary
+// pattern/guard headers, varargs and module linking remain unsupported. Any token or
 // arrangement outside this grammar makes the whole source
 // unrepresentable in this slice; `parse_program` returns std::nullopt in
 // that case, and callers must treat that as "unsupported" (a
@@ -83,6 +83,7 @@ enum class TokenKind : std::uint8_t {
   Pipe,
   DotDot,
   Semicolon,
+  Question,
   End,
 };
 
@@ -399,6 +400,10 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
         tokens.push_back({TokenKind::Comma, ","});
         ++i;
         continue;
+      case '?':
+        tokens.push_back({TokenKind::Question, "?"});
+        ++i;
+        break;
       case ':':
         tokens.push_back({TokenKind::Colon, ":"});
         ++i;
@@ -573,6 +578,13 @@ inline bool is_reserved_keyword(const std::string& name) {
 // captures a header name. Instances are single-use and not thread-safe; no
 // I/O or global state is touched.
 class Parser {
+  // A parsed clause owns its pattern, result and optional guard expression.
+  struct ParsedClause {
+    pattern::Pattern first;
+    ast::Node second;
+    std::shared_ptr<ast::Node> guard;
+  };
+
  public:
   explicit Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)) {}
 
@@ -605,6 +617,7 @@ class Parser {
         for (size_t i = 0; i < stmt->case_patterns.size(); ++i) {
           program.back().case_patterns.push_back(std::move(stmt->case_patterns[i]));
           program.back().case_results.push_back(std::move(stmt->case_results[i]));
+          program.back().case_guards.push_back(stmt->case_guards[i]);
         }
         continue;
       }
@@ -809,6 +822,7 @@ class Parser {
       }
       auto node =
           ast::Node::func_def_case(func_name, param_names, std::move(patterns), std::move(results));
+      for (const auto& clause : *clauses) node.case_guards.push_back(clause.guard);
       node.docstring = std::move(docstring);
       return node;
     }
@@ -912,9 +926,8 @@ class Parser {
   // `name(...)` is followed by `=` before committing to clause parsing,
   // so an ordinary call statement for an open name (e.g. `gcd(48, 18)`)
   // is never misparsed as a failed repeated-clause attempt. This slice
-  // does not implement the `? guard` syntax (no pinned evidence needs
-  // it), so unlike the reference parser's `? | = | {` check, only `=`
-  // is accepted here.
+  // recognizes optional guard syntax for existing local explicit-open clauses;
+  // an ordinary call still cannot be mistaken for a declaration.
   bool header_looks_like_open_clause() {
     const size_t save = pos_;
     advance();  // name
@@ -932,11 +945,13 @@ class Parser {
       }
       advance();
     }
-    const bool result = peek().kind == TokenKind::Eq;
+    const bool result = peek().kind == TokenKind::Eq || peek().kind == TokenKind::Question;
     pos_ = save;
     return result;
   }
 
+  // Parse a local R20 clause with its optional bounded guard. Grouped arms keep
+  // header-capture refusal; repeated clauses retain source order and provenance.
   std::optional<ast::Node> parse_open_pattern_clause(bool is_open_decl) {
     const std::string name = advance().text;
     if (is_open_decl) {
@@ -961,7 +976,9 @@ class Parser {
       patterns.push_back(std::move(clause.first));
       results.push_back(std::move(clause.second));
     }
-    return ast::Node::open_func_def(name, std::move(patterns), std::move(results));
+    auto node = ast::Node::open_func_def(name, std::move(patterns), std::move(results));
+    for (const auto& clause : *clauses) node.case_guards.push_back(clause.guard);
+    return node;
   }
 
   // Shared header parsing for an open/repeated clause: `(<pattern>,
@@ -972,7 +989,7 @@ class Parser {
   // `try_parse_func_def`'s existing grouped-clause handling above, so
   // grouped and repeated local clause syntax normalize to the identical
   // ordered clause list (design doc section 3).
-  std::optional<std::vector<std::pair<pattern::Pattern, ast::Node>>> parse_open_clause_list() {
+  std::optional<std::vector<ParsedClause>> parse_open_clause_list() {
     if (peek().kind != TokenKind::LParen) {
       return std::nullopt;
     }
@@ -997,12 +1014,18 @@ class Parser {
       return std::nullopt;
     }
     advance();  // ')'
-    if (peek().kind != TokenKind::Eq) {
-      return std::nullopt;
+    std::shared_ptr<ast::Node> guard;
+    if (peek().kind == TokenKind::Question) {
+      advance();
+      auto expression = parse_pipeline_expr();
+      if (!expression) return std::nullopt;
+      guard = std::make_shared<ast::Node>(std::move(*expression));
     }
+    if (peek().kind != TokenKind::Eq) return std::nullopt;
     advance();  // '='
 
     if (looks_like_case_clause_start()) {
+      if (guard) return std::nullopt;
       auto arms = parse_case_clauses();
       if (!arms.has_value()) {
         return std::nullopt;
@@ -1012,7 +1035,9 @@ class Parser {
       // outer name. This host cannot diagnose that, so it refuses the whole
       // program (unsupported) instead of running it with a guessed meaning.
       for (const auto& arm : *arms) {
-        if (header_capture::arm_captures_header_name(header_patterns, arm.first, arm.second)) {
+        if (header_capture::arm_captures_header_name(header_patterns, arm.first, arm.second) ||
+            (arm.guard &&
+             header_capture::arm_captures_header_name(header_patterns, arm.first, *arm.guard))) {
           return std::nullopt;
         }
       }
@@ -1023,10 +1048,10 @@ class Parser {
     if (!body.has_value()) {
       return std::nullopt;
     }
-    std::vector<std::pair<pattern::Pattern, ast::Node>> clauses;
+    std::vector<ParsedClause> clauses;
     auto header = pattern::Pattern::tuple(std::move(header_patterns));
     header.source_line = header_line;
-    clauses.emplace_back(std::move(header), std::move(*body));
+    clauses.push_back({std::move(header), std::move(*body), std::move(guard)});
     return clauses;
   }
 
@@ -1191,31 +1216,37 @@ class Parser {
   bool looks_like_case_clause_start() {
     const size_t save = pos_;
     auto pattern = parse_case_clause_pattern();
-    const bool matched = pattern.has_value() && peek().kind == TokenKind::Arrow;
+    const bool matched = pattern.has_value() &&
+                         (peek().kind == TokenKind::Arrow || peek().kind == TokenKind::Question);
     pos_ = save;
     return matched;
   }
 
   // Parses ordered pattern/result arms and records each pattern header line.
-  // Returns nullopt on incomplete or unsupported syntax, including guards.
-  std::optional<std::vector<std::pair<pattern::Pattern, ast::Node>>> parse_case_clauses() {
-    std::vector<std::pair<pattern::Pattern, ast::Node>> clauses;
+  // Guards are optional bounded expressions; unsupported children fail the clause.
+  std::optional<std::vector<ParsedClause>> parse_case_clauses() {
+    std::vector<ParsedClause> clauses;
     while (true) {
       const int clause_line = peek().line;
       auto clause_pattern = parse_case_clause_pattern();
       if (!clause_pattern.has_value()) {
         return std::nullopt;
       }
-      if (peek().kind != TokenKind::Arrow) {
-        return std::nullopt;
+      std::shared_ptr<ast::Node> guard;
+      if (peek().kind == TokenKind::Question) {
+        advance();
+        auto expression = parse_pipeline_expr();
+        if (!expression) return std::nullopt;
+        guard = std::make_shared<ast::Node>(std::move(*expression));
       }
+      if (peek().kind != TokenKind::Arrow) return std::nullopt;
       advance();
       auto result = parse_pipeline_expr();
       if (!result.has_value()) {
         return std::nullopt;
       }
       clause_pattern->source_line = clause_line;
-      clauses.emplace_back(std::move(*clause_pattern), std::move(*result));
+      clauses.push_back({std::move(*clause_pattern), std::move(*result), std::move(guard)});
       if (peek().kind == TokenKind::Pipe) {
         advance();
         continue;

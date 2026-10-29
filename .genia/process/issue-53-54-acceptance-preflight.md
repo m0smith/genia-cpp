@@ -68,3 +68,16 @@ framework. Native RED/positive controls, full shared corpus and zero failure
 taxonomy, existing R20/depth controls, format/tidy and canonical code docs are
 the checks. Record the current authority and candidate separately; compatibility
 at an ancestor-declared C++ contract is not exact-current contract certification.
+
+## Explicit maintainer decisions (2026-10-29)
+
+The user approved the bounded guard implementation: ordinary grouped-arm and
+local explicit-R20 guards, guard evaluation/capture, portable fields and
+alpha-normalized guard dispatch keys. Existing default-open headers, varargs,
+module linking, capabilities and shared oracles stay unchanged. The user also
+accepted the verified nested-lambda-arm/header-capture case for #53. Literal
+nested multi-arm block syntax is not being added. This supersedes the prior
+repair preflight's guard exclusion for this specific follow-up only.
+New guard RED: 166fc5b8c1654f529838b9f3307dad0892affd31 (four positive
+acceptance failures, six existing supported controls pass). No issue criterion
+is waived; the nested-arm interpretation is an explicit maintainer disposition.

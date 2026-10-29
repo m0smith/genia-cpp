@@ -51,5 +51,32 @@ int main() {
   check("R20 guard differs", "open f(x) ? x > 0 = 1\nf(y) ? y < 0 = 2\n[f(3), f(-3)]", "[1, 2]\n");
   check("R20 alpha-equivalent guard duplicate", "open f(x) ? x > 0 = 1\nf(y) ? y > 0 = 2\nf(3)", "",
         duplicate, 1);
+  check("guard errors stop dispatch", "f(x) = (n) ? missing -> 1 | (n) -> 2\nf(1)", "",
+        "Error: Undefined name: missing\n", 1);
+  check("guards run once in order and stop after match",
+        "positive(x) = { print(x); x > 0 }\n"
+        "f(x) = (n) ? positive(n) -> n + x | (n) ? positive(10) -> 99\n[f(3), f(-1)]",
+        "3\n-1\n10\n[6, 99]\n");
+  check("arm binding shadows header before guard", "f(x) = ([x]) ? x > 0 -> x | (n) -> 0\nf([3])",
+        "3\n");
+  check("guard truthiness preserves reference value kinds",
+        "f(x) = (n) ? n -> 1 | (n) -> 2\n[f(0), f(0.0), f([]), f({}), f(false)]",
+        "[2, 1, 2, 1, 2]\n");
+  check("guard key normalizes integer spelling", "open f(x) ? x > 00 = 1\nf(y) ? y > 0 = 2\nf(3)",
+        "", duplicate, 1);
+  check("guard key normalizes shadowing lambda parameters",
+        "open f(x) ? check((x) -> x) = 1\nf(y) ? check((z) -> z) = 2\nf(3)", "", duplicate, 1);
+  check("guard key distinguishes captured and shadowed lambda references",
+        "open f(x) ? check((z) -> x) = 1\nf(y) ? check((z) -> z) = 2\n42", "42\n");
+  auto guarded = genia::engine::try_lower("open f(x) ? x > 0 = 1\nf(y) = 2");
+  if (!guarded || !(*guarded)[0]["clauses"][0].contains("guard") ||
+      (*guarded)[0]["clauses"][1].contains("guard")) {
+    ++failures;
+    std::cerr << "FAILED: portable guard field presence\n";
+  }
+  if (genia::engine::try_parse("open f(x) = (n) ? x > 0 -> n")) {
+    ++failures;
+    std::cerr << "FAILED: explicit-open guard header capture refusal\n";
+  }
   return failures == 0 ? 0 : 1;
 }

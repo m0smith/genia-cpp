@@ -41,6 +41,16 @@ truth — read them from `genia-2026` directly.
   `docs/host-interop/HOST_PORTING_GUIDE.md` for the exact "different
   internals are fine, different observable semantics are not" boundary.
 
+## Current local guard boundary
+
+The #53/#54 follow-up implements optional guards in ordinary grouped arms and
+local explicit-R20 clauses, using the existing bounded expression subset and
+portable guard fields. It preserves explicit-open header-capture refusal and
+normalizes guard references for duplicate keys. It does not implement ordinary
+pattern/guard headers, default-open functions, varargs or cross-module linking.
+The earlier R24 status below remains historical; current bounded details and
+acceptance evidence are in docs/host-conformance-repairs.md.
+
 ## Status
 
 **R27 E27-5 (`m0smith/genia-2026#1047`) hardens Flow and pipe mode without
