@@ -241,8 +241,9 @@ inline const char* arithmetic_symbol(core_ir::Op op) {
 }
 
 // Reference truthiness for the implemented runtime kinds. Decimal/Rational and
-// GeniaMap are reference-host objects without __bool__/__len__, so even zero
-// Decimal and an empty map are true; Integer/Float64/list/text use value truth.
+// GeniaMap/GeniaBytes are reference-host objects without __bool__/__len__, so
+// zero Decimal, empty map and empty Bytes are true; Integer/Float64/list/string
+// use value truth.
 // This never renders, unwraps or evaluates a value and performs no IO.
 inline bool guard_truthy(const value::Value& condition) {
   switch (condition.kind) {
@@ -253,7 +254,6 @@ inline bool guard_truthy(const value::Value& condition) {
     case value::Kind::Boolean:
       return condition.boolean;
     case value::Kind::String:
-    case value::Kind::Bytes:
       return !condition.text.empty();
     case value::Kind::List:
       return !condition.list_items->empty();
