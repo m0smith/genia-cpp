@@ -63,6 +63,8 @@ inline std::optional<std::vector<core_ir::Annotation>> lower_annotations(
   return lowered;
 }
 
+// Definition of lower_node (declared above): one AST node to Core IR,
+// including the Model B Slice A carriers and their annotations.
 inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
   switch (node.kind) {
     case ast::Kind::Literal:

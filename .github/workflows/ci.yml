@@ -1,3 +1,4 @@
+# genia-cpp CI: build, CTest, lint and pinned shared conformance evidence.
 name: CI
 
 on:

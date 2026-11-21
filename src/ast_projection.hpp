@@ -49,6 +49,8 @@ inline std::optional<int64_t> digits_to_safe_int64(const std::string& digits) {
   }
 }
 
+// Projects one parse-category AST node; nullopt when no shape is claimed
+// (including every Model B carrier, varargs and annotated functions).
 inline std::optional<json> project(const ast::Node& node) {
   switch (node.kind) {
     case ast::Kind::Literal: {

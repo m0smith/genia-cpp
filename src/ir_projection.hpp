@@ -194,6 +194,8 @@ inline bool is_valid_model_b_carrier(const core_ir::Node& node) {
   return true;
 }
 
+// Serializes one IrCaseClause with its optional guard; nullopt if any child
+// is not portable.
 inline std::optional<json> project_case_clause(
     const pattern::Pattern& pattern, const core_ir::Node& result,
     const std::shared_ptr<core_ir::Node>& guard = nullptr) {

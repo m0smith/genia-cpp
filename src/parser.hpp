@@ -658,6 +658,7 @@ class Parser {
   // >0 while parsing a `{ ... }` function block body.
   int block_depth_ = 0;
 
+  // Model B grouping participants: ordinary, pattern and closed declarations.
   static bool is_function_declaration(ast::Kind kind) {
     return kind == ast::Kind::FuncDef || kind == ast::Kind::PatternFuncDef ||
            kind == ast::Kind::ClosedFuncDef;
@@ -1053,8 +1054,10 @@ class Parser {
     }
     advance();  // '{'
     ++block_depth_;
+    // Restores block_depth_ on every exit path of this block parse.
     struct BlockDepthGuard {
       int& depth;
+      // Leaves the block scope.
       ~BlockDepthGuard() { --depth; }
     } block_guard{block_depth_};
     std::vector<ast::Node> expressions;
@@ -1259,6 +1262,9 @@ class Parser {
 
   // ---- Patterns ------------------------------------------------------
 
+  // Parses one pattern atom: literals, binds, `_`, lists, maps, err/some with
+  // or without context, and `Name(inner)` named-pattern references. Returns
+  // nullopt for anything else; never reports a SyntaxError.
   std::optional<pattern::Pattern> parse_pattern_atom() {
     NestingGuard guard(nesting_depth_);
     if (nesting_depth_ > kMaxNestingDepth) {
@@ -1905,6 +1911,8 @@ struct ParseOutcome {
   std::optional<std::string> syntax_error;
 };
 
+// Tokenizes and parses `source`, reporting a contract SyntaxError separately
+// from an unsupported source. Pure; no evaluation or I/O.
 inline ParseOutcome parse_program_checked(const std::string& source) {
   auto tokens = tokenize(source);
   if (!tokens.has_value()) {

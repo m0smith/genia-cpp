@@ -69,6 +69,7 @@ inline bool is_executable(const pattern::Pattern& pattern) {
   return true;
 }
 
+// True when every pattern in `patterns` is executable (see is_executable).
 inline bool all_executable(const std::vector<pattern::Pattern>& patterns) {
   for (const auto& pattern : patterns) {
     if (!is_executable(pattern)) return false;
@@ -76,6 +77,8 @@ inline bool all_executable(const std::vector<pattern::Pattern>& patterns) {
   return true;
 }
 
+// Matches one pattern against `arg`; nullopt on mismatch. Throws
+// value::UnsupportedError for carriers this host lowers but never matches.
 inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
                                           const value::Value& arg) {
   switch (pattern.kind) {

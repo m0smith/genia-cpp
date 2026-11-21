@@ -58,10 +58,15 @@ Two exposed baseline gaps were fixed, each with its own RED test:
 Commits on `issue-50-model-b-slice-a-parser`:
 - RED `da83d0b`, then RED `71d6994`
 - GREEN `150680f` (parser/lowering), then GREEN `35095be` (identity)
-- Pin/docs: the following commit
+- Pin/docs `7cf9356`, then the documentation-compliance/test-harness commit
 
-At baseline `fef41e5`, 36 of the 41 parse/IR cases in
-`tests/test_model_b_slice_a.cpp` failed.
+At baseline `fef41e5`, 36 of the 41 parse/IR cases failed in the RED suite
+(Catch2 `tests/test_model_b_slice_a.cpp`, commits `da83d0b`/`71d6994`). The same
+assertions now run as the `genia-model-b-slice-a-check` CTest target
+(`tests/check_model_b_slice_a.cpp`). That target also adds direct-IR
+malformed-carrier checks, which were written alongside GREEN rather than before
+it. Catch2 macros cannot be parsed by the code-documentation checker, and its
+baseline may not grow.
 
 Full shared corpus at `d005c89`:
 

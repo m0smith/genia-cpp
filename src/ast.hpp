@@ -23,6 +23,7 @@
 
 namespace genia::ast {
 
+// Node kinds; Model B Slice A adds parse/lower-only carriers at the end.
 enum class Kind : std::uint8_t {
   Literal,
   StringLiteral,
@@ -78,6 +79,7 @@ enum class Kind : std::uint8_t {
 };
 
 struct MapEntry;
+// Prefix annotation record (`@name value`), defined after Node.
 struct Annotation;
 
 // Host-local AST node owning its children and optional function metadata.

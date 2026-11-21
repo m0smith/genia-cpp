@@ -45,6 +45,7 @@
 
 namespace genia::core_ir {
 
+// Node kinds; Model B Slice A adds parse/lower-only carriers at the end.
 enum class Kind : std::uint8_t {
   Literal,
   Var,
@@ -82,6 +83,7 @@ enum class Kind : std::uint8_t {
 enum class LiteralKind : std::uint8_t { Integer, String, Bool, Decimal };
 
 struct MapEntry;
+// Prefix annotation record (`@name value`), defined after Node.
 struct Annotation;
 
 // Binary operator token names, matching genia-2026's parser token names

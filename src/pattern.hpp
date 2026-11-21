@@ -28,6 +28,7 @@
 
 namespace genia::pattern {
 
+// Pattern kinds; Named is a portable carrier this host never matches.
 enum class Kind : std::uint8_t {
   Bind,
   Wildcard,
@@ -164,6 +165,7 @@ struct Pattern {
     return p;
   }
 
+  // One-argument `some(x)`: context absent (never matched by this host).
   static Pattern some_without_context(Pattern value) {
     Pattern p = some(std::move(value), wildcard());
     p.has_context = false;
@@ -181,6 +183,7 @@ struct Pattern {
     return p;
   }
 
+  // Two-argument `some(value, context)` pattern.
   static Pattern some(Pattern value, Pattern context) {
     Pattern p;
     p.kind = Kind::Some;
