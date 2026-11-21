@@ -68,9 +68,17 @@ enum class Kind : std::uint8_t {
   Unary,
   Quote,
   QuasiQuote,
+  // Model B Slice A carriers (genia-2026 core-ir-portability.md "Model B
+  // declaration carriers"). Parsed and lowered only: evaluation is
+  // unsupported because this host declares none of immutable_bindings,
+  // default_open_functions or closed_functions.
+  ImmutableBind,   // name, left = initializer, annotations
+  PatternFuncDef,  // name, header (full tuple), guard (optional), left = body, annotations
+  ClosedFuncDef,   // name, items = ordered FuncDef/PatternFuncDef declarations
 };
 
 struct MapEntry;
+struct Annotation;
 
 // Host-local AST node owning its children and optional function metadata.
 // Only fields selected by kind are meaningful; docstrings never form a body.
@@ -163,6 +171,15 @@ struct Node {
 
   // Map: key -> value-expression entries, in source order.
   std::vector<MapEntry> map_entries;
+
+  // Model B Slice A fields (see Kind). `annotations` holds prefix
+  // annotations on FuncDef/PatternFuncDef/ImmutableBind; `rest_param` is a
+  // legacy FuncDef varargs name (`f(..xs) = ...`); `header` and `guard`
+  // belong to PatternFuncDef only.
+  std::vector<Annotation> annotations;
+  std::optional<std::string> rest_param;
+  pattern::Pattern header;
+  std::shared_ptr<Node> guard;
 
   static Node literal(std::string digits) {
     Node n;
@@ -316,6 +333,12 @@ struct Node {
 
 struct MapEntry {
   std::string key;
+  Node value;
+};
+
+// One prefix annotation `@name value`; the value is an ordinary expression.
+struct Annotation {
+  std::string name;
   Node value;
 };
 

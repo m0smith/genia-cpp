@@ -48,6 +48,21 @@ inline std::optional<std::pair<ast::Node, std::vector<ast::Node>>> flatten_pipel
 
 // Lowers one supported AST recursively, retaining inert docstrings and clause
 // provenance. Returns nullopt for an unsupported shape; performs no evaluation.
+inline std::optional<core_ir::Node> lower_node(const ast::Node& node);
+
+// Lowers prefix annotations in source order; nullopt if any value is outside
+// the bounded expression subset.
+inline std::optional<std::vector<core_ir::Annotation>> lower_annotations(
+    const std::vector<ast::Annotation>& annotations) {
+  std::vector<core_ir::Annotation> lowered;
+  for (const auto& annotation : annotations) {
+    auto value = lower_node(annotation.value);
+    if (!value) return std::nullopt;
+    lowered.push_back(core_ir::Annotation{annotation.name, std::move(*value)});
+  }
+  return lowered;
+}
+
 inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
   switch (node.kind) {
     case ast::Kind::Literal:
@@ -184,6 +199,10 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
         auto lowered = core_ir::Node::func_def_case(node.name, node.header_param_names,
                                                     node.case_patterns, std::move(results));
         lowered.docstring = node.docstring;
+        lowered.rest_param = node.rest_param;
+        auto annotations = lower_annotations(node.annotations);
+        if (!annotations) return std::nullopt;
+        lowered.annotations = std::move(*annotations);
         for (const auto& guard : node.case_guards) {
           if (!guard) {
             lowered.case_guards.push_back(nullptr);
@@ -202,6 +221,10 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       auto lowered = core_ir::Node::func_def(node.name, node.header_param_names, node.params,
                                              std::move(*body));
       lowered.docstring = node.docstring;
+      lowered.rest_param = node.rest_param;
+      auto annotations = lower_annotations(node.annotations);
+      if (!annotations) return std::nullopt;
+      lowered.annotations = std::move(*annotations);
       return lowered;
     }
     case ast::Kind::OpenFuncDef: {
@@ -239,6 +262,45 @@ inline std::optional<core_ir::Node> lower_node(const ast::Node& node) {
       }
       return core_ir::Node::map_literal(std::move(entries));
     }
+    case ast::Kind::ImmutableBind: {
+      auto value = lower_node(*node.left);
+      auto annotations = lower_annotations(node.annotations);
+      if (!value || !annotations) return std::nullopt;
+      core_ir::Node lowered;
+      lowered.kind = core_ir::Kind::ImmutableBind;
+      lowered.name = node.name;
+      lowered.left = std::make_shared<core_ir::Node>(std::move(*value));
+      lowered.annotations = std::move(*annotations);
+      return lowered;
+    }
+    case ast::Kind::PatternFuncDef: {
+      auto body = lower_node(*node.left);
+      auto annotations = lower_annotations(node.annotations);
+      if (!body || !annotations) return std::nullopt;
+      core_ir::Node lowered;
+      lowered.kind = core_ir::Kind::PatternFuncDef;
+      lowered.name = node.name;
+      lowered.header = node.header;
+      lowered.left = std::make_shared<core_ir::Node>(std::move(*body));
+      lowered.annotations = std::move(*annotations);
+      if (node.guard) {
+        auto guard = lower_node(*node.guard);
+        if (!guard) return std::nullopt;
+        lowered.guard = std::make_shared<core_ir::Node>(std::move(*guard));
+      }
+      return lowered;
+    }
+    case ast::Kind::ClosedFuncDef: {
+      core_ir::Node lowered;
+      lowered.kind = core_ir::Kind::ClosedFuncDef;
+      lowered.name = node.name;
+      for (const auto& declaration : node.items) {
+        auto child = lower_node(declaration);
+        if (!child) return std::nullopt;
+        lowered.items.push_back(std::move(*child));
+      }
+      return lowered;
+    }
     case ast::Kind::Spread: {
       auto inner = lower_node(*node.left);
       if (!inner.has_value()) {
@@ -272,7 +334,10 @@ inline std::optional<std::vector<core_ir::Node>> lower_program(const ast::Progra
       return std::nullopt;
     }
     if (lowered->kind == core_ir::Kind::Assign || lowered->kind == core_ir::Kind::FuncDef ||
-        lowered->kind == core_ir::Kind::OpenFuncDef) {
+        lowered->kind == core_ir::Kind::OpenFuncDef ||
+        lowered->kind == core_ir::Kind::ImmutableBind ||
+        lowered->kind == core_ir::Kind::PatternFuncDef ||
+        lowered->kind == core_ir::Kind::ClosedFuncDef) {
       result.push_back(std::move(*lowered));
     } else {
       result.push_back(core_ir::Node::expr_stmt(std::move(*lowered)));

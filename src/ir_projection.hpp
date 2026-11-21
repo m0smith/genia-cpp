@@ -65,7 +65,13 @@ inline std::optional<int64_t> pattern_digits_to_safe_int64(const std::string& di
   }
 }
 
-inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
+// `model_b_header` is true only inside an IrPatternFuncDef header: that is
+// the one position where IrPatSome.context is serialized (legacy lambda/case
+// positions omit it to keep their historical wire). IrPatErr and IrPatNamed
+// serialize identically in every position; an absent IrPatErr context is
+// `null`.
+inline std::optional<json> project_pattern(const pattern::Pattern& pattern,
+                                           bool model_b_header = false) {
   switch (pattern.kind) {
     case pattern::Kind::Literal: {
       // genia-2026's real IrPatLiteral carries the raw value (unlike
@@ -88,7 +94,7 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
     case pattern::Kind::Tuple: {
       json items = json::array();
       for (const auto& item : pattern.items) {
-        auto projected_item = project_pattern(item);
+        auto projected_item = project_pattern(item, model_b_header);
         if (!projected_item.has_value()) {
           return std::nullopt;
         }
@@ -99,7 +105,7 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
     case pattern::Kind::List: {
       json items = json::array();
       for (const auto& item : pattern.items) {
-        auto projected_item = project_pattern(item);
+        auto projected_item = project_pattern(item, model_b_header);
         if (!projected_item.has_value()) {
           return std::nullopt;
         }
@@ -110,7 +116,7 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
     case pattern::Kind::Map: {
       json items = json::array();
       for (const auto& [key, value_pattern] : pattern.map_items) {
-        auto projected_value = project_pattern(value_pattern);
+        auto projected_value = project_pattern(value_pattern, model_b_header);
         if (!projected_value.has_value()) {
           return std::nullopt;
         }
@@ -119,10 +125,31 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
       return json{{"node", "IrPatMap"}, {"items", items}};
     }
     case pattern::Kind::Err: {
-      auto reason = project_pattern(pattern.items[0]);
-      auto context = project_pattern(pattern.items[1]);
-      if (!reason.has_value() || !context.has_value()) return std::nullopt;
-      return json{{"node", "IrPatErr"}, {"reason", *reason}, {"context", *context}};
+      auto reason = project_pattern(pattern.items[0], model_b_header);
+      if (!reason.has_value()) return std::nullopt;
+      json context = nullptr;
+      if (pattern.has_context) {
+        auto projected_context = project_pattern(pattern.items[1], model_b_header);
+        if (!projected_context.has_value()) return std::nullopt;
+        context = *projected_context;
+      }
+      return json{{"node", "IrPatErr"}, {"reason", *reason}, {"context", context}};
+    }
+    case pattern::Kind::Some: {
+      auto inner = project_pattern(pattern.items[0], model_b_header);
+      if (!inner.has_value()) return std::nullopt;
+      json result{{"node", "IrPatSome"}, {"inner", *inner}};
+      if (model_b_header && pattern.has_context) {
+        auto context = project_pattern(pattern.items[1], model_b_header);
+        if (!context.has_value()) return std::nullopt;
+        result["context"] = *context;
+      }
+      return result;
+    }
+    case pattern::Kind::Named: {
+      auto inner = project_pattern(pattern.items[0], model_b_header);
+      if (!inner.has_value()) return std::nullopt;
+      return json{{"node", "IrPatNamed"}, {"name", pattern.name}, {"inner", *inner}};
     }
   }
   return std::nullopt;
@@ -130,6 +157,43 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern) {
 
 // Project one existing portable clause, omitting absent guards. Unsupported
 // pattern, guard or result projection fails the complete clause without effects.
+// Serializes prefix annotations; the caller omits the field when empty.
+inline std::optional<json> project_annotations(
+    const std::vector<core_ir::Annotation>& annotations) {
+  json result = json::array();
+  for (const auto& annotation : annotations) {
+    auto value = project(annotation.value);
+    if (!value) return std::nullopt;
+    result.push_back(json{{"node", "IrAnnotation"}, {"name", annotation.name}, {"value", *value}});
+  }
+  return result;
+}
+
+// Malformed-carrier validation for direct Model B IR (core-ir-portability.md):
+// a pattern declaration needs one full tuple header and no grouped case body;
+// a closed group is a nonempty ordered list of same-name IrFuncDef or
+// IrPatternFuncDef records, never a nested group. Invalid carriers are not
+// portable IR, so projection refuses them (the case becomes unsupported).
+inline bool is_valid_model_b_carrier(const core_ir::Node& node) {
+  if (node.kind == core_ir::Kind::PatternFuncDef) {
+    return node.header.kind == pattern::Kind::Tuple && node.left != nullptr && !node.is_case_body &&
+           node.params.empty() && node.header_param_names.empty() && !node.rest_param.has_value() &&
+           !node.docstring.has_value();
+  }
+  if (node.kind == core_ir::Kind::ClosedFuncDef) {
+    if (node.items.empty()) return false;
+    for (const auto& declaration : node.items) {
+      if (declaration.name != node.name) return false;
+      if (declaration.kind != core_ir::Kind::FuncDef &&
+          declaration.kind != core_ir::Kind::PatternFuncDef)
+        return false;
+      if (!is_valid_model_b_carrier(declaration)) return false;
+    }
+    return true;
+  }
+  return true;
+}
+
 inline std::optional<json> project_case_clause(
     const pattern::Pattern& pattern, const core_ir::Node& result,
     const std::shared_ptr<core_ir::Node>& guard = nullptr) {
@@ -331,7 +395,53 @@ inline std::optional<json> project(const core_ir::Node& node) {
                   {"params", node.header_param_names},
                   {"body", body}};
       if (node.docstring.has_value()) result["docstring"] = *node.docstring;
+      if (node.rest_param.has_value()) result["rest_param"] = *node.rest_param;
+      if (!node.annotations.empty()) {
+        auto annotations = project_annotations(node.annotations);
+        if (!annotations) return std::nullopt;
+        result["annotations"] = *annotations;
+      }
       return result;
+    }
+    case core_ir::Kind::ImmutableBind: {
+      auto expr = project(*node.left);
+      if (!expr.has_value()) return std::nullopt;
+      json result{{"node", "IrImmutableBind"}, {"name", node.name}, {"expr", *expr}};
+      if (!node.annotations.empty()) {
+        auto annotations = project_annotations(node.annotations);
+        if (!annotations) return std::nullopt;
+        result["annotations"] = *annotations;
+      }
+      return result;
+    }
+    case core_ir::Kind::PatternFuncDef: {
+      if (!is_valid_model_b_carrier(node)) return std::nullopt;
+      auto header = project_pattern(node.header, /*model_b_header=*/true);
+      auto body = project(*node.left);
+      if (!header || !body) return std::nullopt;
+      json result{
+          {"node", "IrPatternFuncDef"}, {"name", node.name}, {"pattern", *header}, {"body", *body}};
+      if (node.guard) {
+        auto guard = project(*node.guard);
+        if (!guard) return std::nullopt;
+        result["guard"] = *guard;
+      }
+      if (!node.annotations.empty()) {
+        auto annotations = project_annotations(node.annotations);
+        if (!annotations) return std::nullopt;
+        result["annotations"] = *annotations;
+      }
+      return result;
+    }
+    case core_ir::Kind::ClosedFuncDef: {
+      if (!is_valid_model_b_carrier(node)) return std::nullopt;
+      json declarations = json::array();
+      for (const auto& declaration : node.items) {
+        auto projected = project(declaration);
+        if (!projected) return std::nullopt;
+        declarations.push_back(*projected);
+      }
+      return json{{"node", "IrClosedFuncDef"}, {"name", node.name}, {"declarations", declarations}};
     }
     case core_ir::Kind::OpenFuncDef: {
       // hosts/python/ir_normalize.py's real IrOpenFuncDef handler:

@@ -52,6 +52,30 @@ inline bool merge_bindings(Bindings& into, Bindings&& from) {
   return true;
 }
 
+// False when `pattern` contains a carrier this host lowers but never matches:
+// a named-pattern reference or the one-argument err(r)/some(x) spelling.
+// Definitions using one are refused before they can be called.
+inline bool is_executable(const pattern::Pattern& pattern) {
+  if (pattern.kind == pattern::Kind::Named) return false;
+  if ((pattern.kind == pattern::Kind::Err || pattern.kind == pattern::Kind::Some) &&
+      !pattern.has_context)
+    return false;
+  for (const auto& item : pattern.items) {
+    if (!is_executable(item)) return false;
+  }
+  for (const auto& entry : pattern.map_items) {
+    if (!is_executable(entry.value)) return false;
+  }
+  return true;
+}
+
+inline bool all_executable(const std::vector<pattern::Pattern>& patterns) {
+  for (const auto& pattern : patterns) {
+    if (!is_executable(pattern)) return false;
+  }
+  return true;
+}
+
 inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
                                           const value::Value& arg) {
   switch (pattern.kind) {
@@ -175,7 +199,11 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
       }
       return Bindings{};
     }
+    case pattern::Kind::Named:
+      // Named-pattern resolution is not implemented by this host.
+      throw value::UnsupportedError{};
     case pattern::Kind::Err: {
+      if (!pattern.has_context) throw value::UnsupportedError{};
       if (arg.kind != value::Kind::Outcome || !arg.outcome_is_err ||
           arg.outcome_reason == nullptr || arg.outcome_context == nullptr) {
         return std::nullopt;
@@ -187,6 +215,7 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
       return reason;
     }
     case pattern::Kind::Some: {
+      if (!pattern.has_context) throw value::UnsupportedError{};
       if (arg.kind != value::Kind::Outcome || arg.outcome_is_err || arg.outcome_is_none ||
           arg.outcome_value == nullptr) {
         return std::nullopt;

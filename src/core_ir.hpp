@@ -36,6 +36,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -69,11 +70,19 @@ enum class Kind : std::uint8_t {
   Unary,
   Quote,
   QuasiQuote,
+  // Model B Slice A carriers (genia-2026 core-ir-portability.md "Model B
+  // declaration carriers"). Parsed and lowered only: evaluation is
+  // unsupported because this host declares none of immutable_bindings,
+  // default_open_functions or closed_functions.
+  ImmutableBind,   // name, left = initializer, annotations
+  PatternFuncDef,  // name, header (full tuple), guard (optional), left = body, annotations
+  ClosedFuncDef,   // name, items = ordered FuncDef/PatternFuncDef declarations
 };
 
 enum class LiteralKind : std::uint8_t { Integer, String, Bool, Decimal };
 
 struct MapEntry;
+struct Annotation;
 
 // Binary operator token names, matching genia-2026's parser token names
 // (see src/genia/lowering.py: `IrBinary(lower(left), node.op, lower(right))`
@@ -189,6 +198,15 @@ struct Node {
   // strings, whether written as a bare identifier or a string literal
   // -- see src/genia/lowering.py's `_map_literal_key_name`).
   std::vector<MapEntry> map_entries;
+
+  // Model B Slice A fields (see Kind). `annotations` holds prefix
+  // annotations on FuncDef/PatternFuncDef/ImmutableBind; `rest_param` is a
+  // legacy FuncDef varargs name (`f(..xs) = ...`); `header` and `guard`
+  // belong to PatternFuncDef only.
+  std::vector<Annotation> annotations;
+  std::optional<std::string> rest_param;
+  pattern::Pattern header;
+  std::shared_ptr<Node> guard;
 
   static Node integer_literal(std::string digits) {
     Node n;
@@ -354,6 +372,12 @@ struct Node {
 
 struct MapEntry {
   std::string key;
+  Node value;
+};
+
+// One prefix annotation `@name value`; the value is an ordinary expression.
+struct Annotation {
+  std::string name;
   Node value;
 };
 

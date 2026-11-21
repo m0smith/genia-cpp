@@ -37,6 +37,7 @@ inline void collect_bound_names(const pattern::Pattern& pattern, std::set<std::s
     case pattern::Kind::Tuple:
     case pattern::Kind::Err:
     case pattern::Kind::Some:
+    case pattern::Kind::Named:
       for (const auto& item : pattern.items) {
         collect_bound_names(item, names);
       }
@@ -112,6 +113,12 @@ inline bool has_free_reference(const ast::Node& node, const std::set<std::string
     case ast::Kind::FuncDef:
     case ast::Kind::OpenFuncDef:
       return false;
+    case ast::Kind::ImmutableBind:
+    case ast::Kind::PatternFuncDef:
+    case ast::Kind::ClosedFuncDef:
+      // Model B carriers are never executable here; report a capture so the
+      // enclosing grouped open clause is refused rather than analysed.
+      return true;
   }
   return false;
 }
