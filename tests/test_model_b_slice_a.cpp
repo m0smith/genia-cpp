@@ -124,3 +124,21 @@ TEST_CASE("model-b-a: R20 and legacy behavior is unchanged") {
   REQUIRE(plain_block["status"] == "ok");
   CHECK(plain_block["result"]["stdout"] == "2\n");
 }
+
+// Regressions exposed once Slice A made more sources parse (shared cases
+// spec/ir/option-patterns and spec/eval/model-b-c-open-lambda-factory-distinct).
+TEST_CASE("model-b-a: bare none/nil are never identifier bind patterns") {
+  // IrPatNone is not implemented by this host, so these stay unsupported
+  // instead of lowering to a wrong IrPatBind("none").
+  CHECK(request("lower", "f(opt) = (some(v)) -> v | (none) -> 0")["status"] == "unsupported");
+  CHECK(request("lower", "g = (nil) -> 0")["status"] == "unsupported");
+}
+
+TEST_CASE("model-b-a: functions compare by runtime identity (R18)") {
+  auto same = request("eval", "f = (x) -> x\ng = (x) -> x\n[f == f, f == g]");
+  REQUIRE(same["status"] == "ok");
+  CHECK(same["result"]["stdout"] == "[true, false]\n");
+  auto factory = request("eval", "mk(k) = {\n  g = (x) -> x + k\n  g\n}\na = mk(1)\nb = mk(2)\n[a == a, a == b]");
+  REQUIRE(factory["status"] == "ok");
+  CHECK(factory["result"]["stdout"] == "[true, false]\n");
+}
