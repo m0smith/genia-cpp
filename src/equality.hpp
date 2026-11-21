@@ -221,7 +221,8 @@ inline std::string map_key_encoding(const value::Value& key) {
 // contents: those handles compare by entity identity. Numbers use numeric_compare;
 // lists compare recursively in order and maps by encoded keys/recursive values,
 // independent of insertion order. Mismatched non-numeric kinds are false. Outcome,
-// Represented, Closure, StdinSource, Nil and Opaque branches return false, so this
+// Represented, StdinSource, Nil and Opaque branches return false (closures compare
+// by entity identity), so this
 // is not full portable equality coverage for those kinds. Require valid acyclic
 // containers/handles; recursion and allocation have no additional bound here.
 inline bool structural_equal(const value::Value& a, const value::Value& b) {
@@ -271,8 +272,10 @@ inline bool structural_equal(const value::Value& a, const value::Value& b) {
     }
     case value::Kind::Outcome:
     case value::Kind::Represented:
-    case value::Kind::Closure:
       return false;
+    case value::Kind::Closure:
+      // R18: functions are identity-bearing; one closure entity equals itself.
+      return a.closure == b.closure;
     case value::Kind::Ref:
       return a.ref == b.ref;
     case value::Kind::Cell:

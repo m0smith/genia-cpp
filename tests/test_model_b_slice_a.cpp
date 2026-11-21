@@ -68,21 +68,26 @@ TEST_CASE("model-b-a: every shared parse/IR case matches the pinned contract") {
 TEST_CASE("model-b-a: syntax support never executes unsupported Model B runtime forms") {
   // immutable_bindings, closed_functions and default_open_functions are not
   // C++ capabilities; their programs must stay unsupported, never run as `=`.
-  for (const char* source : {"x =: 1\nx", "f(x) =: x\nf(1)", "f([x]) = x\nf([1])",
-                             "f(x) ? true = x\nf(1)", "f(..xs) = xs\nf(1, 2)",
-                             "g = (P(x)) -> x\ng(1)", "g = (err(r)) -> r\ng(err(\"r\", 1))",
-                             "@doc \"d\"\nx =: 1\nx", "f(_) = 1\nf(2)"}) {
+  for (const char* source :
+       {"x =: 1\nx", "f(x) =: x\nf(1)", "f([x]) = x\nf([1])", "f(x) ? true = x\nf(1)",
+        "f(..xs) = xs\nf(1, 2)", "g = (P(x)) -> x\ng(1)", "g = (err(r)) -> r\ng(err(\"r\", 1))",
+        "@doc \"d\"\nx =: 1\nx", "f(_) = 1\nf(2)"}) {
     INFO(source);
     CHECK(request("eval", source)["status"] == "unsupported");
   }
 }
 
 TEST_CASE("model-b-a: =: lookalikes in strings, comments and maps keep their meaning") {
-  CHECK(lower_ok("\"=:\"") == json::parse(R"([{"node":"IrExprStmt","expr":{"node":"IrLiteral","value":"=:"}}])"));
-  CHECK(lower_ok("x = 1 # =: not an operator") ==
-        json::parse(R"([{"node":"IrAssign","name":"x","expr":{"node":"IrLiteral","value":{"kind":"integer","digits":"1"}}}])"));
-  CHECK(lower_ok("{a: 1}") ==
-        json::parse(R"([{"node":"IrExprStmt","expr":{"node":"IrMap","items":[{"key":"a","value":{"node":"IrLiteral","value":{"kind":"integer","digits":"1"}}}]}}])"));
+  CHECK(lower_ok("\"=:\"") ==
+        json::parse(R"([{"node":"IrExprStmt","expr":{"node":"IrLiteral","value":"=:"}}])"));
+  CHECK(
+      lower_ok("x = 1 # =: not an operator") ==
+      json::parse(
+          R"([{"node":"IrAssign","name":"x","expr":{"node":"IrLiteral","value":{"kind":"integer","digits":"1"}}}])"));
+  CHECK(
+      lower_ok("{a: 1}") ==
+      json::parse(
+          R"([{"node":"IrExprStmt","expr":{"node":"IrMap","items":[{"key":"a","value":{"node":"IrLiteral","value":{"kind":"integer","digits":"1"}}}]}}])"));
 }
 
 TEST_CASE("model-b-a: IrPatSome.context is serialized only inside pattern headers") {
@@ -138,7 +143,8 @@ TEST_CASE("model-b-a: functions compare by runtime identity (R18)") {
   auto same = request("eval", "f = (x) -> x\ng = (x) -> x\n[f == f, f == g]");
   REQUIRE(same["status"] == "ok");
   CHECK(same["result"]["stdout"] == "[true, false]\n");
-  auto factory = request("eval", "mk(k) = {\n  g = (x) -> x + k\n  g\n}\na = mk(1)\nb = mk(2)\n[a == a, a == b]");
+  auto factory = request(
+      "eval", "mk(k) = {\n  g = (x) -> x + k\n  g\n}\na = mk(1)\nb = mk(2)\n[a == a, a == b]");
   REQUIRE(factory["status"] == "ok");
   CHECK(factory["result"]["stdout"] == "[true, false]\n");
 }
