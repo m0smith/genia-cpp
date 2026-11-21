@@ -1,0 +1,56 @@
+// Generated from genia-2026 spec/{parse,ir}/model-b-a-*.yaml (41 cases).
+// Do not edit by hand; regenerate when the pinned contract revision changes.
+{"model-b-a-annotated-immutable", "lower", R"GENIA(@doc "binding"
+x =: "value")GENIA", R"GENIA([{"annotations": [{"name": "doc", "node": "IrAnnotation", "value": {"node": "IrLiteral", "value": "binding"}}], "expr": {"node": "IrLiteral", "value": "value"}, "name": "x", "node": "IrImmutableBind"}])GENIA"},
+{"model-b-a-calls", "lower", R"GENIA(f(1,2)
+gcd(48,18))GENIA", R"GENIA([{"expr": {"args": [{"node": "IrLiteral", "value": {"digits": "1", "kind": "integer"}}, {"node": "IrLiteral", "value": {"digits": "2", "kind": "integer"}}], "fn": {"name": "f", "node": "IrVar"}, "node": "IrCall"}, "node": "IrExprStmt"}, {"expr": {"args": [{"node": "IrLiteral", "value": {"digits": "48", "kind": "integer"}}, {"node": "IrLiteral", "value": {"digits": "18", "kind": "integer"}}], "fn": {"name": "gcd", "node": "IrVar"}, "node": "IrCall"}, "node": "IrExprStmt"}])GENIA"},
+{"model-b-a-closed-grouped", "lower", R"GENIA(f(x) =: (y) -> y | (_) -> "fallback")GENIA", R"GENIA([{"declarations": [{"body": {"clauses": [{"node": "IrCaseClause", "pattern": {"items": [{"name": "y", "node": "IrPatBind"}], "node": "IrPatTuple"}, "result": {"name": "y", "node": "IrVar"}}, {"node": "IrCaseClause", "pattern": {"items": [{"node": "IrPatWildcard"}], "node": "IrPatTuple"}, "result": {"node": "IrLiteral", "value": "fallback"}}], "node": "IrCase"}, "name": "f", "node": "IrFuncDef", "params": ["x"]}], "name": "f", "node": "IrClosedFuncDef"}])GENIA"},
+{"model-b-a-closed-run", "lower", R"GENIA(@doc "binding"
+f(x) =: x
+# comment
+
+@category "other"
+f(x,y) =: y)GENIA", R"GENIA([{"declarations": [{"annotations": [{"name": "doc", "node": "IrAnnotation", "value": {"node": "IrLiteral", "value": "binding"}}], "body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrFuncDef", "params": ["x"]}, {"annotations": [{"name": "category", "node": "IrAnnotation", "value": {"node": "IrLiteral", "value": "other"}}], "body": {"name": "y", "node": "IrVar"}, "name": "f", "node": "IrFuncDef", "params": ["x", "y"]}], "name": "f", "node": "IrClosedFuncDef"}])GENIA"},
+{"model-b-a-closed", "lower", R"GENIA(f(x) =: x)GENIA", R"GENIA([{"declarations": [{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrFuncDef", "params": ["x"]}], "name": "f", "node": "IrClosedFuncDef"}])GENIA"},
+{"model-b-a-guard-identifier", "lower", R"GENIA(f(x) ? true = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "guard": {"node": "IrLiteral", "value": true}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"name": "x", "node": "IrPatBind"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-guard-pattern", "lower", R"GENIA(f([x]) ? true = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "guard": {"node": "IrLiteral", "value": true}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"items": [{"name": "x", "node": "IrPatBind"}], "node": "IrPatList"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-immutable", "lower", R"GENIA(x =: "value")GENIA", R"GENIA([{"expr": {"node": "IrLiteral", "value": "value"}, "name": "x", "node": "IrImmutableBind"}])GENIA"},
+{"model-b-a-legacy-dotted-assignment", "lower", R"GENIA(a.b = 1)GENIA", R"GENIA([{"expr": {"node": "IrLiteral", "value": {"digits": "1", "kind": "integer"}}, "name": "a.b", "node": "IrAssign"}])GENIA"},
+{"model-b-a-legacy-dotted-function-arrow", "lower", R"GENIA(a.b(x) -> x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "a.b", "node": "IrFuncDef", "params": ["x"]}])GENIA"},
+{"model-b-a-legacy-dotted-function-block", "lower", R"GENIA(a.b(x) { x })GENIA", R"GENIA([{"body": {"exprs": [{"name": "x", "node": "IrVar"}], "node": "IrBlock"}, "name": "a.b", "node": "IrFuncDef", "params": ["x"]}])GENIA"},
+{"model-b-a-legacy-dotted-function", "lower", R"GENIA(a.b(x) = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "a.b", "node": "IrFuncDef", "params": ["x"]}])GENIA"},
+{"model-b-a-legacy-lambda-err", "lower", R"GENIA(g = (err(r)) -> r)GENIA", R"GENIA([{"expr": {"body": {"name": "r", "node": "IrVar"}, "node": "IrLambda", "params": [], "pattern": {"items": [{"context": null, "node": "IrPatErr", "reason": {"name": "r", "node": "IrPatBind"}}], "node": "IrPatTuple"}}, "name": "g", "node": "IrAssign"}])GENIA"},
+{"model-b-a-legacy-lambda-named", "lower", R"GENIA(g = (P(x)) -> x)GENIA", R"GENIA([{"expr": {"body": {"name": "x", "node": "IrVar"}, "node": "IrLambda", "params": [], "pattern": {"items": [{"inner": {"name": "x", "node": "IrPatBind"}, "name": "P", "node": "IrPatNamed"}], "node": "IrPatTuple"}}, "name": "g", "node": "IrAssign"}])GENIA"},
+{"model-b-a-legacy-rest", "lower", R"GENIA(f(..xs) = xs)GENIA", R"GENIA([{"body": {"name": "xs", "node": "IrVar"}, "name": "f", "node": "IrFuncDef", "params": [], "rest_param": "xs"}])GENIA"},
+{"model-b-a-legacy-some-context", "lower", R"GENIA(f(x) = (some(y,c)) -> y)GENIA", R"GENIA([{"body": {"clauses": [{"node": "IrCaseClause", "pattern": {"items": [{"inner": {"name": "y", "node": "IrPatBind"}, "node": "IrPatSome"}], "node": "IrPatTuple"}, "result": {"name": "y", "node": "IrVar"}}], "node": "IrCase"}, "name": "f", "node": "IrFuncDef", "params": ["x"]}])GENIA"},
+{"model-b-a-ordinary-independent", "lower", R"GENIA(f(x) = x
+a = "other"
+f(x,y) = y)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrFuncDef", "params": ["x"]}, {"expr": {"node": "IrLiteral", "value": "other"}, "name": "a", "node": "IrAssign"}, {"body": {"name": "y", "node": "IrVar"}, "name": "f", "node": "IrFuncDef", "params": ["x", "y"]}])GENIA"},
+{"model-b-a-pattern-err-context", "lower", R"GENIA(f(err(r, c)) = c)GENIA", R"GENIA([{"body": {"name": "c", "node": "IrVar"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"context": {"name": "c", "node": "IrPatBind"}, "node": "IrPatErr", "reason": {"name": "r", "node": "IrPatBind"}}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-pattern-err", "lower", R"GENIA(f(err(r)) = r)GENIA", R"GENIA([{"body": {"name": "r", "node": "IrVar"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"context": null, "node": "IrPatErr", "reason": {"name": "r", "node": "IrPatBind"}}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-pattern-list", "lower", R"GENIA(f([x,..xs]) = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"items": [{"name": "x", "node": "IrPatBind"}, {"name": "xs", "node": "IrPatRest"}], "node": "IrPatList"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-pattern-literal", "lower", R"GENIA(f("key") = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"node": "IrPatLiteral", "value": "key"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-pattern-map", "lower", R"GENIA(f({key:x}) = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"items": [{"key": "key", "value": {"name": "x", "node": "IrPatBind"}}], "node": "IrPatMap"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-pattern-named", "lower", R"GENIA(f(P(x)) = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"inner": {"name": "x", "node": "IrPatBind"}, "name": "P", "node": "IrPatNamed"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-pattern-some-context", "lower", R"GENIA(f(some(x,c)) = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"context": {"name": "c", "node": "IrPatBind"}, "inner": {"name": "x", "node": "IrPatBind"}, "node": "IrPatSome"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-pattern-string-body", "lower", R"GENIA(f("key") = "body")GENIA", R"GENIA([{"body": {"node": "IrLiteral", "value": "body"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"node": "IrPatLiteral", "value": "key"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-pattern-tuple", "lower", R"GENIA(f("key",x) = x)GENIA", R"GENIA([{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrPatternFuncDef", "pattern": {"items": [{"node": "IrPatLiteral", "value": "key"}, {"name": "x", "node": "IrPatBind"}], "node": "IrPatTuple"}}])GENIA"},
+{"model-b-a-split", "lower", R"GENIA(f(x) =: x
+a = "other"
+f(x,y) =: y)GENIA", R"GENIA([{"declarations": [{"body": {"name": "x", "node": "IrVar"}, "name": "f", "node": "IrFuncDef", "params": ["x"]}], "name": "f", "node": "IrClosedFuncDef"}, {"expr": {"node": "IrLiteral", "value": "other"}, "name": "a", "node": "IrAssign"}, {"declarations": [{"body": {"name": "y", "node": "IrVar"}, "name": "f", "node": "IrFuncDef", "params": ["x", "y"]}], "name": "f", "node": "IrClosedFuncDef"}])GENIA"},
+{"model-b-a-dotted-closed-target", "parse", R"GENIA(a.b(x) =: x)GENIA", R"GENIA({"kind": "error", "message": "Function declaration target must be a simple name", "type": "SyntaxError"})GENIA"},
+{"model-b-a-dotted-guard-target", "parse", R"GENIA(a.b(x) ? true = x)GENIA", R"GENIA({"kind": "error", "message": "Function declaration target must be a simple name", "type": "SyntaxError"})GENIA"},
+{"model-b-a-dotted-pattern-target", "parse", R"GENIA(a.b([x]) = x)GENIA", R"GENIA({"kind": "error", "message": "Function declaration target must be a simple name", "type": "SyntaxError"})GENIA"},
+{"model-b-a-guard-arrow", "parse", R"GENIA(f(x) ? true -> x)GENIA", R"GENIA({"kind": "error", "message": "pattern/guard", "type": "SyntaxError"})GENIA"},
+{"model-b-a-guard-grouped", "parse", R"GENIA(f(x) ? true = (y) -> y | (_) -> x)GENIA", R"GENIA({"kind": "error", "message": "grouped case body", "type": "SyntaxError"})GENIA"},
+{"model-b-a-index", "parse", R"GENIA(a[0] =: 1)GENIA", R"GENIA({"kind": "error", "message": "Assignment target must be a simple name", "type": "SyntaxError"})GENIA"},
+{"model-b-a-missing-body", "parse", R"GENIA(f(x) =:)GENIA", R"GENIA({"kind": "error", "message": "Unexpected", "type": "SyntaxError"})GENIA"},
+{"model-b-a-missing-init", "parse", R"GENIA(x =:)GENIA", R"GENIA({"kind": "error", "message": "Unexpected", "type": "SyntaxError"})GENIA"},
+{"model-b-a-mixed-reverse", "parse", R"GENIA(f(x)=:x
+f(y)=y)GENIA", R"GENIA({"kind": "error", "message": "mixed-function-declaration-operators", "type": "SyntaxError"})GENIA"},
+{"model-b-a-mixed", "parse", R"GENIA(f(x)=x
+f(y)=:y)GENIA", R"GENIA({"kind": "error", "message": "mixed-function-declaration-operators", "type": "SyntaxError"})GENIA"},
+{"model-b-a-nested", "parse", R"GENIA(make(k) = { f(x) =: x; f })GENIA", R"GENIA({"kind": "error", "message": "Assignment target must be a simple name", "type": "SyntaxError"})GENIA"},
+{"model-b-a-pattern-arrow", "parse", R"GENIA(f([x]) -> x)GENIA", R"GENIA({"kind": "error", "message": "pattern/guard", "type": "SyntaxError"})GENIA"},
+{"model-b-a-pattern-grouped", "parse", R"GENIA(f([x]) = (y) -> y | (_) -> x)GENIA", R"GENIA({"kind": "error", "message": "grouped case body", "type": "SyntaxError"})GENIA"},
+{"model-b-a-target", "parse", R"GENIA(a.key =: 1)GENIA", R"GENIA({"kind": "error", "message": "Assignment target must be a simple name", "type": "SyntaxError"})GENIA"},
