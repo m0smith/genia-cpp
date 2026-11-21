@@ -55,7 +55,7 @@ inline constexpr const char* kProtocolVersion = "1";
 // genia-2026 `main` (PR #1027) -- the prior pin above was this PR's
 // still-open branch head; this identical-content commit is the one
 // that is now actually current-main pinned conformance per E16-4.
-inline constexpr const char* kContractRevision = "6402e668ae85a1e7efe94b3ac3d51f233b730ca4";
+inline constexpr const char* kContractRevision = "d005c89f852ee2d27682dade272eabfd158adf12";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -102,6 +102,11 @@ inline const std::vector<std::string>& known_capabilities() {
       "open_functions",
       "multi_file_eval",
       "execution_process",
+      // Model B (manifest at d005c89). Declared unsupported: genia-cpp#50
+      // parses and lowers their syntax only; it executes none of them.
+      "immutable_bindings",
+      "default_open_functions",
+      "closed_functions",
   };
   return kNames;
 }
