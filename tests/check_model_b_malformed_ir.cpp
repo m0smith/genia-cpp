@@ -106,6 +106,31 @@ void check_pattern_arity() {
   expect(!refused(pattern_decl(Pattern::named("P", Pattern::bind("x")))), "valid named");
 }
 
+// Finding 1 (follow-up): a Some context subtree is validated in every
+// position, although only Model B headers serialize it.
+void check_some_context_validation() {
+  using genia::ir_projection::project;
+  const Pattern bad_context = carrier(pk::Kind::Err, 1);  // malformed: 1 child
+  const Pattern legacy_bad = Pattern::some(Pattern::bind("v"), bad_context);
+  expect(refused(lambda_with(legacy_bad)), "malformed context in a legacy lambda Some");
+  Node grouped = Node::func_def_case("f", {"x"}, {Pattern::tuple({legacy_bad})}, {Node::var("v")});
+  expect(refused(grouped), "malformed context in a legacy grouped-arm Some");
+  expect(refused(lambda_with(Pattern::list({legacy_bad}))),
+         "malformed context in a Some nested in a list");
+  expect(refused(pattern_decl(legacy_bad)), "malformed context in a header Some");
+
+  // Valid legacy context: accepted and still omitted from the wire.
+  const Pattern legacy_ok = Pattern::some(Pattern::bind("v"), Pattern::bind("c"));
+  auto lambda = project(lambda_with(legacy_ok));
+  expect(lambda.has_value() && !(*lambda)["expr"]["pattern"]["items"][1].contains("context"),
+         "valid legacy Some context omitted");
+  // Valid Model B header context: still serialized.
+  auto header = project(pattern_decl(legacy_ok));
+  expect(header.has_value() && (*header)["pattern"]["items"][0]["context"] ==
+                                   nlohmann::json({{"node", "IrPatBind"}, {"name", "c"}}),
+         "valid header Some context serialized");
+}
+
 // Finding 2: closed-group FuncDef children are fully validated.
 void check_closed_children() {
   Node no_body = func_decl(Node::var("x"));
@@ -212,6 +237,7 @@ bool run_isolated(const char* name, void (*check)()) {
 int main() {
   int failed = 0;
   failed += run_isolated("finding_1_pattern_arity", check_pattern_arity) ? 0 : 1;
+  failed += run_isolated("finding_1_some_context", check_some_context_validation) ? 0 : 1;
   failed += run_isolated("finding_2_closed_children", check_closed_children) ? 0 : 1;
   failed += run_isolated("finding_3_immutable_initializer", check_immutable_initializer) ? 0 : 1;
   failed += run_isolated("finding_4_nested_declarations", check_nested_declarations) ? 0 : 1;

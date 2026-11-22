@@ -23,3 +23,14 @@ FAILED: boolean_patterns: exception: [json.exception.type_error.305] cannot use 
 3 Model B Slice A invariant(s) failed
 rc=1
 ```
+
+## Finding 1 follow-up: legacy Some context (RED at 96fa669)
+
+```
+FAILED: malformed context in a legacy lambda Some
+FAILED: malformed context in a legacy grouped-arm Some
+FAILED: malformed context in a Some nested in a list
+FAILED: finding_1_some_context
+1 malformed-IR check(s) failed
+rc=1
+```
