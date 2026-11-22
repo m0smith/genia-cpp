@@ -98,3 +98,8 @@ add_test(NAME genia-source-comments-check COMMAND genia-source-comments-check)
 add_executable(genia-model-b-slice-a-check tests/check_model_b_slice_a.cpp)
 target_include_directories(genia-model-b-slice-a-check PRIVATE third_party/nlohmann_json)
 add_test(NAME genia-model-b-slice-a-check COMMAND genia-model-b-slice-a-check)
+
+# genia-cpp#50 review findings 1-4: adversarial malformed direct Core IR.
+add_executable(genia-model-b-malformed-ir-check tests/check_model_b_malformed_ir.cpp)
+target_include_directories(genia-model-b-malformed-ir-check PRIVATE third_party/nlohmann_json)
+add_test(NAME genia-model-b-malformed-ir-check COMMAND genia-model-b-malformed-ir-check)

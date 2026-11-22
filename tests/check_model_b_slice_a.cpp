@@ -190,12 +190,53 @@ void check_function_identity() {
   expect(factory["result"]["stdout"] == "[true, false]\n");
 }
 
+// Review finding 3 (source path): a missing `=:` initializer stays a parse
+// SyntaxError and is never lowered.
+void check_missing_initializer_source() {
+  auto parsed = request("parse", "x =:");
+  require(parsed["status"] == "ok", parsed.dump());
+  expect(parsed["result"]["kind"] == "error" && parsed["result"]["type"] == "SyntaxError");
+  expect(request("lower", "x =:")["status"] == "unsupported");
+}
+
+// Review finding 5: bare true/false are Boolean literal patterns in every
+// position (wire `IrPatLiteral` with a JSON boolean), never identifier binds.
+void check_boolean_patterns() {
+  const json lit_true = json::parse(R"({"node":"IrPatLiteral","value":true})");
+  const json lit_false = json::parse(R"({"node":"IrPatLiteral","value":false})");
+  const json guarded = lower_ok("f(true) ? true = 1");
+  expect(guarded[0]["node"] == "IrPatternFuncDef", guarded.dump());
+  expect(guarded[0]["pattern"]["items"][0] == lit_true, guarded.dump());
+  const json unguarded = lower_ok("f(false) = 1");
+  expect(unguarded[0]["node"] == "IrPatternFuncDef", unguarded.dump());
+  expect(unguarded[0]["pattern"]["items"][0] == lit_false, unguarded.dump());
+  const json compound = lower_ok("f([true, {k: false}]) = 1");
+  expect(compound[0]["pattern"]["items"][0]["items"][0] == lit_true, compound.dump());
+  expect(compound[0]["pattern"]["items"][0]["items"][1]["items"][0]["value"] == lit_false,
+         compound.dump());
+  const json closed = lower_ok("f(true) =: 1");
+  expect(closed[0]["declarations"][0]["node"] == "IrPatternFuncDef", closed.dump());
+  const json lambda = lower_ok("g = (true) -> 1");
+  expect(lambda[0]["expr"]["pattern"]["items"][0] == lit_true, lambda.dump());
+  // Real identifiers keep identifier-binding semantics.
+  const json ident = lower_ok("f(truth, falsey) = truth");
+  expect(ident[0]["node"] == "IrFuncDef" && ident[0]["params"] == json({"truth", "falsey"}),
+         ident.dump());
+  // A Boolean literal arm matches by equality, not as a catch-all binding.
+  auto arms = request("eval", "f(x) = (true) -> \"t\" | (_) -> \"o\"\n[f(true), f(false), f(1)]");
+  require(arms["status"] == "ok", arms.dump());
+  expect(arms["result"]["stdout"] == "[\"t\", \"o\", \"o\"]\n", arms.dump());
+}
+
 // Runs one named check, isolating a failed prerequisite to that check.
 void run_check(const char* name, void (*check)()) {
   g_current_check = name;
   try {
     check();
   } catch (const std::runtime_error&) {
+  } catch (const std::exception& error) {
+    // A malformed response shape is a failure of this check, not a crash.
+    expect(false, std::string("exception: ") + error.what());
   }
 }
 
@@ -213,6 +254,8 @@ int main() {
   run_check("r20_and_legacy", check_r20_and_legacy);
   run_check("none_nil_patterns", check_none_nil_patterns);
   run_check("function_identity", check_function_identity);
+  run_check("missing_initializer_source", check_missing_initializer_source);
+  run_check("boolean_patterns", check_boolean_patterns);
   if (g_failures != 0) {
     std::cerr << g_failures << " Model B Slice A invariant(s) failed\n";
     return 1;
