@@ -35,6 +35,12 @@ inline std::optional<json> project(const core_ir::Node& node);
 // destructuring List/Map/Wildcard/Rest pattern) projects with `params`
 // as plain names and no `pattern` field; anything else projects `params`
 // as empty and carries the full pattern via `pattern`.
+// Projects a required child; a missing (null) child is a malformed carrier.
+inline std::optional<json> project_child(const std::shared_ptr<core_ir::Node>& child) {
+  if (!child) return std::nullopt;
+  return project(*child);
+}
+
 inline bool is_simple_bind_shape(const std::vector<pattern::Pattern>& params) {
   for (const auto& p : params) {
     if (p.kind != pattern::Kind::Bind) {
@@ -65,6 +71,31 @@ inline std::optional<int64_t> pattern_digits_to_safe_int64(const std::string& di
   }
 }
 
+// Child-count contract of each pattern carrier, checked before any child is
+// read: Err/Some hold exactly [value, context], Named exactly [inner],
+// Tuple/List any number of items, Map only map_items, and leaf carriers
+// (Bind/Wildcard/Rest/Literal) none. Missing or excess children are refused.
+inline bool has_valid_arity(const pattern::Pattern& pattern) {
+  switch (pattern.kind) {
+    case pattern::Kind::Err:
+    case pattern::Kind::Some:
+      return pattern.items.size() == 2 && pattern.map_items.empty();
+    case pattern::Kind::Named:
+      return pattern.items.size() == 1 && pattern.map_items.empty();
+    case pattern::Kind::Tuple:
+    case pattern::Kind::List:
+      return pattern.map_items.empty();
+    case pattern::Kind::Map:
+      return pattern.items.empty();
+    case pattern::Kind::Bind:
+    case pattern::Kind::Wildcard:
+    case pattern::Kind::Rest:
+    case pattern::Kind::Literal:
+      return pattern.items.empty() && pattern.map_items.empty();
+  }
+  return false;
+}
+
 // `model_b_header` is true only inside an IrPatternFuncDef header: that is
 // the one position where IrPatSome.context is serialized (legacy lambda/case
 // positions omit it to keep their historical wire). IrPatErr and IrPatNamed
@@ -72,6 +103,7 @@ inline std::optional<int64_t> pattern_digits_to_safe_int64(const std::string& di
 // `null`.
 inline std::optional<json> project_pattern(const pattern::Pattern& pattern,
                                            bool model_b_header = false) {
+  if (!has_valid_arity(pattern)) return std::nullopt;
   switch (pattern.kind) {
     case pattern::Kind::Literal: {
       // genia-2026's real IrPatLiteral carries the raw value (unlike
@@ -174,6 +206,65 @@ inline std::optional<json> project_annotations(
 // a closed group is a nonempty ordered list of same-name IrFuncDef or
 // IrPatternFuncDef records, never a nested group. Invalid carriers are not
 // portable IR, so projection refuses them (the case becomes unsupported).
+// A grouped (case-body) function needs parallel pattern/result arrays and,
+// when guards are present, one guard slot per clause.
+inline bool has_valid_clause_arrays(const core_ir::Node& node) {
+  return node.case_patterns.size() == node.case_results.size() &&
+         (node.case_guards.empty() || node.case_guards.size() == node.case_patterns.size());
+}
+
+// True when `node` or any expression beneath it is a function declaration
+// (IrFuncDef, IrOpenFuncDef, IrPatternFuncDef or IrClosedFuncDef). Walks every
+// child slot: operands, items, map values, bodies, grouped results, guards
+// and annotation values. IrImmutableBind is a permitted local binding; its
+// initializer is still walked.
+inline bool contains_function_declaration(const core_ir::Node& node) {
+  switch (node.kind) {
+    case core_ir::Kind::FuncDef:
+    case core_ir::Kind::OpenFuncDef:
+    case core_ir::Kind::PatternFuncDef:
+    case core_ir::Kind::ClosedFuncDef:
+      return true;
+    default:
+      break;
+  }
+  auto any = [](const std::shared_ptr<core_ir::Node>& child) {
+    return child && contains_function_declaration(*child);
+  };
+  if (any(node.left) || any(node.right) || any(node.guard)) return true;
+  for (const auto& item : node.items) {
+    if (contains_function_declaration(item)) return true;
+  }
+  for (const auto& result : node.case_results) {
+    if (contains_function_declaration(result)) return true;
+  }
+  for (const auto& guard : node.case_guards) {
+    if (any(guard)) return true;
+  }
+  for (const auto& entry : node.map_entries) {
+    if (contains_function_declaration(entry.value)) return true;
+  }
+  for (const auto& annotation : node.annotations) {
+    if (contains_function_declaration(annotation.value)) return true;
+  }
+  return false;
+}
+
+// The body slots of one closed-group child (its declaration itself excluded).
+inline bool declaration_body_contains_function(const core_ir::Node& declaration) {
+  auto any = [](const std::shared_ptr<core_ir::Node>& child) {
+    return child && contains_function_declaration(*child);
+  };
+  if (any(declaration.left) || any(declaration.guard)) return true;
+  for (const auto& result : declaration.case_results) {
+    if (contains_function_declaration(result)) return true;
+  }
+  for (const auto& guard : declaration.case_guards) {
+    if (any(guard)) return true;
+  }
+  return false;
+}
+
 inline bool is_valid_model_b_carrier(const core_ir::Node& node) {
   if (node.kind == core_ir::Kind::PatternFuncDef) {
     return node.header.kind == pattern::Kind::Tuple && node.left != nullptr && !node.is_case_body &&
@@ -188,6 +279,11 @@ inline bool is_valid_model_b_carrier(const core_ir::Node& node) {
           declaration.kind != core_ir::Kind::PatternFuncDef)
         return false;
       if (!is_valid_model_b_carrier(declaration)) return false;
+      if (declaration.kind == core_ir::Kind::FuncDef &&
+          (declaration.is_case_body ? !has_valid_clause_arrays(declaration)
+                                    : declaration.left == nullptr))
+        return false;
+      if (declaration_body_contains_function(declaration)) return false;
     }
     return true;
   }
@@ -243,7 +339,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
       // {"node": "IrUnary", "op": <token name>, "expr": <ir>} --
       // verified directly against spec/ir/r21-unary-negative-decimal-
       // tagged-payload.yaml.
-      auto operand = project(*node.left);
+      auto operand = project_child(node.left);
       if (!operand.has_value()) {
         return std::nullopt;
       }
@@ -252,6 +348,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
     case core_ir::Kind::Quote:
     case core_ir::Kind::QuasiQuote: {
       json quoted;
+      if (!node.left) return std::nullopt;
       if (node.left->literal_kind == core_ir::LiteralKind::Integer) {
         try {
           quoted = json{{"kind", "Literal"}, {"value", std::stoll(node.left->integer_digits)}};
@@ -275,8 +372,8 @@ inline std::optional<json> project(const core_ir::Node& node) {
     case core_ir::Kind::Var:
       return json{{"node", "IrVar"}, {"name", node.name}};
     case core_ir::Kind::Binary: {
-      auto left = project(*node.left);
-      auto right = project(*node.right);
+      auto left = project_child(node.left);
+      auto right = project_child(node.right);
       if (!left.has_value() || !right.has_value()) {
         return std::nullopt;
       }
@@ -293,7 +390,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
       return projected;
     }
     case core_ir::Kind::ExprStmt: {
-      auto expr = project(*node.left);
+      auto expr = project_child(node.left);
       if (!expr.has_value()) {
         return std::nullopt;
       }
@@ -331,7 +428,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
       return json{{"node", "IrMap"}, {"items", items}};
     }
     case core_ir::Kind::Assign: {
-      auto expr = project(*node.left);
+      auto expr = project_child(node.left);
       if (!expr.has_value()) {
         return std::nullopt;
       }
@@ -350,7 +447,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
           {"node", "IrCall"}, {"fn", json{{"node", "IrVar"}, {"name", node.name}}}, {"args", args}};
     }
     case core_ir::Kind::Lambda: {
-      auto body = project(*node.left);
+      auto body = project_child(node.left);
       if (!body.has_value()) {
         return std::nullopt;
       }
@@ -372,6 +469,8 @@ inline std::optional<json> project(const core_ir::Node& node) {
       return result;
     }
     case core_ir::Kind::FuncDef: {
+      if (node.is_case_body ? !has_valid_clause_arrays(node) : node.left == nullptr)
+        return std::nullopt;
       json body;
       if (node.is_case_body) {
         json clauses = json::array();
@@ -386,7 +485,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
         }
         body = json{{"node", "IrCase"}, {"clauses", clauses}};
       } else {
-        auto projected_body = project(*node.left);
+        auto projected_body = project_child(node.left);
         if (!projected_body.has_value()) {
           return std::nullopt;
         }
@@ -406,7 +505,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
       return result;
     }
     case core_ir::Kind::ImmutableBind: {
-      auto expr = project(*node.left);
+      auto expr = project_child(node.left);
       if (!expr.has_value()) return std::nullopt;
       json result{{"node", "IrImmutableBind"}, {"name", node.name}, {"expr", *expr}};
       if (!node.annotations.empty()) {
@@ -419,12 +518,12 @@ inline std::optional<json> project(const core_ir::Node& node) {
     case core_ir::Kind::PatternFuncDef: {
       if (!is_valid_model_b_carrier(node)) return std::nullopt;
       auto header = project_pattern(node.header, /*model_b_header=*/true);
-      auto body = project(*node.left);
+      auto body = project_child(node.left);
       if (!header || !body) return std::nullopt;
       json result{
           {"node", "IrPatternFuncDef"}, {"name", node.name}, {"pattern", *header}, {"body", *body}};
       if (node.guard) {
-        auto guard = project(*node.guard);
+        auto guard = project_child(node.guard);
         if (!guard) return std::nullopt;
         result["guard"] = *guard;
       }
@@ -446,6 +545,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
       return json{{"node", "IrClosedFuncDef"}, {"name", node.name}, {"declarations", declarations}};
     }
     case core_ir::Kind::OpenFuncDef: {
+      if (!has_valid_clause_arrays(node)) return std::nullopt;
       // hosts/python/ir_normalize.py's real IrOpenFuncDef handler:
       // {"node": "IrOpenFuncDef", "name": ..., "clauses": [...]} --
       // `docstring`/`annotations` are only added when non-None/non-empty,
@@ -463,7 +563,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
       return json{{"node", "IrOpenFuncDef"}, {"name", node.name}, {"clauses", clauses}};
     }
     case core_ir::Kind::Pipeline: {
-      auto source = project(*node.left);
+      auto source = project_child(node.left);
       if (!source.has_value()) {
         return std::nullopt;
       }
@@ -478,7 +578,7 @@ inline std::optional<json> project(const core_ir::Node& node) {
       return json{{"node", "IrPipeline"}, {"source", *source}, {"stages", stages}};
     }
     case core_ir::Kind::Spread: {
-      auto expr = project(*node.left);
+      auto expr = project_child(node.left);
       if (!expr.has_value()) {
         return std::nullopt;
       }
