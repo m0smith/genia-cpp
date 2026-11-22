@@ -76,6 +76,7 @@ Node closed(std::vector<Node> children) {
 
 // Finding 1: Err/Some/Named child counts are validated at every level.
 void check_pattern_arity() {
+  // One malformed carrier shape: a kind with a wrong child count.
   struct Bad {
     pk::Kind kind;
     size_t count;

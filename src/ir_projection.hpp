@@ -30,17 +30,17 @@ using json = nlohmann::json;
 // docstrings but excluding host-local spans. Unsupported shapes return nullopt.
 inline std::optional<json> project(const core_ir::Node& node);
 
-// Mirrors src/genia/lowering.py's `_lambda_pattern_is_simple_parameter_shape`:
-// a lambda whose every positional parameter is a plain Bind (never a
-// destructuring List/Map/Wildcard/Rest pattern) projects with `params`
-// as plain names and no `pattern` field; anything else projects `params`
-// as empty and carries the full pattern via `pattern`.
 // Projects a required child; a missing (null) child is a malformed carrier.
 inline std::optional<json> project_child(const std::shared_ptr<core_ir::Node>& child) {
   if (!child) return std::nullopt;
   return project(*child);
 }
 
+// Mirrors src/genia/lowering.py's `_lambda_pattern_is_simple_parameter_shape`:
+// a lambda whose every positional parameter is a plain Bind (never a
+// destructuring List/Map/Wildcard/Rest pattern) projects with `params`
+// as plain names and no `pattern` field; anything else projects `params`
+// as empty and carries the full pattern via `pattern`.
 inline bool is_simple_bind_shape(const std::vector<pattern::Pattern>& params) {
   for (const auto& p : params) {
     if (p.kind != pattern::Kind::Bind) {
@@ -204,11 +204,6 @@ inline std::optional<json> project_annotations(
   return result;
 }
 
-// Malformed-carrier validation for direct Model B IR (core-ir-portability.md):
-// a pattern declaration needs one full tuple header and no grouped case body;
-// a closed group is a nonempty ordered list of same-name IrFuncDef or
-// IrPatternFuncDef records, never a nested group. Invalid carriers are not
-// portable IR, so projection refuses them (the case becomes unsupported).
 // A grouped (case-body) function needs parallel pattern/result arrays and,
 // when guards are present, one guard slot per clause.
 inline bool has_valid_clause_arrays(const core_ir::Node& node) {
@@ -268,6 +263,12 @@ inline bool declaration_body_contains_function(const core_ir::Node& declaration)
   return false;
 }
 
+// Malformed-carrier validation for direct Model B IR (core-ir-portability.md):
+// a pattern declaration needs one full tuple header and no grouped case body;
+// a closed group is a nonempty ordered list of same-name IrFuncDef or
+// IrPatternFuncDef records, never a nested group, each with a
+// body (or parallel clause arrays) that holds no nested function declaration. Invalid carriers are
+// not portable IR, so projection refuses them (the case becomes unsupported).
 inline bool is_valid_model_b_carrier(const core_ir::Node& node) {
   if (node.kind == core_ir::Kind::PatternFuncDef) {
     return node.header.kind == pattern::Kind::Tuple && node.left != nullptr && !node.is_case_body &&

@@ -23,11 +23,23 @@ Pinned contract revision: `d005c89f852ee2d27682dade272eabfd158adf12`.
 - `IrPatErr` (an absent context is `null`) and `IrPatNamed` are serialized in every
   position, including legacy lambda and case patterns. `IrPatSome.context` is
   serialized only inside `IrPatternFuncDef` headers (the documented asymmetry).
-- Malformed-carrier validation (`ir_projection::is_valid_model_b_carrier`). A closed
-  group must be nonempty and contain only same-name `IrFuncDef`/`IrPatternFuncDef`
-  children, with no nested groups. A pattern declaration needs one tuple header and
-  has no params/rest/docstring or grouped body. An invalid carrier is refused, not
-  serialized.
+- Malformed-carrier validation in `src/ir_projection.hpp`. An invalid carrier is
+  refused (unsupported) before any child is read, never serialized or partially
+  emitted:
+  - Every pattern's child count is checked: `Err`/`Some` need exactly two children,
+    `Named` exactly one, and leaf patterns none.
+  - Every required child (bodies, initializers, operands) must be present.
+  - A grouped function needs parallel pattern/result arrays and, when it has guards,
+    one guard slot per clause.
+  - A closed group is nonempty and contains only same-name, well-formed
+    `IrFuncDef`/`IrPatternFuncDef` children. A child body contains no nested
+    function declaration of any kind: not in a block, lambda, grouped-arm result or
+    guard. A local `IrImmutableBind` is permitted.
+  - A pattern declaration needs one tuple header and has no params, rest, docstring
+    or grouped body.
+- Bare `true`/`false` in any pattern position are Boolean literal patterns
+  (`IrPatLiteral` with a JSON boolean, matched by R18 equality), so `f(true) = …` is
+  an `IrPatternFuncDef`. Identifiers such as `truth` stay parameter binds.
 - Contract SyntaxErrors are reported by the `parse` operation only:
   - `Assignment target must be a simple name`
   - `Function declaration target must be a simple name`
@@ -52,6 +64,23 @@ claims no shape for the new carriers.
 Two exposed baseline gaps were fixed, each with its own RED test:
 - Bare `none`/`nil` were lowered as `IrPatBind`.
 - Closures were never equal to themselves (R18 identity: `f == f` was `false`).
+
+## PR #61 review corrections
+
+The independent review of `a4673b7` raised five blocking findings. Each one got a
+RED test first, in commit `4100936`. The RED output is saved in
+[`docs/evidence/model-b-review-red.md`](evidence/model-b-review-red.md).
+
+| # | Finding | RED at `a4673b7` | GREEN |
+|---|---|---|---|
+| 1 | `Err`/`Some`/`Named` child counts are not checked | SIGSEGV | `73e02ab` |
+| 2 | Closed `FuncDef` children: missing body, mismatched arrays | SIGSEGV | `73e02ab` |
+| 3 | `ImmutableBind` without an initializer | SIGSEGV | `73e02ab` |
+| 4 | Nested declarations in closed child bodies | 6 nested forms serialized | `73e02ab` |
+| 5 | `true`/`false` lowered as identifier binds | `IrPatBind("true")`, `params:["false"]` | `7832f9c` |
+
+The adversarial checks run in the fork-isolated `genia-model-b-malformed-ir-check`.
+The source-path and Boolean checks run in `genia-model-b-slice-a-check`.
 
 ## Evidence
 
