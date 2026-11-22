@@ -67,6 +67,8 @@ struct Pattern {
   std::string name;
   bool literal_is_decimal = false;
   bool literal_is_string = false;
+  // Boolean literal pattern (`true`/`false`); `name` holds its spelling.
+  bool literal_is_bool = false;
   std::string decimal_coefficient_digits;
   int64_t decimal_exponent = 0;
 
@@ -119,6 +121,16 @@ struct Pattern {
     p.literal_is_decimal = true;
     p.decimal_coefficient_digits = std::move(coefficient_digits);
     p.decimal_exponent = exponent;
+    return p;
+  }
+
+  // Bare `true`/`false` in pattern position: a Boolean literal pattern that
+  // matches by R18 equality, never an identifier bind.
+  static Pattern bool_literal(bool value) {
+    Pattern p;
+    p.kind = Kind::Literal;
+    p.literal_is_bool = true;
+    p.name = value ? "true" : "false";
     return p;
   }
 

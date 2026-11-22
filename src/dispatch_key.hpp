@@ -36,9 +36,12 @@ inline std::string pattern_key(const pattern::Pattern& pattern,
       append_field(key, std::to_string(entry->second));
     }
   } else if (pattern.kind == pattern::Kind::Literal) {
-    key += pattern.literal_is_decimal ? "D" : pattern.literal_is_string ? "S" : "I";
+    key += pattern.literal_is_bool      ? "B"
+           : pattern.literal_is_decimal ? "D"
+           : pattern.literal_is_string  ? "S"
+                                        : "I";
     auto name = pattern.name;
-    if (!pattern.literal_is_decimal && !pattern.literal_is_string) {
+    if (!pattern.literal_is_decimal && !pattern.literal_is_string && !pattern.literal_is_bool) {
       const auto first = name.find_first_not_of('0');
       name = first == std::string::npos ? "0" : name.substr(first);
     }

@@ -111,6 +111,9 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern,
       // numeric literals are explicitly unaffected by that ticket, see
       // pattern.hpp's header comment).
       if (pattern.literal_is_string) return json{{"node", "IrPatLiteral"}, {"value", pattern.name}};
+      if (pattern.literal_is_bool) {
+        return json{{"node", "IrPatLiteral"}, {"value", pattern.name == "true"}};
+      }
       auto value = pattern_digits_to_safe_int64(pattern.name);
       if (!value.has_value()) {
         return std::nullopt;

@@ -1293,6 +1293,11 @@ class Parser {
       if ((text == "none" || text == "nil") && peek().kind != TokenKind::LParen) {
         return std::nullopt;
       }
+      if (text == "true" || text == "false") {
+        // Boolean literals are literal patterns, never identifier binds.
+        if (peek().kind == TokenKind::LParen) return std::nullopt;
+        return pattern::Pattern::bool_literal(text == "true");
+      }
       if ((text == "err" || text == "some") && peek().kind == TokenKind::LParen) {
         advance();
         auto first = parse_pattern_atom();
