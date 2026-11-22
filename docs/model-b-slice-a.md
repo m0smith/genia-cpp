@@ -28,6 +28,9 @@ Pinned contract revision: `d005c89f852ee2d27682dade272eabfd158adf12`.
   emitted:
   - Every pattern's child count is checked: `Err`/`Some` need exactly two children,
     `Named` exactly one, and leaf patterns none.
+  - Every child subtree is validated recursively, including a `Some` context in
+    legacy lambda and case positions. There it is still not serialized, but a
+    malformed context fails the whole projection.
   - Every required child (bodies, initializers, operands) must be present.
   - A grouped function needs parallel pattern/result arrays and, when it has guards,
     one guard slot per clause.
@@ -77,7 +80,11 @@ RED test first, in commit `4100936`. The RED output is saved in
 | 2 | Closed `FuncDef` children: missing body, mismatched arrays | SIGSEGV | `73e02ab` |
 | 3 | `ImmutableBind` without an initializer | SIGSEGV | `73e02ab` |
 | 4 | Nested declarations in closed child bodies | 6 nested forms serialized | `73e02ab` |
+| 1b | Legacy `Some` context not validated (follow-up review) | 3 malformed contexts accepted (`2455aab`) | see below |
 | 5 | `true`/`false` lowered as identifier binds | `IrPatBind("true")`, `params:["false"]` | `7832f9c` |
+
+Finding 1b was raised by the follow-up independent review of `96fa669`. RED is
+`2455aab`; the fix is in the next commit.
 
 The adversarial checks run in the fork-isolated `genia-model-b-malformed-ir-check`.
 The source-path and Boolean checks run in `genia-model-b-slice-a-check`.

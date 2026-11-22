@@ -174,10 +174,13 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern,
       auto inner = project_pattern(pattern.items[0], model_b_header);
       if (!inner.has_value()) return std::nullopt;
       json result{{"node", "IrPatSome"}, {"inner", *inner}};
-      if (model_b_header && pattern.has_context) {
+      if (pattern.has_context) {
+        // The context is validated in every position so a malformed subtree
+        // fails the whole projection, but it is serialized only inside an
+        // IrPatternFuncDef header (legacy positions keep the historical wire).
         auto context = project_pattern(pattern.items[1], model_b_header);
         if (!context.has_value()) return std::nullopt;
-        result["context"] = *context;
+        if (model_b_header) result["context"] = *context;
       }
       return result;
     }
