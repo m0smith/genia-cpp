@@ -49,6 +49,8 @@ inline std::optional<int64_t> digits_to_safe_int64(const std::string& digits) {
   }
 }
 
+// Projects one parse-category AST node; nullopt when no shape is claimed
+// (including every Model B carrier, varargs and annotated functions).
 inline std::optional<json> project(const ast::Node& node) {
   switch (node.kind) {
     case ast::Kind::Literal: {
@@ -128,7 +130,14 @@ inline std::optional<json> project(const ast::Node& node) {
     case ast::Kind::Spread:
       // Same bare-fallback rule for the real `Spread` AST node.
       return json{{"kind", "Spread"}};
+    case ast::Kind::ImmutableBind:
+    case ast::Kind::PatternFuncDef:
+    case ast::Kind::ClosedFuncDef:
+      // No parse-category AST shape is claimed for Model B carriers; their
+      // pinned evidence is the lowered Core IR (`lower` operation).
+      return std::nullopt;
     case ast::Kind::FuncDef: {
+      if (node.rest_param.has_value() || !node.annotations.empty()) return std::nullopt;
       // normalize_ast's real FuncDef handler: `params` is always the
       // header's plain parameter names (regardless of whether the body
       // is a case-dispatch expression), and `body` recurses -- a

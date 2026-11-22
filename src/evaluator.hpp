@@ -509,6 +509,7 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       return native_functions::call(node.name, args);
     }
     case core_ir::Kind::Lambda: {
+      if (!pattern_match::all_executable(node.params)) return std::nullopt;
       auto closure = std::make_shared<value::Closure>();
       closure->params = node.params;
       closure->body = node.left;
@@ -518,8 +519,21 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
     // Named ordinary groups retain header bindings and fixed-arity overloads.
     // Local explicit-open groups instead flatten arms and validate R20 keys.
     // Both retain captured environments; validation precedes group mutation.
+    case core_ir::Kind::ImmutableBind:
+    case core_ir::Kind::PatternFuncDef:
+    case core_ir::Kind::ClosedFuncDef:
+      // genia-cpp#50: Model B carriers are parsed and lowered only. This host
+      // declares none of immutable_bindings, default_open_functions or
+      // closed_functions, so it never executes them (and never as `=`).
+      return std::nullopt;
     case core_ir::Kind::OpenFuncDef:
     case core_ir::Kind::FuncDef: {
+      // Legacy varargs and prefix annotations lower portably but are not
+      // executed by this bounded runtime.
+      if (node.rest_param.has_value() || !node.annotations.empty()) return std::nullopt;
+      if (!pattern_match::all_executable(node.params) ||
+          !pattern_match::all_executable(node.case_patterns))
+        return std::nullopt;
       auto closure = std::make_shared<value::Closure>();
       closure->name = node.name;
       closure->captured_env = env;

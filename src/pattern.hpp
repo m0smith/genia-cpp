@@ -28,7 +28,19 @@
 
 namespace genia::pattern {
 
-enum class Kind : std::uint8_t { Bind, Wildcard, Rest, List, Map, Tuple, Literal, Err, Some };
+// Pattern kinds; Named is a portable carrier this host never matches.
+enum class Kind : std::uint8_t {
+  Bind,
+  Wildcard,
+  Rest,
+  List,
+  Map,
+  Tuple,
+  Literal,
+  Err,
+  Some,
+  Named
+};
 
 struct PatternMapEntry;
 
@@ -55,6 +67,8 @@ struct Pattern {
   std::string name;
   bool literal_is_decimal = false;
   bool literal_is_string = false;
+  // Boolean literal pattern (`true`/`false`); `name` holds its spelling.
+  bool literal_is_bool = false;
   std::string decimal_coefficient_digits;
   int64_t decimal_exponent = 0;
 
@@ -63,6 +77,11 @@ struct Pattern {
   // final item in a list pattern" rule). Tuple: one pattern per
   // top-level case-clause/lambda-parameter position.
   std::vector<Pattern> items;
+
+  // Err/Some only: false for the one-argument `err(r)` / `some(x)` spelling.
+  // The second item is then a placeholder wildcard that must never be
+  // matched as a real context pattern (see pattern_match.hpp).
+  bool has_context = true;
 
   // Map: key -> value-pattern pairs. A bare `{name}` shorthand key
   // lowers to `{name, Bind(name)}` at parse time (see parser.hpp),
@@ -105,6 +124,16 @@ struct Pattern {
     return p;
   }
 
+  // Bare `true`/`false` in pattern position: a Boolean literal pattern that
+  // matches by R18 equality, never an identifier bind.
+  static Pattern bool_literal(bool value) {
+    Pattern p;
+    p.kind = Kind::Literal;
+    p.literal_is_bool = true;
+    p.name = value ? "true" : "false";
+    return p;
+  }
+
   static Pattern string_literal(std::string text) {
     Pattern p;
     p.kind = Kind::Literal;
@@ -142,6 +171,31 @@ struct Pattern {
   // defaults to None when the 1-argument constructor form was used --
   // matched here regardless, since every pinned case using this pattern
   // only ever binds its second slot with `_`).
+  static Pattern err_without_context(Pattern reason) {
+    Pattern p = err(std::move(reason), wildcard());
+    p.has_context = false;
+    return p;
+  }
+
+  // One-argument `some(x)`: context absent (never matched by this host).
+  static Pattern some_without_context(Pattern value) {
+    Pattern p = some(std::move(value), wildcard());
+    p.has_context = false;
+    return p;
+  }
+
+  // `Name(inner)`: a named-pattern reference. Only the name is carried;
+  // resolution is host runtime semantics this host does not implement, so
+  // matching it is always unsupported (portable IR carrier only).
+  static Pattern named(std::string pattern_name, Pattern inner) {
+    Pattern p;
+    p.kind = Kind::Named;
+    p.name = std::move(pattern_name);
+    p.items.push_back(std::move(inner));
+    return p;
+  }
+
+  // Two-argument `some(value, context)` pattern.
   static Pattern some(Pattern value, Pattern context) {
     Pattern p;
     p.kind = Kind::Some;

@@ -90,6 +90,18 @@ before implementing:
   evidence credit for `partial`, which would have made the two pinned
   `open_functions_r20` cases permanently un-runnable.
 
+## Model B Slice A parser and lowering (#50)
+
+`=:` immutable bindings, closed `f(...) =:` groups, pattern/guard declaration
+headers, their prefix annotations, and the `IrPatErr`/`IrPatNamed`/`IrPatSome`
+wire rules are parsed and lowered to portable Core IR. The contract
+SyntaxErrors are reported. None of these forms is executed:
+`immutable_bindings`, `default_open_functions`, `closed_functions` and
+`multi_file_eval` remain `unsupported`. All 41 parse/IR `model-b-a-*` shared
+cases pass. The two eval cases remain unsupported only because of the
+pre-existing `nil` literal gap. Details and per-case evidence:
+[docs/model-b-slice-a.md](docs/model-b-slice-a.md).
+
 ## Supported-behavior conformance repairs
 
 The repairs for #53–#57 preserve the existing capability floor while correcting
@@ -110,9 +122,9 @@ or semantic contract pin.
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`6402e668ae85a1e7efe94b3ac3d51f233b730ca4`](https://github.com/m0smith/genia-2026/commit/6402e668ae85a1e7efe94b3ac3d51f233b730ca4) |
+| `genia-2026` contract revision | [`d005c89f852ee2d27682dade272eabfd158adf12`](https://github.com/m0smith/genia-2026/commit/d005c89f852ee2d27682dade272eabfd158adf12) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | R27 E27-5 hardening (genia-2026 issue #1047; 37 `flow_phase_1` and 16 `cli_pipe_mode` gated cases, all passing; boundary in `docs/r27-e27-5-hardening.md`), on top of R27 E27-2 `cli_pipe_mode` (genia-2026 issue #1038; the 9 `requires: [cli_pipe_mode]` pipe-mode shared cases, gated at this revision; boundary in `docs/r27-e27-2-pipe-mode.md`), on top of R27 E27-1 `flow_phase_1` (genia-2026 issue #1035; the 17 `requires: [flow_phase_1]` first-wave Flow shared cases, gated at this revision; boundary in `docs/r27-e27-1-flow-phase-1.md`), on top of R26-2 `json_strict` (genia-2026 issue #1024, following the approved `docs/design/r26-cpp-data-bridge-contract.md` contract and the E26-1..E26-3 capability-vocabulary/shared-spec gating): this adapter widens the existing E24-7 scalar-numeric JSON codec to the full grammar (objects, arrays, strings/Unicode, booleans, null, nesting/duplicate-key limits, deterministic sorted-key/indented encode layout) and declares `json_strict` **supported**. `json_compat` remains unimplemented (permanent, by contract). This is the exact revision `src/protocol.hpp` declares and this repository's own CI pins (`.github/workflows/ci.yml`), a `current` pinned-conformance revision per E16-4. |
+| Represents | genia-cpp#50 Model B Slice A parser/portable Core IR lowering at `d005c89` (1146 shared cases: 335 pass, 0 fail, 811 unsupported; Model B execution capabilities stay `unsupported`; boundary in `docs/model-b-slice-a.md`), on top of R27 E27-5 hardening (genia-2026 issue #1047; 37 `flow_phase_1` and 16 `cli_pipe_mode` gated cases, all passing; boundary in `docs/r27-e27-5-hardening.md`), on top of R27 E27-2 `cli_pipe_mode` (genia-2026 issue #1038; the 9 `requires: [cli_pipe_mode]` pipe-mode shared cases, gated at this revision; boundary in `docs/r27-e27-2-pipe-mode.md`), on top of R27 E27-1 `flow_phase_1` (genia-2026 issue #1035; the 17 `requires: [flow_phase_1]` first-wave Flow shared cases, gated at this revision; boundary in `docs/r27-e27-1-flow-phase-1.md`), on top of R26-2 `json_strict` (genia-2026 issue #1024, following the approved `docs/design/r26-cpp-data-bridge-contract.md` contract and the E26-1..E26-3 capability-vocabulary/shared-spec gating): this adapter widens the existing E24-7 scalar-numeric JSON codec to the full grammar (objects, arrays, strings/Unicode, booleans, null, nesting/duplicate-key limits, deterministic sorted-key/indented encode layout) and declares `json_strict` **supported**. `json_compat` remains unimplemented (permanent, by contract). This is the exact revision `src/protocol.hpp` declares and this repository's own CI pins (`.github/workflows/ci.yml`), a `current` pinned-conformance revision per E16-4. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's

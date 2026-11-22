@@ -92,3 +92,14 @@ set_tests_properties(genia-parser-depth-check PROPERTIES TIMEOUT 120)
 add_executable(genia-source-comments-check tests/check_source_comments.cpp)
 target_include_directories(genia-source-comments-check PRIVATE third_party/nlohmann_json)
 add_test(NAME genia-source-comments-check COMMAND genia-source-comments-check)
+
+# genia-cpp#50 Model B Slice A parser/lowering checks (41 generated shared
+# cases plus host-local execution, wire and regression boundaries).
+add_executable(genia-model-b-slice-a-check tests/check_model_b_slice_a.cpp)
+target_include_directories(genia-model-b-slice-a-check PRIVATE third_party/nlohmann_json)
+add_test(NAME genia-model-b-slice-a-check COMMAND genia-model-b-slice-a-check)
+
+# genia-cpp#50 review findings 1-4: adversarial malformed direct Core IR.
+add_executable(genia-model-b-malformed-ir-check tests/check_model_b_malformed_ir.cpp)
+target_include_directories(genia-model-b-malformed-ir-check PRIVATE third_party/nlohmann_json)
+add_test(NAME genia-model-b-malformed-ir-check COMMAND genia-model-b-malformed-ir-check)

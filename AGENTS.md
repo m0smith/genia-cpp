@@ -51,6 +51,14 @@ pattern/guard headers, default-open functions, varargs or cross-module linking.
 The earlier R24 status below remains historical; current bounded details and
 acceptance evidence are in docs/host-conformance-repairs.md.
 
+## Model B Slice A boundary (#50)
+
+Model B Slice A syntax (`=:`, closed groups, pattern/guard headers, prefix
+annotations on those carriers, `IrPatErr`/`IrPatNamed`) is parsed and lowered
+only. Evaluation of every new carrier stays unsupported, and no Model B
+execution capability is declared. Do not treat parsing as runtime support.
+Boundary and evidence: docs/model-b-slice-a.md.
+
 ## Status
 
 **R27 E27-5 (`m0smith/genia-2026#1047`) hardens Flow and pipe mode without

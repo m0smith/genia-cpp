@@ -84,6 +84,8 @@ enum class TokenKind : std::uint8_t {
   DotDot,
   Semicolon,
   Question,
+  EqColon,  // `=:` (Model B immutable binding / closed declaration)
+  At,       // `@` prefix-annotation marker
   End,
 };
 
@@ -418,7 +420,17 @@ inline std::optional<std::vector<Token>> tokenize(const std::string& source) {
           i += 2;
           continue;
         }
+        // Longest match: `==` above, then `=:`, then `=`.
+        if (i + 1 < n && source[i + 1] == ':') {
+          tokens.push_back({TokenKind::EqColon, "=:"});
+          i += 2;
+          continue;
+        }
         tokens.push_back({TokenKind::Eq, "="});
+        ++i;
+        continue;
+      case '@':
+        tokens.push_back({TokenKind::At, "@"});
         ++i;
         continue;
       case '!':
@@ -568,6 +580,14 @@ inline bool is_reserved_keyword(const std::string& name) {
          name == "delay" || name == "quasiquote" || name == "unquote" || name == "unquote_splicing";
 }
 
+// A contract-defined SyntaxError (genia-cpp#50). Thrown only at the Model B
+// Slice A decision points whose diagnostics the shared cases pin; every other
+// rejection stays an unsupported `std::nullopt`. Never escapes this header:
+// `parse_program` maps it to nullopt and `parse_program_checked` reports it.
+struct SyntaxError {
+  std::string message;
+};
+
 // Recursive-descent parser over the token stream of one source text.
 //
 // Inputs: the tokens produced by the tokenizer. Output: `parse_program()`
@@ -598,10 +618,16 @@ class Parser {
         advance();
         continue;
       }
-      auto stmt = parse_statement();
+      std::optional<ast::Node> stmt;
+      if (peek().kind == TokenKind::At) {
+        stmt = parse_annotated_statement();
+      } else {
+        stmt = parse_statement();
+      }
       if (!stmt.has_value()) {
         return std::nullopt;
       }
+      if (merge_model_b_toplevel(program, *stmt)) continue;
       // R20: a contiguous run of top-level clauses for the same open
       // interface merges into one AST node so grouped and repeated
       // local clause syntax normalize identically (design doc section
@@ -629,6 +655,65 @@ class Parser {
  private:
   std::vector<Token> tokens_;
   size_t pos_ = 0;
+  // >0 while parsing a `{ ... }` function block body.
+  int block_depth_ = 0;
+
+  // Model B grouping participants: ordinary, pattern and closed declarations.
+  static bool is_function_declaration(ast::Kind kind) {
+    return kind == ast::Kind::FuncDef || kind == ast::Kind::PatternFuncDef ||
+           kind == ast::Kind::ClosedFuncDef;
+  }
+
+  // GENIA_STATE.md "Model B declarations": consecutive same-name `=:` clauses
+  // form one ordered closed group; a same-name `=`/`=:` neighbour pair raises
+  // `mixed-function-declaration-operators`. Only the immediately preceding
+  // top-level statement participates (comments are not tokens; any other
+  // statement ends the group). Returns true when `stmt` was merged.
+  bool merge_model_b_toplevel(ast::Program& program, ast::Node& stmt) {
+    if (program.empty() || !is_function_declaration(stmt.kind)) return false;
+    ast::Node& previous = program.back();
+    if (!is_function_declaration(previous.kind) || previous.name != stmt.name) return false;
+    const bool closed = stmt.kind == ast::Kind::ClosedFuncDef;
+    if (closed != (previous.kind == ast::Kind::ClosedFuncDef)) {
+      throw SyntaxError{"mixed-function-declaration-operators"};
+    }
+    if (!closed) return false;
+    for (auto& declaration : stmt.items) previous.items.push_back(std::move(declaration));
+    return true;
+  }
+
+  // `@name value` lines followed by their target. Annotations attach to an
+  // immutable binding or to the closed-group child they precede; any other
+  // annotated target is outside this host's bounded grammar (unsupported).
+  // Each value must end at a newline or `;` before the target.
+  std::optional<ast::Node> parse_annotated_statement() {
+    std::vector<ast::Annotation> annotations;
+    while (peek().kind == TokenKind::At) {
+      advance();
+      if (peek().kind != TokenKind::Ident) return std::nullopt;
+      std::string name = advance().text;
+      auto value = parse_expr();
+      if (!value) return std::nullopt;
+      const int value_end_line = tokens_[pos_ - 1].line;
+      if (peek().kind == TokenKind::Semicolon) {
+        advance();
+      } else if (peek().kind == TokenKind::End || peek().line <= value_end_line) {
+        return std::nullopt;
+      }
+      annotations.push_back(ast::Annotation{std::move(name), std::move(*value)});
+    }
+    auto target = parse_statement();
+    if (!target) return std::nullopt;
+    if (target->kind == ast::Kind::ImmutableBind) {
+      target->annotations = std::move(annotations);
+      return target;
+    }
+    if (target->kind == ast::Kind::ClosedFuncDef && target->items.size() == 1) {
+      target->items[0].annotations = std::move(annotations);
+      return target;
+    }
+    return std::nullopt;
+  }
 
   // E24-6: names declared `open` earlier in this parse, for
   // redeclaration detection and for recognizing a bare repeated clause
@@ -726,6 +811,24 @@ class Parser {
       return func_def;
     }
     if (pos_ != declaration_start) return std::nullopt;
+    if (peek().kind == TokenKind::Ident && peek_at(1).kind == TokenKind::EqColon) {
+      const Token target = advance();
+      advance();  // '=:'
+      if (target.text.find('.') != std::string::npos) {
+        throw SyntaxError{"Assignment target must be a simple name"};
+      }
+      if (peek().kind == TokenKind::End) {
+        throw SyntaxError{"Unexpected end of input after '=:'"};
+      }
+      auto value = parse_pipeline_expr();
+      if (!value) return std::nullopt;
+      ast::Node bind;
+      bind.kind = ast::Kind::ImmutableBind;
+      bind.name = target.text;
+      bind.line = target.line;
+      bind.left = std::make_shared<ast::Node>(std::move(*value));
+      return bind;
+    }
     if (peek().kind == TokenKind::Ident && peek_at(1).kind == TokenKind::Eq) {
       const std::string name = advance().text;
       advance();  // '='
@@ -735,7 +838,12 @@ class Parser {
       }
       return ast::Node::assign(name, std::move(*value));
     }
-    return parse_pipeline_expr();
+    auto expression = parse_pipeline_expr();
+    if (expression && peek().kind == TokenKind::EqColon) {
+      // Any non-name expression before `=:` is an invalid binding target.
+      throw SyntaxError{"Assignment target must be a simple name"};
+    }
+    return expression;
   }
 
   // `name(p1, p2, ...) = body` -- a real top-level grammar production,
@@ -748,16 +856,35 @@ class Parser {
       return std::nullopt;
     }
     const size_t save = pos_;
-    std::string func_name = advance().text;
+    const Token name_token = advance();
+    std::string func_name = name_token.text;
     advance();  // '('
-    std::vector<std::string> param_names;
+    // Header items reuse the ordinary pattern grammar plus a final `..rest`.
+    // Anything else (e.g. `f(1 + 2)`) is not a header: restore and let the
+    // statement parse as an ordinary call expression.
+    std::vector<pattern::Pattern> items;
     if (peek().kind != TokenKind::RParen) {
       while (true) {
-        if (peek().kind != TokenKind::Ident) {
+        if (!items.empty() && items.back().kind == pattern::Kind::Rest) {
           pos_ = save;
-          return std::nullopt;
+          return std::nullopt;  // rest must be final (diagnostic not claimed)
         }
-        param_names.push_back(advance().text);
+        if (peek().kind == TokenKind::DotDot) {
+          advance();
+          std::string rest_name;
+          if (peek().kind == TokenKind::Ident) {
+            rest_name = advance().text;
+            if (rest_name == "_") rest_name.clear();
+          }
+          items.push_back(pattern::Pattern::rest(rest_name));
+        } else {
+          auto item = parse_pattern_atom();
+          if (!item.has_value()) {
+            pos_ = save;
+            return std::nullopt;
+          }
+          items.push_back(std::move(*item));
+        }
         if (peek().kind == TokenKind::Comma) {
           advance();
           continue;
@@ -770,44 +897,117 @@ class Parser {
       return std::nullopt;
     }
     advance();  // ')'
+    const bool block_after_header =
+        peek().kind == TokenKind::LBrace && peek().line == tokens_[pos_ - 1].line &&
+        peek_at(1).kind != TokenKind::RBrace && peek_at(2).kind != TokenKind::Colon;
+    const TokenKind after = peek().kind;
+    if (after != TokenKind::Eq && after != TokenKind::EqColon && after != TokenKind::Arrow &&
+        after != TokenKind::Question && !block_after_header) {
+      pos_ = save;
+      return std::nullopt;
+    }
+
+    // From here the statement is a declaration (no backtracking).
+    std::shared_ptr<ast::Node> guard;
+    if (peek().kind == TokenKind::Question) {
+      advance();
+      auto expression = parse_pipeline_expr();
+      if (!expression) return std::nullopt;
+      guard = std::make_shared<ast::Node>(std::move(*expression));
+    }
+    // An identifier-only header (optionally ending in a named rest) with no
+    // guard is the legacy IrFuncDef form; anything else is a full pattern
+    // header lowering to IrPatternFuncDef (GENIA_STATE.md Model B).
+    bool legacy = guard == nullptr;
+    std::vector<std::string> param_names;
+    std::optional<std::string> rest_param;
+    for (const auto& item : items) {
+      if (item.kind == pattern::Kind::Bind) {
+        param_names.push_back(item.name);
+      } else if (item.kind == pattern::Kind::Rest && !item.name.empty()) {
+        rest_param = item.name;
+      } else {
+        legacy = false;
+      }
+    }
+    const bool closed = peek().kind == TokenKind::EqColon;
+    if (func_name.find('.') != std::string::npos && (closed || !legacy)) {
+      throw SyntaxError{"Function declaration target must be a simple name"};
+    }
+    if (closed && block_depth_ > 0) {
+      // Function declarations are not block statements; `f(x) =:` there is an
+      // invalid binding target, exactly like any other non-name expression.
+      throw SyntaxError{"Assignment target must be a simple name"};
+    }
+    auto make_declaration = [&](ast::Node body) {
+      ast::Node node;
+      if (legacy) {
+        std::vector<pattern::Pattern> patterns;
+        for (const auto& name : param_names) patterns.push_back(pattern::Pattern::bind(name));
+        node = ast::Node::func_def(func_name, param_names, std::move(patterns), std::move(body));
+        node.rest_param = rest_param;
+      } else {
+        node.kind = ast::Kind::PatternFuncDef;
+        node.name = func_name;
+        node.header = pattern::Pattern::tuple(items);
+        node.header.source_line = name_token.line;
+        node.guard = guard;
+        node.left = std::make_shared<ast::Node>(std::move(body));
+      }
+      return node;
+    };
+    auto finish = [&](ast::Node declaration) -> std::optional<ast::Node> {
+      if (!closed) return declaration;
+      ast::Node group;
+      group.kind = ast::Kind::ClosedFuncDef;
+      group.name = func_name;
+      group.items.push_back(std::move(declaration));
+      return group;
+    };
+
     // `name(params) -> expr` is the same FuncDef production as
-    // `name(params) = expr` (src/genia/parser.py's `parse_toplevel` builds
-    // an identical FuncDef for both); the arrow form takes a single
-    // expression body only, never a case-clause body.
+    // `name(params) = expr`; the arrow form takes a single expression body.
     if (peek().kind == TokenKind::Arrow) {
+      if (!legacy) throw SyntaxError{"pattern/guard function headers cannot use ->"};
       advance();  // '->'
       auto arrow_body = parse_pipeline_expr();
       if (!arrow_body.has_value()) {
         return std::nullopt;
       }
-      std::vector<pattern::Pattern> arrow_patterns;
-      arrow_patterns.reserve(param_names.size());
-      for (auto& name : param_names) {
-        arrow_patterns.push_back(pattern::Pattern::bind(name));
-      }
-      return ast::Node::func_def(func_name, param_names, std::move(arrow_patterns),
-                                 std::move(*arrow_body));
+      return finish(make_declaration(std::move(*arrow_body)));
     }
-    if (peek().kind != TokenKind::Eq) {
-      pos_ = save;
-      return std::nullopt;
+    // `name(params) { ... }`: the historical block-body form without `=`.
+    if (peek().kind == TokenKind::LBrace) {
+      auto block = parse_function_block();
+      if (!block) return std::nullopt;
+      return finish(make_declaration(std::move(*block)));
     }
-    advance();  // '='
+    if (peek().kind != TokenKind::Eq && peek().kind != TokenKind::EqColon) {
+      return std::nullopt;  // e.g. a guard not followed by `=`
+    }
+    advance();  // '=' or '=:'
+    if (closed && peek().kind == TokenKind::End) {
+      throw SyntaxError{"Unexpected end of input after '=:'"};
+    }
 
     // A leading string is metadata only when another body follows on the
     // same line. A string-only function retains its ordinary string body.
+    // Pattern/guard headers never take a docstring: their string is a body.
     std::optional<std::string> docstring;
     const auto next = peek_at(1).kind;
     const bool body_follows_string = next == TokenKind::Ident || next == TokenKind::Integer ||
                                      next == TokenKind::Decimal || next == TokenKind::String ||
                                      next == TokenKind::LParen || next == TokenKind::LBracket ||
                                      next == TokenKind::LBrace;
-    if (peek().kind == TokenKind::String && peek_at(1).line == peek().line && body_follows_string &&
-        !looks_like_case_clause_start()) {
+    if (legacy && peek().kind == TokenKind::String && peek_at(1).line == peek().line &&
+        body_follows_string && !looks_like_case_clause_start()) {
       docstring = advance().text;
     }
 
     if (looks_like_case_clause_start()) {
+      if (!legacy) {
+        throw SyntaxError{"pattern/guard function header cannot have a grouped case body"};
+      }
       auto clauses = parse_case_clauses();
       if (!clauses.has_value()) {
         return std::nullopt;
@@ -824,7 +1024,8 @@ class Parser {
           ast::Node::func_def_case(func_name, param_names, std::move(patterns), std::move(results));
       for (const auto& clause : *clauses) node.case_guards.push_back(clause.guard);
       node.docstring = std::move(docstring);
-      return node;
+      node.rest_param = rest_param;
+      return finish(std::move(node));
     }
 
     const bool block_body = peek().kind == TokenKind::LBrace &&
@@ -834,14 +1035,9 @@ class Parser {
     if (!body.has_value()) {
       return std::nullopt;
     }
-    std::vector<pattern::Pattern> patterns;
-    patterns.reserve(param_names.size());
-    for (auto& name : param_names) {
-      patterns.push_back(pattern::Pattern::bind(name));
-    }
-    auto node = ast::Node::func_def(func_name, param_names, std::move(patterns), std::move(*body));
+    auto node = make_declaration(std::move(*body));
     node.docstring = std::move(docstring);
-    return node;
+    return finish(std::move(node));
   }
 
   // Parses the existing named block-body form, with or without metadata. Statements
@@ -857,6 +1053,13 @@ class Parser {
       return std::nullopt;
     }
     advance();  // '{'
+    ++block_depth_;
+    // Restores block_depth_ on every exit path of this block parse.
+    struct BlockDepthGuard {
+      int& depth;
+      // Leaves the block scope.
+      ~BlockDepthGuard() { --depth; }
+    } block_guard{block_depth_};
     std::vector<ast::Node> expressions;
     while (peek().kind != TokenKind::RBrace) {
       if (peek().kind == TokenKind::End) return std::nullopt;
@@ -869,7 +1072,9 @@ class Parser {
       if (peek().kind == TokenKind::Ident && peek().text == "open") return std::nullopt;
       auto expression = parse_statement();
       if (!expression.has_value() || expression->kind == ast::Kind::FuncDef ||
-          expression->kind == ast::Kind::OpenFuncDef)
+          expression->kind == ast::Kind::OpenFuncDef ||
+          expression->kind == ast::Kind::PatternFuncDef ||
+          expression->kind == ast::Kind::ClosedFuncDef)
         return std::nullopt;
       expressions.push_back(std::move(*expression));
     }
@@ -1057,6 +1262,9 @@ class Parser {
 
   // ---- Patterns ------------------------------------------------------
 
+  // Parses one pattern atom: literals, binds, `_`, lists, maps, err/some with
+  // or without context, and `Name(inner)` named-pattern references. Returns
+  // nullopt for anything else; never reports a SyntaxError.
   std::optional<pattern::Pattern> parse_pattern_atom() {
     NestingGuard guard(nesting_depth_);
     if (nesting_depth_ > kMaxNestingDepth) {
@@ -1080,25 +1288,46 @@ class Parser {
       if (text == "_") {
         return pattern::Pattern::wildcard();
       }
-      if (text == "err" && peek().kind == TokenKind::LParen) {
-        advance();
-        auto reason = parse_pattern_atom();
-        if (!reason.has_value() || peek().kind != TokenKind::Comma) return std::nullopt;
-        advance();
-        auto context = parse_pattern_atom();
-        if (!context.has_value() || peek().kind != TokenKind::RParen) return std::nullopt;
-        advance();
-        return pattern::Pattern::err(std::move(*reason), std::move(*context));
+      // Bare `none`/`nil` are IrPatNone-family patterns, which this host does
+      // not implement; they must never become identifier binds.
+      if ((text == "none" || text == "nil") && peek().kind != TokenKind::LParen) {
+        return std::nullopt;
       }
-      if (text == "some" && peek().kind == TokenKind::LParen) {
+      if (text == "true" || text == "false") {
+        // Boolean literals are literal patterns, never identifier binds.
+        if (peek().kind == TokenKind::LParen) return std::nullopt;
+        return pattern::Pattern::bool_literal(text == "true");
+      }
+      if ((text == "err" || text == "some") && peek().kind == TokenKind::LParen) {
         advance();
-        auto value_pattern = parse_pattern_atom();
-        if (!value_pattern.has_value() || peek().kind != TokenKind::Comma) return std::nullopt;
+        auto first = parse_pattern_atom();
+        if (!first.has_value()) return std::nullopt;
+        if (peek().kind == TokenKind::RParen) {
+          // One-argument spelling: the context is absent (portable IR carries
+          // `context: null` for err; matching it is not implemented here).
+          advance();
+          return text == "err" ? pattern::Pattern::err_without_context(std::move(*first))
+                               : pattern::Pattern::some_without_context(std::move(*first));
+        }
+        if (peek().kind != TokenKind::Comma) return std::nullopt;
         advance();
         auto context = parse_pattern_atom();
         if (!context.has_value() || peek().kind != TokenKind::RParen) return std::nullopt;
         advance();
-        return pattern::Pattern::some(std::move(*value_pattern), std::move(*context));
+        return text == "err" ? pattern::Pattern::err(std::move(*first), std::move(*context))
+                             : pattern::Pattern::some(std::move(*first), std::move(*context));
+      }
+      if (peek().kind == TokenKind::LParen) {
+        // `Name(inner)`: a named-pattern reference (IrPatNamed). Reserved
+        // constructor/literal names and dotted names are not named patterns.
+        if (is_reserved_keyword(text) || text == "true" || text == "false" ||
+            text.find('.') != std::string::npos)
+          return std::nullopt;
+        advance();
+        auto inner = parse_pattern_atom();
+        if (!inner.has_value() || peek().kind != TokenKind::RParen) return std::nullopt;
+        advance();
+        return pattern::Pattern::named(text, std::move(*inner));
       }
       return pattern::Pattern::bind(text);
     }
@@ -1679,13 +1908,33 @@ class Parser {
   }
 };
 
-inline std::optional<ast::Program> parse_program(const std::string& source) {
+// Result of a parse that distinguishes a contract SyntaxError from an
+// unsupported source. Exactly one of `program` / `syntax_error` is set when
+// the source is in scope; both are empty when it is unsupported.
+struct ParseOutcome {
+  std::optional<ast::Program> program;
+  std::optional<std::string> syntax_error;
+};
+
+// Tokenizes and parses `source`, reporting a contract SyntaxError separately
+// from an unsupported source. Pure; no evaluation or I/O.
+inline ParseOutcome parse_program_checked(const std::string& source) {
   auto tokens = tokenize(source);
   if (!tokens.has_value()) {
-    return std::nullopt;
+    return {};
   }
   Parser parser(std::move(*tokens));
-  return parser.parse_program();
+  try {
+    return {parser.parse_program(), std::nullopt};
+  } catch (const SyntaxError& error) {
+    return {std::nullopt, error.message};
+  }
+}
+
+// Parses for lowering/evaluation. A SyntaxError is reported as nullopt
+// (unsupported) here: only the `parse` operation reports its diagnostic.
+inline std::optional<ast::Program> parse_program(const std::string& source) {
+  return parse_program_checked(source).program;
 }
 
 }  // namespace genia::parser

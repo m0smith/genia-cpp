@@ -37,11 +37,11 @@ inline std::optional<json> handle_parse(const std::string& case_id, const json& 
   if (!input.contains("source") || !input["source"].is_string()) {
     return std::nullopt;
   }
-  auto ast = engine::try_parse(input["source"].get<std::string>());
-  if (!ast.has_value()) {
+  auto result = engine::try_parse_result(input["source"].get<std::string>());
+  if (!result.has_value()) {
     return std::nullopt;
   }
-  return build_ok_response(case_id, "parse", json{{"kind", "ok"}, {"ast", *ast}});
+  return build_ok_response(case_id, "parse", *result);
 }
 
 // Handles `lower`: input {"source": "<string>"}.

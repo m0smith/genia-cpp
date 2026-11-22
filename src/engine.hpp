@@ -43,6 +43,20 @@ inline std::optional<json> try_parse(const std::string& source) {
   return ast_projection::project_program(*program);
 }
 
+// `parse` operation result object: {"kind": "ok", "ast": ...} or a
+// contract SyntaxError {"kind": "error", "type": "SyntaxError", "message"}.
+// std::nullopt when the source is outside this slice's grammar.
+inline std::optional<json> try_parse_result(const std::string& source) {
+  auto outcome = parser::parse_program_checked(source);
+  if (outcome.syntax_error.has_value()) {
+    return json{{"kind", "error"}, {"type", "SyntaxError"}, {"message", *outcome.syntax_error}};
+  }
+  if (!outcome.program.has_value()) return std::nullopt;
+  auto ast = ast_projection::project_program(*outcome.program);
+  if (!ast.has_value()) return std::nullopt;
+  return json{{"kind", "ok"}, {"ast", *ast}};
+}
+
 // `lower` operation: returns the normalized Core IR array, or
 // std::nullopt if `source` is outside this slice's grammar.
 inline std::optional<json> try_lower(const std::string& source) {
