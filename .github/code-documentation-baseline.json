@@ -106,7 +106,6 @@
     "src/format.hpp::binding::genia::format::precision_text": "e28d5965b9ab62404dcfb56c2aed12e5f6093704fcd7f0c83dc0d7bd91a8b5ba",
     "src/format.hpp::binding::genia::format::quoted_spec": "8353e93b0b87562c9acc718a8081aa6f427a992d84f76f7a66a1ff483af8b790",
     "src/format.hpp::binding::genia::format::simple_field_name": "537075b1b9fa96db84710f4bc68efb3dc12ec73956b72d7b011cc97c6d2fb3b6",
-    "src/genia2026_known_globals.hpp::binding::genia::genia2026_known_globals::is_known": "fc9b1a479c889a250c8e22b15df5eb02b16ac1d79f87082e5fc584f1bb895fff",
     "src/global_env.hpp::binding::genia::global_env::& prelude_source()": "39f483af3c70476edf75912f0ec8ad87198aadc06e12eafd562e8141f1fdeaeb",
     "src/json.hpp::binding::genia::strict_json::Decoder": "d00fe631988341a90ffad9536e092f5409f197fb6455794c4f6c8d4d5f30bad9",
     "src/json.hpp::binding::genia::strict_json::Decoder.Decoder": "e21485eb0fadc6e9788db6bc7a10b0677af12d35ae56231df97660e917887724",
