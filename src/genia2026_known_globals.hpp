@@ -36,6 +36,9 @@
 
 namespace genia::genia2026_known_globals {
 
+/// Return whether the reference-host catalogue contains this exact global name.
+/// Call after local lookup misses to distinguish unsupported reference bindings
+/// from undefined names. Membership conveys no C++ execution support.
 inline bool is_known(const std::string& name) {
   static const std::unordered_set<std::string> kNames = {
       "Format",
@@ -256,6 +259,7 @@ inline bool is_known(const std::string& name) {
       "collect",
       "collect_sheet",
       "collect_validated",
+      "column",
       "columns",
       "compose",
       "concat",
@@ -349,6 +353,7 @@ inline bool is_known(const std::string& name) {
       "lookup",
       "lower",
       "map",
+      "map2",
       "map_count",
       "map_get",
       "map_has?",
@@ -498,6 +503,7 @@ inline bool is_known(const std::string& name) {
       "validate_record",
       "validate_required",
       "where",
+      "with_column",
       "write",
       "write_file",
       "writeln",
