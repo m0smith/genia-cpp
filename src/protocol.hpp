@@ -55,7 +55,7 @@ inline constexpr const char* kProtocolVersion = "1";
 // genia-2026 `main` (PR #1027) -- the prior pin above was this PR's
 // still-open branch head; this identical-content commit is the one
 // that is now actually current-main pinned conformance per E16-4.
-inline constexpr const char* kContractRevision = "d005c89f852ee2d27682dade272eabfd158adf12";
+inline constexpr const char* kContractRevision = "b759c20f97334da14d1b15bdf8a70b87d6e0d2c8";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
@@ -107,6 +107,7 @@ inline const std::vector<std::string>& known_capabilities() {
       "immutable_bindings",
       "default_open_functions",
       "closed_functions",
+      "sheet_values",
   };
   return kNames;
 }

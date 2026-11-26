@@ -1,5 +1,5 @@
 {
-  "applicable_cases": 1146,
+  "applicable_cases": 1187,
   "capabilities": {
     "allowlisted_host_interop": "unsupported",
     "ast_lowering": "supported",
@@ -37,6 +37,7 @@
     "resource_io": "unsupported",
     "retrieval_deterministic_fixture": "unsupported",
     "shared_spec_runner": "partial",
+    "sheet_values": "unsupported",
     "shell_stage": "unsupported"
   },
   "capability_operations": [
@@ -46,9 +47,9 @@
     "cli"
   ],
   "contract_revision": {
-    "checkout": "d005c89f852ee2d27682dade272eabfd158adf12",
+    "checkout": "b759c20f97334da14d1b15bdf8a70b87d6e0d2c8",
     "classification": "current",
-    "declared": "d005c89f852ee2d27682dade272eabfd158adf12"
+    "declared": "b759c20f97334da14d1b15bdf8a70b87d6e0d2c8"
   },
   "counts": {
     "crash": 0,
@@ -57,8 +58,8 @@
     "pass": 335,
     "protocol_error": 0,
     "timeout": 0,
-    "unsupported": 811
+    "unsupported": 852
   },
   "protocol_version": "1",
-  "total_cases": 1146
+  "total_cases": 1187
 }
