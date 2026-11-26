@@ -18,6 +18,7 @@ Value hardening_integer(std::uint64_t value) {
 }
 }  // namespace
 
+namespace {
 static const auto process_serializes_handlers = [] {
   std::atomic<int> in_flight{0};
   std::atomic<int> maximum{0};
@@ -79,3 +80,5 @@ static const auto async_send_option = [] {
   CHECK(process_result->stdout_text == "[none(\"nil\")]\n");
 };
 REGISTER_TEST_CASE(async_send_option, "R25 asynchronous sends return the contracted nil Option");
+
+}  // namespace
