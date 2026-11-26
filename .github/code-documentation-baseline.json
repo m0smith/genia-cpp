@@ -245,7 +245,6 @@
     "tests/test_pipe_mode.cpp::parse_error::<parse>": "b3aa2c44d40dc7a22838f9a770d4d109da7d2bf39a4e957363a9a26b38115434",
     "tests/test_process.cpp::module::<module>": "8978dd5071f43d01af9a73e54133ce0a38e72fd6849f9284d8bf0214c7967974",
     "tests/test_process.cpp::parse_error::<parse>": "8978dd5071f43d01af9a73e54133ce0a38e72fd6849f9284d8bf0214c7967974",
-    "tests/test_protocol.cpp::parse_error::<parse>": "da252835f950596104fcfc38f52edf81fb3bc6f8d60ee655606828431dbf76d4",
     "tests/test_r25_hardening.cpp::binding::::hardening_integer": "f8a582e3d589aec33da115c5e4043ac31865e59f6190630fbbab00e4a07dabf6",
     "tests/test_r25_hardening.cpp::module::<module>": "c64df3824a654f272f9d0cd2b1b283296d0cbe57522c63ef08b1ff3a32ef3a09",
     "tests/test_r25_hardening.cpp::parse_error::<parse>": "c64df3824a654f272f9d0cd2b1b283296d0cbe57522c63ef08b1ff3a32ef3a09",
