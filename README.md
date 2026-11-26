@@ -122,9 +122,9 @@ or semantic contract pin.
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`d005c89f852ee2d27682dade272eabfd158adf12`](https://github.com/m0smith/genia-2026/commit/d005c89f852ee2d27682dade272eabfd158adf12) |
+| `genia-2026` contract revision | [`b759c20f97334da14d1b15bdf8a70b87d6e0d2c8`](https://github.com/m0smith/genia-2026/commit/b759c20f97334da14d1b15bdf8a70b87d6e0d2c8) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | genia-cpp#50 Model B Slice A parser/portable Core IR lowering at `d005c89` (1146 shared cases: 335 pass, 0 fail, 811 unsupported; Model B execution capabilities stay `unsupported`; boundary in `docs/model-b-slice-a.md`), on top of R27 E27-5 hardening (genia-2026 issue #1047; 37 `flow_phase_1` and 16 `cli_pipe_mode` gated cases, all passing; boundary in `docs/r27-e27-5-hardening.md`), on top of R27 E27-2 `cli_pipe_mode` (genia-2026 issue #1038; the 9 `requires: [cli_pipe_mode]` pipe-mode shared cases, gated at this revision; boundary in `docs/r27-e27-2-pipe-mode.md`), on top of R27 E27-1 `flow_phase_1` (genia-2026 issue #1035; the 17 `requires: [flow_phase_1]` first-wave Flow shared cases, gated at this revision; boundary in `docs/r27-e27-1-flow-phase-1.md`), on top of R26-2 `json_strict` (genia-2026 issue #1024, following the approved `docs/design/r26-cpp-data-bridge-contract.md` contract and the E26-1..E26-3 capability-vocabulary/shared-spec gating): this adapter widens the existing E24-7 scalar-numeric JSON codec to the full grammar (objects, arrays, strings/Unicode, booleans, null, nesting/duplicate-key limits, deterministic sorted-key/indented encode layout) and declares `json_strict` **supported**. `json_compat` remains unimplemented (permanent, by contract). This is the exact revision `src/protocol.hpp` declares and this repository's own CI pins (`.github/workflows/ci.yml`), a `current` pinned-conformance revision per E16-4. |
+| Represents | R31 CPP-1 re-pin and catalogue correction (genia-2026 #1330). Of 1,187 shared cases, 335 pass and 852 are unsupported, with zero failures. C++ explicitly reports `sheet_values` as `unsupported`. See [CPP-1 evidence and scope](docs/r31-cpp1-repin.md). Model B Slice A's parser and lowering boundary is recorded in [docs/model-b-slice-a.md](docs/model-b-slice-a.md). |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
@@ -535,10 +535,12 @@ ctest --test-dir build --output-on-failure   # internal unit tests
 ```bash
 git clone https://github.com/m0smith/genia-2026
 git clone https://github.com/m0smith/genia-cpp
-cd genia-cpp && cmake -S . -B build && cmake --build build && cd ..
+cmake -S genia-cpp -B genia-cpp-build -DCMAKE_BUILD_TYPE=Release
+cmake --build genia-cpp-build --target genia-adapter
 cd genia-2026
-python -m tools.spec_runner --host '../genia-cpp/build/genia-adapter' --evidence evidence.json
-# total=762 passed=149 failed=0 unsupported=613 protocol_error=0 crash=0 timeout=0 invalid=0
+git checkout --detach b759c20f97334da14d1b15bdf8a70b87d6e0d2c8
+uv run python -m tools.spec_runner --host ../genia-cpp-build/genia-adapter --evidence evidence.json
+# total=1187 passed=335 failed=0 unsupported=852 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):
