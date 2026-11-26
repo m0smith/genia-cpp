@@ -141,16 +141,10 @@ inline Pull lazy(std::function<Pull()> start) {
   };
 }
 
-// Invoke one Closure with the supplied Values. Non-Closure, none arguments and
-// a missing native result throw UnsupportedError in this bounded kernel. Other
-// callback exceptions propagate; a present Outcome result remains ordinary data.
+// Apply the supplied ordinary or raw invocation policy to a Closure.
+// Non-callables and missing results are unsupported; callback errors propagate.
 inline Value apply(const Invoke& invoke, const Value& fn, const std::vector<Value>& args) {
   if (fn.kind != value::Kind::Closure) throw value::UnsupportedError{};
-  for (const auto& arg : args) {
-    // The reference host propagates a `none` argument instead of calling the
-    // stage; that path is not evidenced, so it is left unsupported.
-    if (arg.kind == value::Kind::Outcome && arg.outcome_is_none) throw value::UnsupportedError{};
-  }
   auto result = invoke(fn, args);
   if (!result.has_value()) throw value::UnsupportedError{};
   return std::move(*result);
@@ -457,7 +451,7 @@ inline Value reduce(const Value& reducer, Value accumulator, const Value& source
 // selected by the *last argument* being a Flow, matching the reference host's
 // call-site dispatch (src/genia/callable.py `invoke_callable`).
 inline bool dispatch(const std::string& name, const std::vector<Value>& args, const Invoke& invoke,
-                     Value& out) {
+                     const Invoke& raw, Value& out) {
   const size_t n = args.size();
   const bool last_is_flow = n > 0 && args.back().kind == value::Kind::Flow;
   if (name == "lines" && n == 1) {
@@ -499,7 +493,7 @@ inline bool dispatch(const std::string& name, const std::vector<Value>& args, co
   }
   if (name == "each" && n == 2) {
     if (args[1].kind != value::Kind::List && !last_is_flow) seq_compatible_error("each", args[1]);
-    out = each(args[0], args[1], invoke);
+    out = each(args[0], args[1], raw);
     return true;
   }
   if (name == "collect" && n == 1) {
@@ -524,7 +518,7 @@ inline bool dispatch(const std::string& name, const std::vector<Value>& args, co
     seq_compatible_error(args[0].text, args[1]);
   }
   if (name == "_seq_reduce" && n == 3) {
-    out = reduce(args[0], args[1], args[2], invoke);
+    out = reduce(args[0], args[1], args[2], raw);
     return true;
   }
   return false;

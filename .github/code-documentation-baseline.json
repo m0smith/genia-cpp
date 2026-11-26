@@ -94,7 +94,6 @@
     "src/evaluator.hpp::binding::genia::evaluator::UndefinedNameError": "5c413289a28b0425278beed7d316ab4e28b9055f7c63d6bfe049ea539527f9ef",
     "src/evaluator.hpp::binding::genia::evaluator::arithmetic_symbol": "ee050023b9d7fe1c32dc81d8a3780d256dce461cb9ca14da1ef59290591e5433",
     "src/evaluator.hpp::binding::genia::evaluator::eval_in_environment": "2f27222f4e5eda56f847721c9dabfc088df0f883b74a502b0aeaa44cbf29cf20",
-    "src/evaluator.hpp::binding::genia::evaluator::eval_pipeline_stage": "4bc9f7f21024466c601a9ce6a4ca4ce0cefe8bcbac57fd3c2281a5e38b9eeb2d",
     "src/evaluator.hpp::binding::genia::evaluator::eval_program": "de0f7693c725cbb3581b2169871eea3434ccccb19e467a1cb32867be85a60cb0",
     "src/format.hpp::binding::genia::format::FormatError": "77659b35edcc713800706dfee70e3023bf26b461d1aa17af5d8af1057b1e6d87",
     "src/format.hpp::binding::genia::format::apply_spec": "8df71627526e791cb3a2e960407166c83e676ae8f2b69e4bd157ae13a8fe7991",

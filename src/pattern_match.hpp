@@ -240,6 +240,7 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
     case pattern::Kind::None: {
       if (arg.kind != value::Kind::Outcome || !arg.outcome_is_none || !arg.outcome_reason)
         return std::nullopt;
+      if (pattern.items.empty()) return Bindings{};
       auto bindings = match_atom(pattern.items[0], *arg.outcome_reason);
       if (!bindings || !pattern.has_context) return bindings;
       const auto missing_context =

@@ -1290,7 +1290,8 @@ class Parser {
       }
       if (text == "none" || text == "nil") {
         if (peek().kind != TokenKind::LParen)
-          return pattern::Pattern::none(pattern::Pattern::string_literal("nil"));
+          return text == "none" ? pattern::Pattern::any_none()
+                                : pattern::Pattern::none(pattern::Pattern::string_literal("nil"));
         if (text == "nil") return std::nullopt;
         advance();
         auto reason = parse_pattern_atom();

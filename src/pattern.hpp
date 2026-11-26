@@ -159,12 +159,18 @@ struct Pattern {
 
   static Pattern map(std::vector<PatternMapEntry> key_patterns);
 
-  // Build an absence pattern with no context constraint.
-  static Pattern none(Pattern reason) {
+  // Bare none matches any absence regardless of its reason and context.
+  static Pattern any_none() {
     Pattern p;
     p.kind = Kind::None;
-    p.items.push_back(std::move(reason));
     p.has_context = false;
+    return p;
+  }
+
+  // Build an absence pattern with no context constraint.
+  static Pattern none(Pattern reason) {
+    Pattern p = any_none();
+    p.items.push_back(std::move(reason));
     return p;
   }
 

@@ -52,5 +52,22 @@ int main() {
                     "[none(\"first\"), 5]\n");
   ok &= expect_eval("list pipeline", "f(x) = 5\n[1 |> f, none(\"a\") |> f]", "[5, none(\"a\")]\n");
   ok &= expect_eval("raw delivery", "f(x) = 5\n[apply_raw(f, [none(\"a\")])]", "[5]\n");
+  ok &= expect_eval("context and nonmatching value",
+                    "f(none(r, c)) = c\nf(x) = 0\n"
+                    "[f(none(\"x\", {key: 1})), f(none(\"x\")), f(1)]",
+                    "[{key: 1}, none(\"nil\"), 0]\n");
+  ok &= expect_eval("bare none pattern accepts any reason",
+                    "f(none) = 1\nf(x) = 0\n[f(none(\"x\")), f(1)]", "[1, 0]\n");
+  ok &= expect_eval("call-shaped pipeline propagates explicit none",
+                    "f(a, b) = 5\n[1 |> f(none(\"a\"))]", "[none(\"a\")]\n");
+  ok &= expect_eval("Flow map ordinary dispatch",
+                    "step(x) = none(\"stop\")\n"
+                    "evolve(1, step) |> take(2) |> map((x) -> 5) |> collect",
+                    "[5, none(\"stop\")]\n");
+  ok &= expect_eval("raw call's own arguments propagate",
+                    "f(x) = 5\n[apply_raw(f, none(\"a\")), apply_raw(f, [none(\"a\")])]",
+                    "[none(\"a\"), 5]\n");
+  ok &= expect_eval("delegation to known aware function",
+                    "probe(x) = unwrap_or(7, x)\n[probe(none(\"e\"))]", "[7]\n");
   return ok ? 0 : 1;
 }
