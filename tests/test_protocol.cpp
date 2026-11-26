@@ -6,7 +6,11 @@
 // README.md "Running the adapter" and m0smith/genia-2026#955's
 // acceptance criteria).
 #define CATCH_CONFIG_MAIN
+#include <filesystem>
+#include <fstream>
+
 #include "../src/adapter.hpp"
+#include "../src/genia2026_known_globals.hpp"
 #include "../src/protocol.hpp"
 #include "../third_party/catch2/catch.hpp"
 
@@ -35,6 +39,9 @@ TEST_CASE("capabilities response matches this build's actual, evidence-backed su
   CHECK(result["contract_revision"].get<std::string>().size() > 0);
 
   const json& capabilities = result["capabilities"];
+  REQUIRE(capabilities.contains("sheet_values"));
+  CHECK(capabilities["sheet_values"] == "unsupported");
+  CHECK_FALSE(capabilities.contains("sheet_relational"));
   CHECK(capabilities.size() == genia::protocol::known_capabilities().size());
 
   // As of E24-2, exactly the overridden capabilities are
@@ -59,6 +66,26 @@ TEST_CASE("capabilities response matches this build's actual, evidence-backed su
   for (const auto& name : genia::protocol::known_capabilities()) {
     CHECK(capabilities.contains(name));
   }
+}
+
+TEST_CASE("the C++ contract revision matches the shared spec checkout in CI") {
+  const auto root = std::filesystem::path(__FILE__).parent_path().parent_path();
+  std::ifstream workflow(root / ".github/workflows/ci.yml");
+  REQUIRE(workflow.is_open());
+
+  std::string line;
+  while (std::getline(workflow, line)) {
+    if (line == "          repository: m0smith/genia-2026") {
+      REQUIRE(static_cast<bool>(std::getline(workflow, line)));
+      CHECK(line == "          ref: " + std::string(genia::protocol::kContractRevision));
+      return;
+    }
+  }
+  FAIL("Missing genia-2026 checkout in the CI workflow");
+}
+
+TEST_CASE("sheet_records is a known reference-host global") {
+  CHECK(genia::genia2026_known_globals::is_known("sheet_records"));
 }
 
 TEST_CASE("parse/lower/eval/cli with no input fields are all unsupported") {
