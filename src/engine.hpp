@@ -144,11 +144,11 @@ inline std::optional<RunResult> try_run(const std::string& source, bool enable_r
       if (main.has_value() && main->kind == value::Kind::Closure &&
           main->closure->is_named_definition && !main->closure->is_open) {
         const auto& group = *main->closure;
-        bool has_one = group.header_names.size() == 1;
-        bool has_zero = group.header_names.empty();
+        bool has_one = group.fixed_arity() == 1;
+        bool has_zero = group.fixed_arity() == 0;
         for (const auto& overload : group.overloads) {
-          has_one = has_one || overload->header_names.size() == 1;
-          has_zero = has_zero || overload->header_names.empty();
+          has_one = has_one || overload->fixed_arity() == 1;
+          has_zero = has_zero || overload->fixed_arity() == 0;
         }
         if (has_one) {
           std::vector<value::Value> arguments;
@@ -195,8 +195,11 @@ inline std::optional<RunResult> try_run(const std::string& source, bool enable_r
   RunResult run_result;
   run_result.stdout_text = runtime_io::g_stdout_text;
   run_result.exit_code = 0;
-  if (result->kind == value::Kind::Nil) {
-    // The reference host's `None` (for example from `run`) displays nothing.
+  if (result->kind == value::Kind::Nil ||
+      (result->kind == value::Kind::Outcome && result->outcome_is_none && result->outcome_reason &&
+       result->outcome_reason->kind == value::Kind::String &&
+       result->outcome_reason->text == "nil" && !result->outcome_context)) {
+    // Command/eval auto-display suppresses the reference host's nil sentinel.
     return run_result;
   }
   auto rendered = render::display(*result);

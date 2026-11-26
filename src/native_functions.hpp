@@ -207,6 +207,9 @@ inline std::optional<Value> call_flow_support(const std::string& name,
 inline std::optional<Value> call(const std::string& name, const std::vector<Value>& args) {
   if (auto support = call_flow_support(name, args); support.has_value()) return support;
   if (name == "none" && args.size() == 1) return Value::make_outcome_none(args[0]);
+  if (name == "none" && args.size() == 2 && args[0].kind == value::Kind::String &&
+      args[1].kind == value::Kind::Map)
+    return Value::make_outcome_none(args[0], args[1]);
   if (name == "cell" && args.size() == 1) return Value::make_cell(value::Cell::create(args[0]));
   if (name == "cell_with_state" && args.size() == 1 && args[0].kind == value::Kind::Ref)
     return Value::make_cell(value::Cell::create_with_state(args[0].ref));
@@ -361,6 +364,9 @@ inline std::optional<Value> call(const std::string& name, const std::vector<Valu
     context->put(equality::map_key_encoding(key_value), key_value, args[0]);
     return Value::make_outcome_none(Value::make_string("missing-key"), Value::make_map(context));
   }
+  if (name == "unwrap_or" && args.size() == 2 && args[1].kind == value::Kind::Outcome &&
+      args[1].outcome_is_none)
+    return args[0];
   if (name == "unwrap_or" && args.size() == 2 && args[1].kind == value::Kind::Outcome &&
       !args[1].outcome_is_err && args[1].outcome_value != nullptr) {
     return *args[1].outcome_value;

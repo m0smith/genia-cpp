@@ -53,9 +53,9 @@ inline constexpr const char* kProtocolVersion = "1";
 // unimplemented and `unsupported` -- this change is `bytes_utf8` only.
 // Re-pinned again to the same E26-1..E26-3 gating's merge commit on
 // genia-2026 `main` (PR #1027) -- the prior pin above was this PR's
-// still-open branch head. R31 CPP-1 (genia-2026 #1330) re-pins to
-// the R30 closeout revision, whose manifest includes sheet_values.
-inline constexpr const char* kContractRevision = "b759c20f97334da14d1b15bdf8a70b87d6e0d2c8";
+// still-open branch head. R31 X Part B (genia-2026 #1347) pins the
+// frozen shared Option propagation evidence on top of R30 closeout.
+inline constexpr const char* kContractRevision = "8ad371551b0de2ada39bf39266066e918b966200";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract

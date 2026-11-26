@@ -1,7 +1,9 @@
 # Model B Slice A: parser and portable Core IR lowering (genia-cpp#50)
 
-This host parses and lowers the approved Model B Slice A syntax. It executes
-none of it. Authority: genia-2026 `GENIA_STATE.md` ("Model B declarations") and
+Slice A added parsing and lowering for the approved Model B syntax.
+[R31 X Part B](r31-xb-none-propagation.md) later added execution of a bounded
+absence-pattern subset. This document records the original Slice A boundary.
+Authority: genia-2026 `GENIA_STATE.md` ("Model B declarations") and
 `docs/architecture/core-ir-portability.md` ("Model B declaration carriers").
 Pinned contract revision: `d005c89f852ee2d27682dade272eabfd158adf12`.
 

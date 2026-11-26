@@ -22,6 +22,7 @@
 
 namespace genia::render {
 
+// Render a printable value recursively; return nullopt for unsupported kinds.
 inline std::optional<std::string> display(const value::Value& value);
 
 inline std::string render_float64(double number) {
@@ -267,13 +268,14 @@ inline std::optional<std::string> display(const value::Value& value) {
       // where N is the exact byte count, matching the reference host's
       // GeniaBytes.__repr__ (src/genia/values.py) verbatim.
       return "<bytes " + std::to_string(value.text.size()) + ">";
+    case value::Kind::Nil:
+      return std::string("none(\"nil\")");
     case value::Kind::Closure:
     case value::Kind::Ref:
     case value::Kind::Cell:
     case value::Kind::Process:
     case value::Kind::Flow:
     case value::Kind::StdinSource:
-    case value::Kind::Nil:
     case value::Kind::Opaque:
       return std::nullopt;
   }

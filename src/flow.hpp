@@ -141,16 +141,10 @@ inline Pull lazy(std::function<Pull()> start) {
   };
 }
 
-// Invoke one Closure with the supplied Values. Non-Closure, none arguments and
-// a missing native result throw UnsupportedError in this bounded kernel. Other
-// callback exceptions propagate; a present Outcome result remains ordinary data.
+// Apply the supplied ordinary or raw invocation policy to a Closure.
+// Non-callables and missing results are unsupported; callback errors propagate.
 inline Value apply(const Invoke& invoke, const Value& fn, const std::vector<Value>& args) {
   if (fn.kind != value::Kind::Closure) throw value::UnsupportedError{};
-  for (const auto& arg : args) {
-    // The reference host propagates a `none` argument instead of calling the
-    // stage; that path is not evidenced, so it is left unsupported.
-    if (arg.kind == value::Kind::Outcome && arg.outcome_is_none) throw value::UnsupportedError{};
-  }
   auto result = invoke(fn, args);
   if (!result.has_value()) throw value::UnsupportedError{};
   return std::move(*result);
@@ -258,9 +252,9 @@ inline Value map(const Value& fn, const Value& source, const Invoke& invoke) {
 }
 
 // Derive a lazy Flow retaining predicate/upstream/invoke; source must be a Flow.
-// Pull until a Boolean true verdict or end; false skips an item. Non-Boolean is
-// UnsupportedError. One output may require arbitrarily many pulls/callbacks, so an
-// unbounded source with no match never returns. Validation follows demanded items.
+// Pull until a Boolean true verdict or end; false and absence skip an item.
+// Other non-Booleans are unsupported. One output may require arbitrarily many pulls/callbacks, so
+// an unbounded source with no match never returns. Validation follows demanded items.
 inline Value filter(const Value& predicate, const Value& source, const Invoke& invoke) {
   auto upstream = source.flow;
   return make_flow([predicate, upstream, invoke]() -> Pull {
@@ -271,6 +265,7 @@ inline Value filter(const Value& predicate, const Value& source, const Invoke& i
           auto item = items();
           if (!item.has_value()) return std::nullopt;
           const Value verdict = apply(invoke, predicate, {*item});
+          if (verdict.kind == value::Kind::Outcome && verdict.outcome_is_none) continue;
           if (verdict.kind != value::Kind::Boolean) throw value::UnsupportedError{};
           if (verdict.boolean) return item;
         }
@@ -427,7 +422,7 @@ inline Value run(const Value& source) {
     while (items().has_value()) {
     }
   }
-  return Value::make_nil();
+  return Value::make_outcome_none(Value::make_string("nil"));
 }
 
 // `_seq_reduce(f, acc, source)`: the non-list branch of the prelude
@@ -457,7 +452,7 @@ inline Value reduce(const Value& reducer, Value accumulator, const Value& source
 // selected by the *last argument* being a Flow, matching the reference host's
 // call-site dispatch (src/genia/callable.py `invoke_callable`).
 inline bool dispatch(const std::string& name, const std::vector<Value>& args, const Invoke& invoke,
-                     Value& out) {
+                     const Invoke& raw, Value& out) {
   const size_t n = args.size();
   const bool last_is_flow = n > 0 && args.back().kind == value::Kind::Flow;
   if (name == "lines" && n == 1) {
@@ -499,7 +494,7 @@ inline bool dispatch(const std::string& name, const std::vector<Value>& args, co
   }
   if (name == "each" && n == 2) {
     if (args[1].kind != value::Kind::List && !last_is_flow) seq_compatible_error("each", args[1]);
-    out = each(args[0], args[1], invoke);
+    out = each(args[0], args[1], raw);
     return true;
   }
   if (name == "collect" && n == 1) {
@@ -524,7 +519,7 @@ inline bool dispatch(const std::string& name, const std::vector<Value>& args, co
     seq_compatible_error(args[0].text, args[1]);
   }
   if (name == "_seq_reduce" && n == 3) {
-    out = reduce(args[0], args[1], args[2], invoke);
+    out = reduce(args[0], args[1], args[2], raw);
     return true;
   }
   return false;

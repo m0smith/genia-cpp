@@ -39,6 +39,7 @@ enum class Kind : std::uint8_t {
   Literal,
   Err,
   Some,
+  None,
   Named
 };
 
@@ -157,6 +158,29 @@ struct Pattern {
   }
 
   static Pattern map(std::vector<PatternMapEntry> key_patterns);
+
+  // Bare none matches any absence regardless of its reason and context.
+  static Pattern any_none() {
+    Pattern p;
+    p.kind = Kind::None;
+    p.has_context = false;
+    return p;
+  }
+
+  // Build an absence pattern with no context constraint.
+  static Pattern none(Pattern reason) {
+    Pattern p = any_none();
+    p.items.push_back(std::move(reason));
+    return p;
+  }
+
+  // Build an absence pattern that also matches and binds the context.
+  static Pattern none(Pattern reason, Pattern context) {
+    Pattern p = none(std::move(reason));
+    p.has_context = true;
+    p.items.push_back(std::move(context));
+    return p;
+  }
 
   static Pattern err(Pattern reason, Pattern context) {
     Pattern p;

@@ -171,11 +171,12 @@ void check_r20_and_legacy() {
   expect(plain_block["result"]["stdout"] == "2\n");
 }
 
-// Bare none/nil are never identifier bind patterns (IrPatNone is not
-// implemented here; exposed by spec/ir/option-patterns).
+// Bare none/nil project as absence patterns, never identifier bindings.
 void check_none_nil_patterns() {
-  expect(request("lower", "f(opt) = (some(v)) -> v | (none) -> 0")["status"] == "unsupported");
-  expect(request("lower", "g = (nil) -> 0")["status"] == "unsupported");
+  const auto clause = request("lower", "f(opt) = (some(v)) -> v | (none) -> 0");
+  const auto lambda = request("lower", "g = (nil) -> 0");
+  expect(clause["status"] == "ok" && clause.dump().find("IrPatNone") != std::string::npos);
+  expect(lambda["status"] == "ok" && lambda.dump().find("IrPatNone") != std::string::npos);
 }
 
 // Functions compare by runtime identity (R18; exposed by

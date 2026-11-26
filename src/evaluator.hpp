@@ -30,6 +30,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "arithmetic.hpp"
@@ -95,15 +96,356 @@ struct CallDepthGuard {
 // Named declarations validate before installation; normalized runtime errors
 // throw to the engine, while unsupported operations return nullopt.
 inline std::optional<value::Value> eval_node(const core_ir::Node& node, const EnvPtr& env);
+// Evaluate a user callable's body and normalize a returned host null at the
+// callable boundary. Raw invocation still delivers its input values unchanged.
+inline std::optional<value::Value> eval_callable_body(const core_ir::Node& body,
+                                                      const EnvPtr& env) {
+  auto result = eval_node(body, env);
+  if (result && result->kind == value::Kind::Nil)
+    return value::Value::make_outcome_none(value::Value::make_string("nil"));
+  return result;
+}
+
 // Invokes a closure in a fresh child of its captured environment. Ordinary
 // groups select fixed arity and bind headers before arm locals; explicit-open
 // groups bind only arm patterns. Arity/pattern misses return nullopt, runtime
 // failures propagate; the call-depth guard prevents unbounded native recursion.
 inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
                                                   const std::vector<value::Value>& args);
+// Evaluate a supported stage with its positional pipeline input.
 inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stage,
                                                        const value::Value& stage_value,
                                                        const EnvPtr& env);
+
+template <typename Closure>
+// Resolve the fixed-arity ordinary record without running a clause.
+inline Closure* fixed_stratum(Closure& group, size_t arity) {
+  if (group.fixed_arity() == arity) return &group;
+  for (const auto& overload : group.overloads) {
+    if (overload->fixed_arity() == arity) return overload.get();
+  }
+  return nullptr;
+}
+
+// Ordinary duplicates have stable arity diagnostics. Pattern duplicates share
+// the R20 key and preserve the source lines of both declarations.
+inline void check_pattern_duplicate(const value::Closure& existing, const value::Closure& added) {
+  if (!existing.header_pattern || !added.header_pattern ||
+      dispatch_key::clause_key(*existing.header_pattern, nullptr) !=
+          dispatch_key::clause_key(*added.header_pattern, nullptr))
+    return;
+  if (runtime_io::g_source_name.empty()) throw value::UnsupportedError{};
+  const std::string& source = runtime_io::g_source_name;
+  throw StatefulRuntimeError{"open-function-duplicate-clause: " + added.name +
+                             " in unit 'base' has two clauses with an identical "
+                             "dispatch key shape=('fixed', " +
+                             std::to_string(added.fixed_arity()) + ") (first at " + source + ":" +
+                             std::to_string(existing.declaration_line) + ", duplicate at " +
+                             source + ":" + std::to_string(added.declaration_line) + ")"};
+}
+
+// Mirror the pinned reference callable.py public Option-awareness set.
+inline bool public_handles_none(const std::string& name) {
+  static const std::unordered_set<std::string> names = {"_apply_match_procedure",
+                                                        "_compound_body",
+                                                        "_compound_env",
+                                                        "_compound_params",
+                                                        "_compound_procedure?",
+                                                        "_eval_guarded_branch",
+                                                        "_eval_match_branch",
+                                                        "_eval_match_branch_result",
+                                                        "_eval_match_branches",
+                                                        "_match_env",
+                                                        "_match_expr",
+                                                        "_match_procedure?",
+                                                        "absence_context",
+                                                        "absence_meta",
+                                                        "absence_reason",
+                                                        "application_expr?",
+                                                        "apply",
+                                                        "apply_dispatch",
+                                                        "assignment_expr?",
+                                                        "assignment_name",
+                                                        "assignment_value",
+                                                        "block_expr?",
+                                                        "block_expressions",
+                                                        "branch_body",
+                                                        "branch_body_from_size",
+                                                        "branch_guard",
+                                                        "branch_guard_from_size",
+                                                        "branch_has_guard?",
+                                                        "branch_pattern",
+                                                        "car",
+                                                        "cdr",
+                                                        "cli_option",
+                                                        "cli_option_or",
+                                                        "cons",
+                                                        "define",
+                                                        "diagnostic_error",
+                                                        "diagnostic_skipped",
+                                                        "empty_env",
+                                                        "eval",
+                                                        "eval_assignment",
+                                                        "eval_block",
+                                                        "eval_dispatch",
+                                                        "eval_operands",
+                                                        "eval_sequence",
+                                                        "extend",
+                                                        "flat_map_some",
+                                                        "flush",
+                                                        "get",
+                                                        "get?",
+                                                        "inspect",
+                                                        "is_none?",
+                                                        "is_some?",
+                                                        "lambda_body",
+                                                        "lambda_expr?",
+                                                        "lambda_params",
+                                                        "lookup",
+                                                        "make_function",
+                                                        "make_matcher",
+                                                        "map_put",
+                                                        "map_some",
+                                                        "match_branches",
+                                                        "match_expr?",
+                                                        "nil?",
+                                                        "none?",
+                                                        "null?",
+                                                        "operands",
+                                                        "operator",
+                                                        "or_else",
+                                                        "or_else_with",
+                                                        "pair?",
+                                                        "quasiquoted_expr?",
+                                                        "quoted_expr?",
+                                                        "reduce",
+                                                        "self_evaluating?",
+                                                        "set",
+                                                        "some",
+                                                        "some?",
+                                                        "symbol_expr?",
+                                                        "syntax_expect_match_branch",
+                                                        "syntax_expect_tagged",
+                                                        "syntax_match_branch_size",
+                                                        "syntax_match_branch_size_checked",
+                                                        "syntax_pair_nth",
+                                                        "syntax_pair_nth_from",
+                                                        "syntax_pair_rest",
+                                                        "syntax_pair_rest_from",
+                                                        "syntax_proper_list_length",
+                                                        "tagged_list?",
+                                                        "tagged_list_impl",
+                                                        "tap",
+                                                        "text_of_quotation",
+                                                        "then_find",
+                                                        "then_first",
+                                                        "then_get",
+                                                        "then_nth",
+                                                        "trace",
+                                                        "unwrap_or",
+                                                        "write",
+                                                        "writeln"};
+  return names.contains(name);
+}
+
+// Reference bootstrap registrations carrying either of the Option-awareness
+// flags consulted by the pinned host for final-expression delegation.
+inline bool registered_handles_none(const std::string& name) {
+  static const std::unordered_set<std::string> names = {"_absence_context",
+                                                        "_absence_meta",
+                                                        "_absence_reason",
+                                                        "_cli_option_or",
+                                                        "_cli_spec",
+                                                        "_err",
+                                                        "_flat_map_some",
+                                                        "_flush",
+                                                        "_http_send",
+                                                        "_is_none?",
+                                                        "_is_some?",
+                                                        "_json_decode",
+                                                        "_json_encode",
+                                                        "_json_schema",
+                                                        "_map_put",
+                                                        "_map_some",
+                                                        "_meta_define",
+                                                        "_meta_eval_error",
+                                                        "_meta_extend",
+                                                        "_meta_host_apply",
+                                                        "_meta_lookup",
+                                                        "_meta_match_error",
+                                                        "_meta_match_pattern_env",
+                                                        "_meta_set",
+                                                        "_none?",
+                                                        "_or_else",
+                                                        "_or_else_with",
+                                                        "_send_annotated",
+                                                        "_some",
+                                                        "_some?",
+                                                        "_syntax_error",
+                                                        "_syntax_self_evaluating",
+                                                        "_syntax_symbol_expr",
+                                                        "_unwrap_or",
+                                                        "_write",
+                                                        "_writeln",
+                                                        "car",
+                                                        "cdr",
+                                                        "cons",
+                                                        "debug_repr",
+                                                        "display",
+                                                        "null?",
+                                                        "pair?"};
+  return names.contains(name);
+}
+
+// These native fallbacks realize Option syntax or already-aware wrappers.
+// They accept none directly without implying Option-aware user delegation.
+inline bool direct_native_handles_none(const std::string& name) {
+  return public_handles_none(name) || registered_handles_none(name) || name == "none" ||
+         name == "err" || name == "json_encode" || name == "json_decode" || name == "represent" ||
+         name == "representation_match" || name == "_seq_reduce";
+}
+
+// Recognize final-expression delegation without executing or autoloading
+// the callee. A lexical binding shadows a flagged native registration.
+inline bool delegates_to_none_aware(const core_ir::Node* body, const EnvPtr& env) {
+  while (body && body->kind == core_ir::Kind::Block && !body->items.empty())
+    body = &body->items.back();
+  if (body && body->kind == core_ir::Kind::ExprStmt) body = body->left.get();
+  if (!body || body->kind != core_ir::Kind::Call) return false;
+  if (public_handles_none(body->name)) return true;
+  auto binding = env->lookup(body->name);
+  if (!binding) return registered_handles_none(body->name);
+  return binding->kind == value::Kind::Closure &&
+         registered_handles_none(binding->closure->native_name);
+}
+
+// Determine admission for the selected fixed stratum, without matching
+// arguments, evaluating guards, or executing any of its clauses.
+inline bool closure_handles_none(const value::Closure& closure, size_t arity) {
+  if (!closure.native_name.empty()) return direct_native_handles_none(closure.native_name);
+  if (!closure.is_open && public_handles_none(closure.name)) return true;
+  auto record_handles_none = [&](const value::Closure& record) {
+    if (record.header_pattern && pattern_match::handles_option(*record.header_pattern)) return true;
+    if (!record.is_named_definition) {
+      for (const auto& pat : record.params) {
+        if (pattern_match::handles_none(pat)) return true;
+      }
+    }
+    for (const auto& arm : record.case_clauses) {
+      if (record.is_open && arm.pattern.items.size() != arity) continue;
+      if (pattern_match::handles_option(arm.pattern) ||
+          (record.is_open && delegates_to_none_aware(arm.result.get(), record.captured_env)))
+        return true;
+    }
+    return delegates_to_none_aware(record.body.get(), record.captured_env);
+  };
+  const auto* selected =
+      closure.is_named_definition && !closure.is_open ? fixed_stratum(closure, arity) : &closure;
+  if (!selected) return false;
+  if (record_handles_none(*selected)) return true;
+  for (const auto& record : selected->same_arity_clauses) {
+    if (record_handles_none(*record)) return true;
+  }
+  return false;
+}
+
+// Names with a bounded native or Flow fallback in this evaluator. Do not
+// treat catalogue membership as implementation or guess flags for other hosts.
+inline bool has_native_call(const std::string& name) {
+  static const std::unordered_set<std::string> names = {"_pipe_run",
+                                                        "_seq_reduce",
+                                                        "_seq_type_error",
+                                                        "_sum",
+                                                        "append",
+                                                        "apply_raw",
+                                                        "argv",
+                                                        "cell",
+                                                        "cell_alive?",
+                                                        "cell_error",
+                                                        "cell_failed?",
+                                                        "cell_get",
+                                                        "cell_send",
+                                                        "cell_state",
+                                                        "cell_status",
+                                                        "cell_stop",
+                                                        "cell_with_state",
+                                                        "collect",
+                                                        "concat",
+                                                        "contains",
+                                                        "display",
+                                                        "drop",
+                                                        "each",
+                                                        "empty_env",
+                                                        "err",
+                                                        "eval",
+                                                        "evolve",
+                                                        "exact",
+                                                        "filter",
+                                                        "float64",
+                                                        "format",
+                                                        "get",
+                                                        "is_some?",
+                                                        "json_decode",
+                                                        "json_encode",
+                                                        "keep_some",
+                                                        "lines",
+                                                        "map",
+                                                        "map_count",
+                                                        "map_get",
+                                                        "map_has?",
+                                                        "map_items",
+                                                        "map_new",
+                                                        "map_put",
+                                                        "map_remove",
+                                                        "none",
+                                                        "none?",
+                                                        "nth",
+                                                        "parse_int",
+                                                        "print",
+                                                        "process_alive?",
+                                                        "process_error",
+                                                        "process_failed?",
+                                                        "rational",
+                                                        "ref",
+                                                        "ref_get",
+                                                        "ref_is_set",
+                                                        "ref_set",
+                                                        "ref_update",
+                                                        "represent",
+                                                        "representation_match",
+                                                        "restart_cell",
+                                                        "run",
+                                                        "scan",
+                                                        "send",
+                                                        "some?",
+                                                        "spawn",
+                                                        "take",
+                                                        "trim",
+                                                        "unwrap_or",
+                                                        "upper",
+                                                        "utf8_decode",
+                                                        "utf8_encode"};
+  return names.contains(name);
+}
+
+// Return the first absence argument, including its original context, when
+// a resolved callable would short-circuit. Raw invocation does not use this.
+inline std::optional<value::Value> propagated_none(const std::vector<value::Value>& args,
+                                                   const value::Value* callee,
+                                                   const std::string& native_name = "") {
+  for (const auto& arg : args) {
+    if (arg.kind != value::Kind::Outcome || !arg.outcome_is_none) continue;
+    if (callee) {
+      if (callee->kind == value::Kind::Closure &&
+          !closure_handles_none(*callee->closure, args.size()))
+        return arg;
+    } else if (has_native_call(native_name) && !direct_native_handles_none(native_name)) {
+      return arg;
+    }
+    break;
+  }
+  return std::nullopt;
+}
 
 // R27 E27-1: routes a named call to the Flow kernel (flow.hpp) when the
 // call selects a Flow operation. Returns false to leave the call to ordinary
@@ -111,9 +453,14 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
 inline bool dispatch_flow(const std::string& name, const std::vector<value::Value>& args,
                           value::Value& out) {
   const flow::Invoke invoke = [](const value::Value& fn, const std::vector<value::Value>& a) {
+    if (auto absence = propagated_none(a, &fn)) return absence;
     return invoke_closure(*fn.closure, a);
   };
-  return flow::dispatch(name, args, invoke, out);
+  const flow::Invoke raw = [](const value::Value& fn, const std::vector<value::Value>& a) {
+    if (fn.kind != value::Kind::Closure) return std::optional<value::Value>{};
+    return invoke_closure(*fn.closure, a);
+  };
+  return flow::dispatch(name, args, invoke, raw, out);
 }
 
 // Calls a first-class native reference (for example `upper` passed to
@@ -411,6 +758,9 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         }
         args.push_back(std::move(*arg_value));
       }
+      auto callee = env->lookup(node.name);
+      if (auto absence = propagated_none(args, callee ? &*callee : nullptr, node.name))
+        return absence;
       if (node.name == "apply_raw" && args.size() == 2) {
         // `apply_raw(proc, args)` invokes `proc` with `args` directly
         // (genia-2026's src/genia/builtins.py `apply_raw_fn`); it is
@@ -495,7 +845,6 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
         throw StatefulRuntimeError{"json_decode expected string or bytes, received " +
                                    json_runtime_type_name(args[0].kind)};
       }
-      auto callee = env->lookup(node.name);
       const bool bound_closure = callee.has_value() && callee->kind == value::Kind::Closure &&
                                  callee->closure->native_name.empty();
       value::Value flow_result;
@@ -520,14 +869,20 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
     // Local explicit-open groups instead flatten arms and validate R20 keys.
     // Both retain captured environments; validation precedes group mutation.
     case core_ir::Kind::ImmutableBind:
-    case core_ir::Kind::PatternFuncDef:
     case core_ir::Kind::ClosedFuncDef:
       // genia-cpp#50: Model B carriers are parsed and lowered only. This host
       // declares none of immutable_bindings, default_open_functions or
       // closed_functions, so it never executes them (and never as `=`).
       return std::nullopt;
+    case core_ir::Kind::PatternFuncDef:
     case core_ir::Kind::OpenFuncDef:
     case core_ir::Kind::FuncDef: {
+      const bool pattern_header = node.kind == core_ir::Kind::PatternFuncDef;
+      if (pattern_header &&
+          (node.header.kind != pattern::Kind::Tuple || node.guard ||
+           (!node.header.items.empty() && node.header.items.back().kind == pattern::Kind::Rest) ||
+           !pattern_match::handles_none(node.header) || !pattern_match::is_executable(node.header)))
+        return std::nullopt;
       // Legacy varargs and prefix annotations lower portably but are not
       // executed by this bounded runtime.
       if (node.rest_param.has_value() || !node.annotations.empty()) return std::nullopt;
@@ -541,6 +896,10 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       closure->is_open = node.kind == core_ir::Kind::OpenFuncDef;
       closure->header_names = node.header_param_names;
       closure->docstring = node.docstring;
+      if (pattern_header) {
+        closure->header_pattern = node.header;
+        closure->declaration_line = node.header.source_line;
+      }
       if (node.is_case_body) {
         closure->case_clauses.reserve(node.case_patterns.size());
         for (size_t i = 0; i < node.case_patterns.size(); ++i) {
@@ -557,6 +916,12 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       // Validate before installing or extending a callable. Ordinary function
       // groups keep one shared identity so existing aliases observe new arities.
       auto existing = env->lookup(node.name);
+      if (pattern_header && (existing ? existing->kind != value::Kind::Closure ||
+                                            !existing->closure->is_named_definition ||
+                                            existing->closure->name != node.name ||
+                                            existing->closure->captured_env != env
+                                      : genia2026_known_globals::is_known(node.name)))
+        return std::nullopt;
       if (existing.has_value() && existing->kind == value::Kind::Closure &&
           existing->closure->is_open && !closure->is_open) {
         throw StatefulRuntimeError{
@@ -606,16 +971,26 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
                                      ": got '" + *node.docstring + "', expected '" +
                                      *group.docstring + "'"};
         }
-        const size_t arity = node.header_param_names.size();
-        bool duplicate = group.header_names.size() == arity;
-        for (const auto& overload : group.overloads) {
-          duplicate = duplicate || overload->header_names.size() == arity;
+        const size_t arity = closure->fixed_arity();
+        auto* selected = fixed_stratum(group, arity);
+        if (selected) {
+          if ((pattern_header || selected->header_pattern ||
+               !selected->same_arity_clauses.empty()) &&
+              group.captured_env != env)
+            return std::nullopt;
+          auto validate = [&](const value::Closure& previous) {
+            if (!previous.header_pattern && !pattern_header) {
+              throw StatefulRuntimeError{"Duplicate function definition: " + node.name + "/" +
+                                         std::to_string(arity)};
+            }
+            check_pattern_duplicate(previous, *closure);
+          };
+          validate(*selected);
+          for (const auto& previous : selected->same_arity_clauses) validate(*previous);
+          selected->same_arity_clauses.push_back(closure);
+        } else {
+          group.overloads.push_back(closure);
         }
-        if (duplicate) {
-          throw StatefulRuntimeError{"Duplicate function definition: " + node.name + "/" +
-                                     std::to_string(arity)};
-        }
-        group.overloads.push_back(closure);
         if (node.docstring.has_value()) group.docstring = node.docstring;
         return existing;
       }
@@ -636,13 +1011,10 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       }
       size_t stage_index = 0;
       for (const auto& stage : node.items) {
-        if (stage_value->kind == value::Kind::Outcome && stage_value->outcome_is_err) {
-          // `err(...)` short-circuits the remaining stages unchanged,
-          // matching genia-2026's src/genia/evaluator.py
-          // `eval_pipeline`'s `is_err(stage_value)` check (this slice
-          // has no `none` yet, so only Outcome::Err triggers this).
+        // Pipeline-wide absence and failure both skip every remaining stage.
+        if (stage_value->kind == value::Kind::Outcome &&
+            (stage_value->outcome_is_none || stage_value->outcome_is_err))
           return stage_value;
-        }
         std::optional<value::Value> next;
         try {
           next = eval_pipeline_stage(stage, *stage_value, env);
@@ -863,12 +1235,33 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
   if (!closure.native_name.empty()) {
     return call_native_reference(closure.native_name, args);
   }
-  if (closure.is_named_definition && !closure.is_open &&
-      closure.header_names.size() != args.size()) {
-    for (const auto& overload : closure.overloads) {
-      if (overload->header_names.size() == args.size()) return invoke_closure(*overload, args);
+  if (closure.is_named_definition && !closure.is_open && closure.fixed_arity() != args.size()) {
+    const auto* selected = fixed_stratum(closure, args.size());
+    return selected ? invoke_closure(*selected, args) : std::nullopt;
+  }
+  if (closure.header_pattern || !closure.same_arity_clauses.empty()) {
+    // Select from the fixed stratum in declaration order. An ordinary
+    // identifier header matches every argument list of the selected arity.
+    auto invoke_record = [&](const value::Closure& record,
+                             const pattern_match::Bindings& bindings) {
+      auto child = std::make_shared<Environment>(record.captured_env);
+      for (const auto& [name, bound] : bindings) child->define(name, bound);
+      return eval_callable_body(*record.body, child);
+    };
+    if (closure.header_pattern) {
+      auto bindings = pattern_match::match(*closure.header_pattern, args);
+      if (bindings) return invoke_record(closure, *bindings);
+      for (const auto& record : closure.same_arity_clauses) {
+        if (!record->header_pattern) return invoke_closure(*record, args);
+        bindings = pattern_match::match(*record->header_pattern, args);
+        if (bindings) return invoke_record(*record, *bindings);
+      }
+      auto rendered = render::display(value::Value::make_list(args));
+      if (!rendered) return std::nullopt;
+      throw StatefulRuntimeError{"No matching case for function " + closure.name + "/" +
+                                 std::to_string(args.size()) + " with arguments " + *rendered};
     }
-    return std::nullopt;
+    // An ordinary first record wins; evaluate its existing body below.
   }
   if (!closure.case_clauses.empty()) {
     for (const auto& clause : closure.case_clauses) {
@@ -892,7 +1285,7 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
         if (!condition) return std::nullopt;
         if (!guard_truthy(*condition)) continue;
       }
-      return eval_node(*clause.result, child);
+      return eval_callable_body(*clause.result, child);
     }
     return std::nullopt;
   }
@@ -909,7 +1302,7 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
       child->define(binding.first, binding.second);
     }
   }
-  return eval_node(*closure.body, child);
+  return eval_callable_body(*closure.body, child);
 }
 
 // Evaluates one pipeline stage against the value piped into it, per
@@ -933,6 +1326,8 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
     }
     args.push_back(stage_value);
     auto callee = env->lookup(stage.name);
+    if (auto absence = propagated_none(args, callee ? &*callee : nullptr, stage.name))
+      return absence;
     const bool bound_closure = callee.has_value() && callee->kind == value::Kind::Closure &&
                                callee->closure->native_name.empty();
     value::Value flow_result;
@@ -949,7 +1344,9 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
   if (!callee.has_value() || callee->kind != value::Kind::Closure) {
     return std::nullopt;
   }
-  return invoke_closure(*callee->closure, {stage_value});
+  const std::vector<value::Value> args{stage_value};
+  if (auto absence = propagated_none(args, &*callee)) return absence;
+  return invoke_closure(*callee->closure, args);
 }
 
 // Evaluates a full program (sequence of independent top-level
