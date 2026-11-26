@@ -1,5 +1,5 @@
 {
-  "applicable_cases": 1187,
+  "applicable_cases": 1197,
   "capabilities": {
     "allowlisted_host_interop": "unsupported",
     "ast_lowering": "supported",
@@ -47,19 +47,19 @@
     "cli"
   ],
   "contract_revision": {
-    "checkout": "b759c20f97334da14d1b15bdf8a70b87d6e0d2c8",
+    "checkout": "8ad371551b0de2ada39bf39266066e918b966200",
     "classification": "current",
-    "declared": "b759c20f97334da14d1b15bdf8a70b87d6e0d2c8"
+    "declared": "8ad371551b0de2ada39bf39266066e918b966200"
   },
   "counts": {
     "crash": 0,
     "fail": 0,
     "invalid": 0,
-    "pass": 335,
+    "pass": 352,
     "protocol_error": 0,
     "timeout": 0,
-    "unsupported": 852
+    "unsupported": 845
   },
   "protocol_version": "1",
-  "total_cases": 1187
+  "total_cases": 1197
 }

@@ -95,7 +95,8 @@ before implementing:
 `=:` immutable bindings, closed `f(...) =:` groups, pattern/guard declaration
 headers, their prefix annotations, and the `IrPatErr`/`IrPatNamed`/`IrPatSome`
 wire rules are parsed and lowered to portable Core IR. The contract
-SyntaxErrors are reported. None of these forms is executed:
+SyntaxErrors are reported. R31 X Part B executes a bounded subset of fixed-arity
+absence-pattern declarations. The broader Model B capabilities
 `immutable_bindings`, `default_open_functions`, `closed_functions` and
 `multi_file_eval` remain `unsupported`. All 41 parse/IR `model-b-a-*` shared
 cases pass. The two eval cases remain unsupported only because of the
@@ -122,9 +123,9 @@ or semantic contract pin.
 
 | | |
 |---|---|
-| `genia-2026` contract revision | [`b759c20f97334da14d1b15bdf8a70b87d6e0d2c8`](https://github.com/m0smith/genia-2026/commit/b759c20f97334da14d1b15bdf8a70b87d6e0d2c8) |
+| `genia-2026` contract revision | [`8ad371551b0de2ada39bf39266066e918b966200`](https://github.com/m0smith/genia-2026/commit/8ad371551b0de2ada39bf39266066e918b966200) |
 | E16-1 adapter-protocol version | `1` |
-| Represents | R31 CPP-1 re-pin and catalogue correction (genia-2026 #1330). Of 1,187 shared cases, 335 pass and 852 are unsupported, with zero failures. C++ explicitly reports `sheet_values` as `unsupported`. See [CPP-1 evidence and scope](docs/r31-cpp1-repin.md). Model B Slice A's parser and lowering boundary is recorded in [docs/model-b-slice-a.md](docs/model-b-slice-a.md). |
+| Represents | R31 X Part B ordinary-call none propagation (genia-2026 #1347). Of 1,197 shared cases, 352 pass and 845 are unsupported, with zero failures. See [X Part B scope and evidence](docs/r31-xb-none-propagation.md). The earlier [CPP-1 re-pin](docs/r31-cpp1-repin.md) established explicit `sheet_values` non-support. |
 
 This is a **pinned-conformance declaration** in the sense E16-4 defines it
 (`genia-2026`'s `tools/spec_runner/revision.py`): this repository's
@@ -538,9 +539,9 @@ git clone https://github.com/m0smith/genia-cpp
 cmake -S genia-cpp -B genia-cpp-build -DCMAKE_BUILD_TYPE=Release
 cmake --build genia-cpp-build --target genia-adapter
 cd genia-2026
-git checkout --detach b759c20f97334da14d1b15bdf8a70b87d6e0d2c8
+git checkout --detach 8ad371551b0de2ada39bf39266066e918b966200
 uv run python -m tools.spec_runner --host ../genia-cpp-build/genia-adapter --evidence evidence.json
-# total=1187 passed=335 failed=0 unsupported=852 protocol_error=0 crash=0 timeout=0 invalid=0
+# total=1197 passed=352 failed=0 unsupported=845 protocol_error=0 crash=0 timeout=0 invalid=0
 ```
 
 Formatting/lint (matching the R24 dependency/toolchain policy):

@@ -46,8 +46,9 @@ truth — read them from `genia-2026` directly.
 The #53/#54 follow-up implements optional guards in ordinary grouped arms and
 local explicit-R20 clauses, using the existing bounded expression subset and
 portable guard fields. It preserves explicit-open header-capture refusal and
-normalizes guard references for duplicate keys. It does not implement ordinary
-pattern/guard headers, default-open functions, varargs or cross-module linking.
+normalizes guard references for duplicate keys. R31 X Part B adds local
+fixed-arity absence-pattern headers. General ordinary pattern and guard headers,
+varargs and cross-module linking remain outside the executable subset.
 The earlier R24 status below remains historical; current bounded details and
 acceptance evidence are in docs/host-conformance-repairs.md.
 
@@ -55,8 +56,8 @@ acceptance evidence are in docs/host-conformance-repairs.md.
 
 Model B Slice A syntax (`=:`, closed groups, pattern/guard headers, prefix
 annotations on those carriers, `IrPatErr`/`IrPatNamed`) is parsed and lowered
-only. Evaluation of every new carrier stays unsupported, and no Model B
-execution capability is declared. Do not treat parsing as runtime support.
+by Slice A. R31 X Part B adds bounded evaluation of absence-pattern headers
+under #1347. The Model B execution capabilities remain unsupported.
 Boundary and evidence: docs/model-b-slice-a.md.
 
 ## Status
