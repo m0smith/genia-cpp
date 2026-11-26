@@ -36,6 +36,7 @@ inline void collect_bound_names(const pattern::Pattern& pattern, std::set<std::s
     case pattern::Kind::List:
     case pattern::Kind::Tuple:
     case pattern::Kind::Err:
+    case pattern::Kind::None:
     case pattern::Kind::Some:
     case pattern::Kind::Named:
       for (const auto& item : pattern.items) {

@@ -105,6 +105,33 @@ inline std::optional<value::Value> eval_pipeline_stage(const core_ir::Node& stag
                                                        const value::Value& stage_value,
                                                        const EnvPtr& env);
 
+template <typename Closure>
+// Resolve the fixed-arity ordinary record without running a clause.
+inline Closure* fixed_stratum(Closure& group, size_t arity) {
+  if (group.fixed_arity() == arity) return &group;
+  for (const auto& overload : group.overloads) {
+    if (overload->fixed_arity() == arity) return overload.get();
+  }
+  return nullptr;
+}
+
+// Ordinary duplicates have stable arity diagnostics. Pattern duplicates share
+// the R20 key and preserve the source lines of both declarations.
+inline void check_pattern_duplicate(const value::Closure& existing, const value::Closure& added) {
+  if (!existing.header_pattern || !added.header_pattern ||
+      dispatch_key::clause_key(*existing.header_pattern, nullptr) !=
+          dispatch_key::clause_key(*added.header_pattern, nullptr))
+    return;
+  if (runtime_io::g_source_name.empty()) throw value::UnsupportedError{};
+  const std::string& source = runtime_io::g_source_name;
+  throw StatefulRuntimeError{"open-function-duplicate-clause: " + added.name +
+                             " in unit 'base' has two clauses with an identical "
+                             "dispatch key shape=('fixed', " +
+                             std::to_string(added.fixed_arity()) + ") (first at " + source + ":" +
+                             std::to_string(existing.declaration_line) + ", duplicate at " +
+                             source + ":" + std::to_string(added.declaration_line) + ")"};
+}
+
 // R27 E27-1: routes a named call to the Flow kernel (flow.hpp) when the
 // call selects a Flow operation. Returns false to leave the call to ordinary
 // closure/native dispatch.
@@ -520,14 +547,20 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
     // Local explicit-open groups instead flatten arms and validate R20 keys.
     // Both retain captured environments; validation precedes group mutation.
     case core_ir::Kind::ImmutableBind:
-    case core_ir::Kind::PatternFuncDef:
     case core_ir::Kind::ClosedFuncDef:
       // genia-cpp#50: Model B carriers are parsed and lowered only. This host
       // declares none of immutable_bindings, default_open_functions or
       // closed_functions, so it never executes them (and never as `=`).
       return std::nullopt;
+    case core_ir::Kind::PatternFuncDef:
     case core_ir::Kind::OpenFuncDef:
     case core_ir::Kind::FuncDef: {
+      const bool pattern_header = node.kind == core_ir::Kind::PatternFuncDef;
+      if (pattern_header &&
+          (node.header.kind != pattern::Kind::Tuple || node.guard ||
+           (!node.header.items.empty() && node.header.items.back().kind == pattern::Kind::Rest) ||
+           !pattern_match::handles_none(node.header) || !pattern_match::is_executable(node.header)))
+        return std::nullopt;
       // Legacy varargs and prefix annotations lower portably but are not
       // executed by this bounded runtime.
       if (node.rest_param.has_value() || !node.annotations.empty()) return std::nullopt;
@@ -541,6 +574,10 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       closure->is_open = node.kind == core_ir::Kind::OpenFuncDef;
       closure->header_names = node.header_param_names;
       closure->docstring = node.docstring;
+      if (pattern_header) {
+        closure->header_pattern = node.header;
+        closure->declaration_line = node.header.source_line;
+      }
       if (node.is_case_body) {
         closure->case_clauses.reserve(node.case_patterns.size());
         for (size_t i = 0; i < node.case_patterns.size(); ++i) {
@@ -606,16 +643,26 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
                                      ": got '" + *node.docstring + "', expected '" +
                                      *group.docstring + "'"};
         }
-        const size_t arity = node.header_param_names.size();
-        bool duplicate = group.header_names.size() == arity;
-        for (const auto& overload : group.overloads) {
-          duplicate = duplicate || overload->header_names.size() == arity;
+        const size_t arity = closure->fixed_arity();
+        auto* selected = fixed_stratum(group, arity);
+        if (selected) {
+          if ((pattern_header || selected->header_pattern ||
+               !selected->same_arity_clauses.empty()) &&
+              group.captured_env != env)
+            return std::nullopt;
+          auto validate = [&](const value::Closure& previous) {
+            if (!previous.header_pattern && !pattern_header) {
+              throw StatefulRuntimeError{"Duplicate function definition: " + node.name + "/" +
+                                         std::to_string(arity)};
+            }
+            check_pattern_duplicate(previous, *closure);
+          };
+          validate(*selected);
+          for (const auto& previous : selected->same_arity_clauses) validate(*previous);
+          selected->same_arity_clauses.push_back(closure);
+        } else {
+          group.overloads.push_back(closure);
         }
-        if (duplicate) {
-          throw StatefulRuntimeError{"Duplicate function definition: " + node.name + "/" +
-                                     std::to_string(arity)};
-        }
-        group.overloads.push_back(closure);
         if (node.docstring.has_value()) group.docstring = node.docstring;
         return existing;
       }
@@ -863,12 +910,33 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
   if (!closure.native_name.empty()) {
     return call_native_reference(closure.native_name, args);
   }
-  if (closure.is_named_definition && !closure.is_open &&
-      closure.header_names.size() != args.size()) {
-    for (const auto& overload : closure.overloads) {
-      if (overload->header_names.size() == args.size()) return invoke_closure(*overload, args);
+  if (closure.is_named_definition && !closure.is_open && closure.fixed_arity() != args.size()) {
+    const auto* selected = fixed_stratum(closure, args.size());
+    return selected ? invoke_closure(*selected, args) : std::nullopt;
+  }
+  if (closure.header_pattern || !closure.same_arity_clauses.empty()) {
+    // Select from the fixed stratum in declaration order. An ordinary
+    // identifier header matches every argument list of the selected arity.
+    auto invoke_record = [&](const value::Closure& record,
+                             const pattern_match::Bindings& bindings) {
+      auto child = std::make_shared<Environment>(record.captured_env);
+      for (const auto& [name, bound] : bindings) child->define(name, bound);
+      return eval_node(*record.body, child);
+    };
+    if (closure.header_pattern) {
+      auto bindings = pattern_match::match(*closure.header_pattern, args);
+      if (bindings) return invoke_record(closure, *bindings);
+      for (const auto& record : closure.same_arity_clauses) {
+        if (!record->header_pattern) return invoke_closure(*record, args);
+        bindings = pattern_match::match(*record->header_pattern, args);
+        if (bindings) return invoke_record(*record, *bindings);
+      }
+      auto rendered = render::display(value::Value::make_list(args));
+      if (!rendered) return std::nullopt;
+      throw StatefulRuntimeError{"No matching case for function " + closure.name + "/" +
+                                 std::to_string(args.size()) + " with arguments " + *rendered};
     }
-    return std::nullopt;
+    // An ordinary first record wins; evaluate its existing body below.
   }
   if (!closure.case_clauses.empty()) {
     for (const auto& clause : closure.case_clauses) {

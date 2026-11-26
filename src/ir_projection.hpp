@@ -80,6 +80,8 @@ inline bool has_valid_arity(const pattern::Pattern& pattern) {
     case pattern::Kind::Err:
     case pattern::Kind::Some:
       return pattern.items.size() == 2 && pattern.map_items.empty();
+    case pattern::Kind::None:
+      return pattern.items.size() == (pattern.has_context ? 2 : 1) && pattern.map_items.empty();
     case pattern::Kind::Named:
       return pattern.items.size() == 1 && pattern.map_items.empty();
     case pattern::Kind::Tuple:
@@ -159,6 +161,7 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern,
       }
       return json{{"node", "IrPatMap"}, {"items", items}};
     }
+    case pattern::Kind::None:
     case pattern::Kind::Err: {
       auto reason = project_pattern(pattern.items[0], model_b_header);
       if (!reason.has_value()) return std::nullopt;
@@ -168,7 +171,9 @@ inline std::optional<json> project_pattern(const pattern::Pattern& pattern,
         if (!projected_context.has_value()) return std::nullopt;
         context = *projected_context;
       }
-      return json{{"node", "IrPatErr"}, {"reason", *reason}, {"context", context}};
+      return json{{"node", pattern.kind == pattern::Kind::None ? "IrPatNone" : "IrPatErr"},
+                  {"reason", *reason},
+                  {"context", context}};
     }
     case pattern::Kind::Some: {
       auto inner = project_pattern(pattern.items[0], model_b_header);

@@ -1288,10 +1288,23 @@ class Parser {
       if (text == "_") {
         return pattern::Pattern::wildcard();
       }
-      // Bare `none`/`nil` are IrPatNone-family patterns, which this host does
-      // not implement; they must never become identifier binds.
-      if ((text == "none" || text == "nil") && peek().kind != TokenKind::LParen) {
-        return std::nullopt;
+      if (text == "none" || text == "nil") {
+        if (peek().kind != TokenKind::LParen)
+          return pattern::Pattern::none(pattern::Pattern::string_literal("nil"));
+        if (text == "nil") return std::nullopt;
+        advance();
+        auto reason = parse_pattern_atom();
+        if (!reason) return std::nullopt;
+        std::optional<pattern::Pattern> context;
+        if (peek().kind == TokenKind::Comma) {
+          advance();
+          context = parse_pattern_atom();
+          if (!context) return std::nullopt;
+        }
+        if (peek().kind != TokenKind::RParen) return std::nullopt;
+        advance();
+        return context ? pattern::Pattern::none(std::move(*reason), std::move(*context))
+                       : pattern::Pattern::none(std::move(*reason));
       }
       if (text == "true" || text == "false") {
         // Boolean literals are literal patterns, never identifier binds.
@@ -1670,7 +1683,7 @@ class Parser {
         }
         items.push_back(ast::Node::spread(std::move(*inner)));
       } else {
-        auto item = parse_expr();
+        auto item = parse_pipeline_expr();
         if (!item.has_value()) {
           return std::nullopt;
         }

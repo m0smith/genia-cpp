@@ -109,6 +109,15 @@ struct Closure {
   std::vector<std::string> header_names;
   std::vector<std::shared_ptr<Closure>> overloads;
   std::optional<std::string> docstring;
+  // Pattern-headed records and later records in this fixed-arity stratum.
+  std::optional<pattern::Pattern> header_pattern;
+  std::vector<std::shared_ptr<Closure>> same_arity_clauses;
+  int declaration_line = 0;
+
+  // Return this record's fixed arity without matching or running its body.
+  size_t fixed_arity() const {
+    return header_pattern ? header_pattern->items.size() : header_names.size();
+  }
 };
 
 struct Value {

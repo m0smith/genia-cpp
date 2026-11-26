@@ -49,6 +49,7 @@ inline std::string pattern_key(const pattern::Pattern& pattern,
     append_field(key, pattern.decimal_coefficient_digits);
     append_field(key, std::to_string(pattern.decimal_exponent));
   }
+  if (pattern.kind == pattern::Kind::None) append_field(key, pattern.has_context ? "context" : "");
   append_field(key, std::to_string(pattern.items.size()));
   for (const auto& item : pattern.items) append_field(key, pattern_key(item, binders));
   append_field(key, std::to_string(pattern.map_items.size()));

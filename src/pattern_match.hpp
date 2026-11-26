@@ -77,6 +77,33 @@ inline bool all_executable(const std::vector<pattern::Pattern>& patterns) {
   return true;
 }
 
+// Find an explicit absence pattern through supported destructuring containers.
+inline bool handles_none(const pattern::Pattern& pat) {
+  if (pat.kind == pattern::Kind::None) return true;
+  if (pat.kind == pattern::Kind::Err) return false;
+  for (const auto& item : pat.items) {
+    if (handles_none(item)) return true;
+  }
+  for (const auto& entry : pat.map_items) {
+    if (handles_none(entry.value)) return true;
+  }
+  return false;
+}
+
+// Determine whether a pattern handles either branch of Option. Context on
+// Some is not part of the None-awareness rule; Some itself suffices here.
+inline bool handles_option(const pattern::Pattern& pat) {
+  if (pat.kind == pattern::Kind::None || pat.kind == pattern::Kind::Some) return true;
+  if (pat.kind == pattern::Kind::Err) return false;
+  for (const auto& item : pat.items) {
+    if (handles_option(item)) return true;
+  }
+  for (const auto& entry : pat.map_items) {
+    if (handles_option(entry.value)) return true;
+  }
+  return false;
+}
+
 // Matches one pattern against `arg`; nullopt on mismatch. Throws
 // value::UnsupportedError for carriers this host lowers but never matches.
 inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
@@ -210,6 +237,18 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
     case pattern::Kind::Named:
       // Named-pattern resolution is not implemented by this host.
       throw value::UnsupportedError{};
+    case pattern::Kind::None: {
+      if (arg.kind != value::Kind::Outcome || !arg.outcome_is_none || !arg.outcome_reason)
+        return std::nullopt;
+      auto bindings = match_atom(pattern.items[0], *arg.outcome_reason);
+      if (!bindings || !pattern.has_context) return bindings;
+      const auto missing_context =
+          value::Value::make_outcome_none(value::Value::make_string("nil"));
+      auto context = match_atom(pattern.items[1],
+                                arg.outcome_context ? *arg.outcome_context : missing_context);
+      if (!context || !merge_bindings(*bindings, std::move(*context))) return std::nullopt;
+      return bindings;
+    }
     case pattern::Kind::Err: {
       if (!pattern.has_context) throw value::UnsupportedError{};
       if (arg.kind != value::Kind::Outcome || !arg.outcome_is_err ||
