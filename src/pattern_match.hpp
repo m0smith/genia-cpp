@@ -243,8 +243,7 @@ inline std::optional<Bindings> match_atom(const pattern::Pattern& pattern,
       if (pattern.items.empty()) return Bindings{};
       auto bindings = match_atom(pattern.items[0], *arg.outcome_reason);
       if (!bindings || !pattern.has_context) return bindings;
-      const auto missing_context =
-          value::Value::make_outcome_none(value::Value::make_string("nil"));
+      const auto missing_context = value::Value::make_nil();
       auto context = match_atom(pattern.items[1],
                                 arg.outcome_context ? *arg.outcome_context : missing_context);
       if (!context || !merge_bindings(*bindings, std::move(*context))) return std::nullopt;

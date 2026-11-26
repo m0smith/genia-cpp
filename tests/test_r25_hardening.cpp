@@ -1,3 +1,5 @@
+// Check local Cell and Process failure handling and asynchronous send display.
+// The private idle fixture synchronizes work; these tests perform no external I/O.
 #include <atomic>
 #include <vector>
 
@@ -16,7 +18,7 @@ Value hardening_integer(std::uint64_t value) {
 }
 }  // namespace
 
-TEST_CASE("R25 Process never invokes one handler concurrently") {
+static const auto process_serializes_handlers = [] {
   std::atomic<int> in_flight{0};
   std::atomic<int> maximum{0};
   auto process = Process::create([&](const Value& message) {
@@ -28,9 +30,11 @@ TEST_CASE("R25 Process never invokes one handler concurrently") {
   for (std::uint64_t i = 0; i < 1000; ++i) REQUIRE(process->send(hardening_integer(i)));
   Process::await_all_idle();
   CHECK(maximum.load() == 1);
-}
+};
+REGISTER_TEST_CASE(process_serializes_handlers,
+                   "R25 Process never invokes one handler concurrently");
 
-TEST_CASE("R25 repeated Cell and Process create/destroy joins every worker") {
+static const auto worker_destruction_joins = [] {
   for (std::uint64_t i = 0; i < 200; ++i) {
     auto cell = Cell::create(hardening_integer(i));
     REQUIRE(cell->send([](const Value& state) { return std::optional<Value>(state); }));
@@ -40,13 +44,17 @@ TEST_CASE("R25 repeated Cell and Process create/destroy joins every worker") {
     REQUIRE(process->send(hardening_integer(i)));
     process->await_idle();
   }
-}
+};
+REGISTER_TEST_CASE(worker_destruction_joins,
+                   "R25 repeated Cell and Process create/destroy joins every worker");
 
-TEST_CASE("R25 private idle hook is unavailable without its fixture") {
+static const auto idle_hook_requires_fixture = [] {
   CHECK_FALSE(genia::engine::try_run("_r25_await_idle()").has_value());
-}
+};
+REGISTER_TEST_CASE(idle_hook_requires_fixture,
+                   "R25 private idle hook is unavailable without its fixture");
 
-TEST_CASE("R25 post-failure Process send is a normalized runtime error") {
+static const auto failed_process_send_diagnostic = [] {
   auto result = genia::engine::try_run(
       "p = spawn((_) -> 1 / 0)\n"
       "send(p, 1)\n"
@@ -57,14 +65,17 @@ TEST_CASE("R25 post-failure Process send is a normalized runtime error") {
   CHECK(result->stdout_text.empty());
   CHECK(result->stderr_text == "Error: send: process is failed\n");
   CHECK(result->exit_code == 1);
-}
+};
+REGISTER_TEST_CASE(failed_process_send_diagnostic,
+                   "R25 post-failure Process send is a normalized runtime error");
 
-TEST_CASE("R25 asynchronous sends return the contracted nil Option") {
-  auto cell_result = genia::engine::try_run("c = cell(0)\ncell_send(c, (x) -> x + 1)");
+static const auto async_send_option = [] {
+  auto cell_result = genia::engine::try_run("c = cell(0)\n[cell_send(c, (x) -> x + 1)]");
   REQUIRE(cell_result.has_value());
-  CHECK(cell_result->stdout_text == "none(\"nil\")\n");
+  CHECK(cell_result->stdout_text == "[none(\"nil\")]\n");
 
-  auto process_result = genia::engine::try_run("p = spawn((x) -> x)\nsend(p, 1)");
+  auto process_result = genia::engine::try_run("p = spawn((x) -> x)\n[send(p, 1)]");
   REQUIRE(process_result.has_value());
-  CHECK(process_result->stdout_text == "none(\"nil\")\n");
-}
+  CHECK(process_result->stdout_text == "[none(\"nil\")]\n");
+};
+REGISTER_TEST_CASE(async_send_option, "R25 asynchronous sends return the contracted nil Option");

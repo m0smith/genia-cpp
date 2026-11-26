@@ -96,6 +96,16 @@ struct CallDepthGuard {
 // Named declarations validate before installation; normalized runtime errors
 // throw to the engine, while unsupported operations return nullopt.
 inline std::optional<value::Value> eval_node(const core_ir::Node& node, const EnvPtr& env);
+// Evaluate a user callable's body and normalize a returned host null at the
+// callable boundary. Raw invocation still delivers its input values unchanged.
+inline std::optional<value::Value> eval_callable_body(const core_ir::Node& body,
+                                                      const EnvPtr& env) {
+  auto result = eval_node(body, env);
+  if (result && result->kind == value::Kind::Nil)
+    return value::Value::make_outcome_none(value::Value::make_string("nil"));
+  return result;
+}
+
 // Invokes a closure in a fresh child of its captured environment. Ordinary
 // groups select fixed arity and bind headers before arm locals; explicit-open
 // groups bind only arm patterns. Arity/pattern misses return nullopt, runtime
@@ -134,18 +144,165 @@ inline void check_pattern_duplicate(const value::Closure& existing, const value:
                              source + ":" + std::to_string(added.declaration_line) + ")"};
 }
 
-// Public Option-aware names in the subset implemented by this host.
+// Mirror the pinned reference callable.py public Option-awareness set.
 inline bool public_handles_none(const std::string& name) {
-  return name == "none?" || name == "some?" || name == "is_some?" || name == "is_none?" ||
-         name == "unwrap_or" || name == "get" || name == "map_put" || name == "reduce" ||
-         name == "empty_env" || name == "eval";
+  static const std::unordered_set<std::string> names = {"_apply_match_procedure",
+                                                        "_compound_body",
+                                                        "_compound_env",
+                                                        "_compound_params",
+                                                        "_compound_procedure?",
+                                                        "_eval_guarded_branch",
+                                                        "_eval_match_branch",
+                                                        "_eval_match_branch_result",
+                                                        "_eval_match_branches",
+                                                        "_match_env",
+                                                        "_match_expr",
+                                                        "_match_procedure?",
+                                                        "absence_context",
+                                                        "absence_meta",
+                                                        "absence_reason",
+                                                        "application_expr?",
+                                                        "apply",
+                                                        "apply_dispatch",
+                                                        "assignment_expr?",
+                                                        "assignment_name",
+                                                        "assignment_value",
+                                                        "block_expr?",
+                                                        "block_expressions",
+                                                        "branch_body",
+                                                        "branch_body_from_size",
+                                                        "branch_guard",
+                                                        "branch_guard_from_size",
+                                                        "branch_has_guard?",
+                                                        "branch_pattern",
+                                                        "car",
+                                                        "cdr",
+                                                        "cli_option",
+                                                        "cli_option_or",
+                                                        "cons",
+                                                        "define",
+                                                        "diagnostic_error",
+                                                        "diagnostic_skipped",
+                                                        "empty_env",
+                                                        "eval",
+                                                        "eval_assignment",
+                                                        "eval_block",
+                                                        "eval_dispatch",
+                                                        "eval_operands",
+                                                        "eval_sequence",
+                                                        "extend",
+                                                        "flat_map_some",
+                                                        "flush",
+                                                        "get",
+                                                        "get?",
+                                                        "inspect",
+                                                        "is_none?",
+                                                        "is_some?",
+                                                        "lambda_body",
+                                                        "lambda_expr?",
+                                                        "lambda_params",
+                                                        "lookup",
+                                                        "make_function",
+                                                        "make_matcher",
+                                                        "map_put",
+                                                        "map_some",
+                                                        "match_branches",
+                                                        "match_expr?",
+                                                        "nil?",
+                                                        "none?",
+                                                        "null?",
+                                                        "operands",
+                                                        "operator",
+                                                        "or_else",
+                                                        "or_else_with",
+                                                        "pair?",
+                                                        "quasiquoted_expr?",
+                                                        "quoted_expr?",
+                                                        "reduce",
+                                                        "self_evaluating?",
+                                                        "set",
+                                                        "some",
+                                                        "some?",
+                                                        "symbol_expr?",
+                                                        "syntax_expect_match_branch",
+                                                        "syntax_expect_tagged",
+                                                        "syntax_match_branch_size",
+                                                        "syntax_match_branch_size_checked",
+                                                        "syntax_pair_nth",
+                                                        "syntax_pair_nth_from",
+                                                        "syntax_pair_rest",
+                                                        "syntax_pair_rest_from",
+                                                        "syntax_proper_list_length",
+                                                        "tagged_list?",
+                                                        "tagged_list_impl",
+                                                        "tap",
+                                                        "text_of_quotation",
+                                                        "then_find",
+                                                        "then_first",
+                                                        "then_get",
+                                                        "then_nth",
+                                                        "trace",
+                                                        "unwrap_or",
+                                                        "write",
+                                                        "writeln"};
+  return names.contains(name);
 }
 
-// Registration flags on the host callables implemented here. The none
-// constructor is a syntax form and does not propagate its own arguments.
+// Reference bootstrap registrations carrying either of the Option-awareness
+// flags consulted by the pinned host for final-expression delegation.
 inline bool registered_handles_none(const std::string& name) {
-  return name == "none" || name == "display" || name == "json_encode" || name == "json_decode" ||
-         name == "represent" || name == "representation_match" || name == "_seq_reduce";
+  static const std::unordered_set<std::string> names = {"_absence_context",
+                                                        "_absence_meta",
+                                                        "_absence_reason",
+                                                        "_cli_option_or",
+                                                        "_cli_spec",
+                                                        "_err",
+                                                        "_flat_map_some",
+                                                        "_flush",
+                                                        "_http_send",
+                                                        "_is_none?",
+                                                        "_is_some?",
+                                                        "_json_decode",
+                                                        "_json_encode",
+                                                        "_json_schema",
+                                                        "_map_put",
+                                                        "_map_some",
+                                                        "_meta_define",
+                                                        "_meta_eval_error",
+                                                        "_meta_extend",
+                                                        "_meta_host_apply",
+                                                        "_meta_lookup",
+                                                        "_meta_match_error",
+                                                        "_meta_match_pattern_env",
+                                                        "_meta_set",
+                                                        "_none?",
+                                                        "_or_else",
+                                                        "_or_else_with",
+                                                        "_send_annotated",
+                                                        "_some",
+                                                        "_some?",
+                                                        "_syntax_error",
+                                                        "_syntax_self_evaluating",
+                                                        "_syntax_symbol_expr",
+                                                        "_unwrap_or",
+                                                        "_write",
+                                                        "_writeln",
+                                                        "car",
+                                                        "cdr",
+                                                        "cons",
+                                                        "debug_repr",
+                                                        "display",
+                                                        "null?",
+                                                        "pair?"};
+  return names.contains(name);
+}
+
+// These native fallbacks realize Option syntax or already-aware wrappers.
+// They accept none directly without implying Option-aware user delegation.
+inline bool direct_native_handles_none(const std::string& name) {
+  return public_handles_none(name) || registered_handles_none(name) || name == "none" ||
+         name == "err" || name == "json_encode" || name == "json_decode" || name == "represent" ||
+         name == "representation_match" || name == "_seq_reduce";
 }
 
 // Recognize final-expression delegation without executing or autoloading
@@ -165,8 +322,7 @@ inline bool delegates_to_none_aware(const core_ir::Node* body, const EnvPtr& env
 // Determine admission for the selected fixed stratum, without matching
 // arguments, evaluating guards, or executing any of its clauses.
 inline bool closure_handles_none(const value::Closure& closure, size_t arity) {
-  if (!closure.native_name.empty())
-    return public_handles_none(closure.native_name) || registered_handles_none(closure.native_name);
+  if (!closure.native_name.empty()) return direct_native_handles_none(closure.native_name);
   if (!closure.is_open && public_handles_none(closure.name)) return true;
   auto record_handles_none = [&](const value::Closure& record) {
     if (record.header_pattern && pattern_match::handles_option(*record.header_pattern)) return true;
@@ -283,8 +439,7 @@ inline std::optional<value::Value> propagated_none(const std::vector<value::Valu
       if (callee->kind == value::Kind::Closure &&
           !closure_handles_none(*callee->closure, args.size()))
         return arg;
-    } else if (has_native_call(native_name) && !public_handles_none(native_name) &&
-               !registered_handles_none(native_name)) {
+    } else if (has_native_call(native_name) && !direct_native_handles_none(native_name)) {
       return arg;
     }
     break;
@@ -761,6 +916,12 @@ inline std::optional<value::Value> eval_node(const core_ir::Node& node, const En
       // Validate before installing or extending a callable. Ordinary function
       // groups keep one shared identity so existing aliases observe new arities.
       auto existing = env->lookup(node.name);
+      if (pattern_header && (existing ? existing->kind != value::Kind::Closure ||
+                                            !existing->closure->is_named_definition ||
+                                            existing->closure->name != node.name ||
+                                            existing->closure->captured_env != env
+                                      : genia2026_known_globals::is_known(node.name)))
+        return std::nullopt;
       if (existing.has_value() && existing->kind == value::Kind::Closure &&
           existing->closure->is_open && !closure->is_open) {
         throw StatefulRuntimeError{
@@ -1085,7 +1246,7 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
                              const pattern_match::Bindings& bindings) {
       auto child = std::make_shared<Environment>(record.captured_env);
       for (const auto& [name, bound] : bindings) child->define(name, bound);
-      return eval_node(*record.body, child);
+      return eval_callable_body(*record.body, child);
     };
     if (closure.header_pattern) {
       auto bindings = pattern_match::match(*closure.header_pattern, args);
@@ -1124,7 +1285,7 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
         if (!condition) return std::nullopt;
         if (!guard_truthy(*condition)) continue;
       }
-      return eval_node(*clause.result, child);
+      return eval_callable_body(*clause.result, child);
     }
     return std::nullopt;
   }
@@ -1141,7 +1302,7 @@ inline std::optional<value::Value> invoke_closure(const value::Closure& closure,
       child->define(binding.first, binding.second);
     }
   }
-  return eval_node(*closure.body, child);
+  return eval_callable_body(*closure.body, child);
 }
 
 // Evaluates one pipeline stage against the value piped into it, per

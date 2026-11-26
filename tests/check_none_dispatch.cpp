@@ -69,5 +69,22 @@ int main() {
                     "[none(\"a\"), 5]\n");
   ok &= expect_eval("delegation to known aware function",
                     "probe(x) = unwrap_or(7, x)\n[probe(none(\"e\"))]", "[7]\n");
+  ok &=
+      expect_eval("err preserves an absence reason", "[err(none(\"x\"))]", "[err(none(\"x\"))]\n");
+  ok &= expect_eval("constructor wrapper is ordinary", "f(x) = none(x)\n[f(none(\"x\"))]",
+                    "[none(\"x\")]\n");
+  ok &= expect_eval("absent context is raw null until returned",
+                    "g(x) = 5\nf(none(r, c)) = [none?(c), c == c, g(c), c]\n"
+                    "f(none(\"x\"))",
+                    "[false, true, 5, none(\"nil\")]\n");
+  ok &= expect_eval("Flow filter skips propagated none",
+                    "step(x) = none(\"stop\")\n"
+                    "evolve(1, step) |> take(2) |> filter((x) -> true) |> collect",
+                    "[1]\n");
+  ok &= request("eval", "f(x) = 5\na = f\na(none(r)) = r\na(1)")["status"] == "unsupported";
+  ok &= expect_eval("standalone normalized nil has no auto-display",
+                    "f(none(r, c)) = c\nf(none(\"x\"))", "");
+  ok &= expect_eval("nested Flow run result propagates", "f(x) = 5\n[f(run(lines([\"a\"])))]",
+                    "[none(\"nil\")]\n");
   return ok ? 0 : 1;
 }

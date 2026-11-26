@@ -195,8 +195,11 @@ inline std::optional<RunResult> try_run(const std::string& source, bool enable_r
   RunResult run_result;
   run_result.stdout_text = runtime_io::g_stdout_text;
   run_result.exit_code = 0;
-  if (result->kind == value::Kind::Nil) {
-    // The reference host's `None` (for example from `run`) displays nothing.
+  if (result->kind == value::Kind::Nil ||
+      (result->kind == value::Kind::Outcome && result->outcome_is_none && result->outcome_reason &&
+       result->outcome_reason->kind == value::Kind::String &&
+       result->outcome_reason->text == "nil" && !result->outcome_context)) {
+    // Command/eval auto-display suppresses the reference host's nil sentinel.
     return run_result;
   }
   auto rendered = render::display(*result);

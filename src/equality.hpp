@@ -284,8 +284,9 @@ inline bool structural_equal(const value::Value& a, const value::Value& b) {
       return a.process == b.process;
     case value::Kind::Flow:
       return a.flow == b.flow;
-    case value::Kind::StdinSource:
     case value::Kind::Nil:
+      return true;  // Two internal nulls compare equal, distinct from Outcome none.
+    case value::Kind::StdinSource:
     case value::Kind::Opaque:
       // Never observed by any pinned evidence; no defined equality.
       return false;

@@ -252,9 +252,9 @@ inline Value map(const Value& fn, const Value& source, const Invoke& invoke) {
 }
 
 // Derive a lazy Flow retaining predicate/upstream/invoke; source must be a Flow.
-// Pull until a Boolean true verdict or end; false skips an item. Non-Boolean is
-// UnsupportedError. One output may require arbitrarily many pulls/callbacks, so an
-// unbounded source with no match never returns. Validation follows demanded items.
+// Pull until a Boolean true verdict or end; false and absence skip an item.
+// Other non-Booleans are unsupported. One output may require arbitrarily many pulls/callbacks, so
+// an unbounded source with no match never returns. Validation follows demanded items.
 inline Value filter(const Value& predicate, const Value& source, const Invoke& invoke) {
   auto upstream = source.flow;
   return make_flow([predicate, upstream, invoke]() -> Pull {
@@ -265,6 +265,7 @@ inline Value filter(const Value& predicate, const Value& source, const Invoke& i
           auto item = items();
           if (!item.has_value()) return std::nullopt;
           const Value verdict = apply(invoke, predicate, {*item});
+          if (verdict.kind == value::Kind::Outcome && verdict.outcome_is_none) continue;
           if (verdict.kind != value::Kind::Boolean) throw value::UnsupportedError{};
           if (verdict.boolean) return item;
         }
@@ -421,7 +422,7 @@ inline Value run(const Value& source) {
     while (items().has_value()) {
     }
   }
-  return Value::make_nil();
+  return Value::make_outcome_none(Value::make_string("nil"));
 }
 
 // `_seq_reduce(f, acc, source)`: the non-list branch of the prelude
