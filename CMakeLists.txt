@@ -103,3 +103,8 @@ add_test(NAME genia-model-b-slice-a-check COMMAND genia-model-b-slice-a-check)
 add_executable(genia-model-b-malformed-ir-check tests/check_model_b_malformed_ir.cpp)
 target_include_directories(genia-model-b-malformed-ir-check PRIVATE third_party/nlohmann_json)
 add_test(NAME genia-model-b-malformed-ir-check COMMAND genia-model-b-malformed-ir-check)
+
+# Plain adapter regressions for the R31 absence-pattern and call boundary.
+add_executable(genia-none-dispatch-check tests/check_none_dispatch.cpp)
+target_include_directories(genia-none-dispatch-check PRIVATE third_party/nlohmann_json)
+add_test(NAME genia-none-dispatch-check COMMAND genia-none-dispatch-check)
