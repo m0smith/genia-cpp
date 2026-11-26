@@ -53,14 +53,14 @@ inline constexpr const char* kProtocolVersion = "1";
 // unimplemented and `unsupported` -- this change is `bytes_utf8` only.
 // Re-pinned again to the same E26-1..E26-3 gating's merge commit on
 // genia-2026 `main` (PR #1027) -- the prior pin above was this PR's
-// still-open branch head; this identical-content commit is the one
-// that is now actually current-main pinned conformance per E16-4.
-inline constexpr const char* kContractRevision = "d005c89f852ee2d27682dade272eabfd158adf12";
+// still-open branch head. R31 CPP-1 (genia-2026 #1330) re-pins to
+// the R30 closeout revision, whose manifest includes sheet_values.
+inline constexpr const char* kContractRevision = "b759c20f97334da14d1b15bdf8a70b87d6e0d2c8";
 
 // Every capability name genia-2026's spec/manifest.json currently defines
 // (required_capabilities + optional_capabilities), pinned at the contract
-// revision above. This adapter declares every one of them "unsupported":
-// E24-1 is toolchain bootstrap only and implements no Genia semantics.
+// revision above. Capabilities default to "unsupported" unless
+// capability_overrides() declares them supported or partial.
 // This list must never be extended locally -- a name must come from
 // genia-2026's spec/manifest.json, updated deliberately alongside a
 // contract-revision bump.
@@ -107,6 +107,7 @@ inline const std::vector<std::string>& known_capabilities() {
       "immutable_bindings",
       "default_open_functions",
       "closed_functions",
+      "sheet_values",
   };
   return kNames;
 }
